@@ -242,7 +242,9 @@ public final class MainActivity extends Activity {
         masthead.addView(hamburger, new LinearLayout.LayoutParams(dp(52), dp(48)));
         TextView brand = text("  ATLANTE LIBRARY", 12, SAGE, false);
         brand.setLetterSpacing(.12f); masthead.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
-        Button settings = button("⚙", false, this::settings); settings.setContentDescription("Impostazioni"); masthead.addView(settings, new LinearLayout.LayoutParams(dp(52), dp(48))); gap(header, 12);
+        Button settings = button("", false, this::settings); settings.setContentDescription("Impostazioni");
+        android.graphics.drawable.Drawable gear = getResources().getDrawable(R.drawable.ic_settings, getTheme()); gear.setTint(INK);
+        settings.setCompoundDrawablesWithIntrinsicBounds(gear,null,null,null); masthead.addView(settings, new LinearLayout.LayoutParams(dp(52), dp(48))); gap(header, 12);
         LinearLayout titleRow = row();
         TextView title = text("La tua biblioteca", 29, INK, true);
         titleRow.addView(title, new LinearLayout.LayoutParams(0, -2, 1));

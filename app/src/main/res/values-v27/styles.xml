@@ -8,7 +8,7 @@
         <item name="android:navigationBarColor">#F2F0E7</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">#F2F0E7</item>
+        <item name="android:windowBackground">#000000</item>
     </style>
     <style name="AtlanteDialogLight" parent="android:style/Theme.Material.Light.Dialog.Alert">
         <item name="android:windowBackground">@drawable/dialog_surface</item>

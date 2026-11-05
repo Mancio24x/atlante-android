@@ -42,5 +42,9 @@ tap('Apri menu laterale');tap('Mappa');shot('09-map-amoled')
 tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 # The persisted theme must survive a process restart.
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
-shot('11-theme-restored')
+tap('Impostazioni')
+state=dump()
+assert any('Temi · AMOLED nero' in n.get('text','') for n in state.iter('node')), 'Theme preference was not restored'
+shot('11-settings-restored')
+tap('Chiudi');shot('12-theme-restored')
 print('Navigation, settings, theme selection and restart completed.')
