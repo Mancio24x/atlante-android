@@ -9,13 +9,28 @@ import org.json.*;
 
 /** On-demand HTTPS lookups only; never uploads the local catalog, notes or book files. */
 final class OnlineCatalog {
-    private static long lastRequest;
+    private static final Map<String, Long> nextRequest = new HashMap<>();
+    private static File cacheDirectory;
     private static final LinkedHashMap<String, String> cache = new LinkedHashMap<>();
-
+    static synchronized void configure(File directory) { cacheDirectory = directory; }
+    private static String hash(String value) throws Exception {
+        StringBuilder hex = new StringBuilder();
+        for (byte b : MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))) hex.append(String.format(Locale.ROOT,"%02x",b & 255));
+        return hex.toString();
+    }
     private static byte[] request(String address, int limit) throws Exception {
-        long delay = 1100 - (System.currentTimeMillis() - lastRequest);
-        if (delay > 0) Thread.sleep(delay);
-        lastRequest = System.currentTimeMillis();
+        File file = cacheDirectory == null ? null : new File(cacheDirectory, hash(address));
+        long ttl = address.contains("search.json") ? 15 * 60 * 1000L : 24 * 60 * 60 * 1000L;
+        if (file != null && file.isFile() && file.length() <= limit && System.currentTimeMillis()-file.lastModified() < ttl) {
+            try (InputStream in = new FileInputStream(file)) { return EbookParser.read(in,limit); }
+            catch (IOException ignored) { /* A broken cache falls back to the network. */ }
+        }
+        String host = new URL(address).getHost(); long wait;
+        synchronized (nextRequest) {
+            long now = System.currentTimeMillis(); long slot = Math.max(now,nextRequest.containsKey(host) ? nextRequest.get(host) : now);
+            nextRequest.put(host,slot+1050); wait=slot-now;
+        }
+        if (wait > 0) Thread.sleep(wait);
         HttpURLConnection connection = (HttpURLConnection)new URL(address).openConnection();
         connection.setConnectTimeout(12000); connection.setReadTimeout(15000);
         connection.setRequestProperty("User-Agent", "AtlanteLibraryAndroid (https://github.com/Mancio24x/atlante-android)");
@@ -23,15 +38,34 @@ final class OnlineCatalog {
             int status = connection.getResponseCode();
             if (status == 429) throw new IOException("Il catalogo è occupato: attendi e riprova.");
             if (status != 200) throw new IOException("Il catalogo ha risposto con codice " + status);
-            try (InputStream in = connection.getInputStream()) { return EbookParser.read(in, limit); }
+            try (InputStream in = connection.getInputStream()) {
+                byte[] bytes = EbookParser.read(in, limit);
+                if (file != null) {
+                    try {
+                        if (!cacheDirectory.isDirectory() && !cacheDirectory.mkdirs()) throw new IOException("Cache non disponibile");
+                        File temporary = File.createTempFile("cache-", ".tmp",cacheDirectory);
+                        try {
+                            try (OutputStream out = new FileOutputStream(temporary)) { out.write(bytes); }
+                            if (!temporary.renameTo(file)) temporary.delete();
+                        } finally { temporary.delete(); }
+                        File[] entries = cacheDirectory.listFiles();
+                        if (entries != null && entries.length > 64) {
+                            Arrays.sort(entries,Comparator.comparingLong(File::lastModified));
+                            for(int i=0;i<entries.length-64;i++) entries[i].delete();
+                        }
+                    } catch (IOException ignored) { /* Searches also work when the cache is full. */ }
+                }
+                return bytes;
+            }
         } finally { connection.disconnect(); }
     }
 
     static ArrayList<Book> search(String query) throws Exception {
+        query = query.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
         String response = cache.get(query);
         if (response == null) {
             response = new String(request("https://openlibrary.org/search.json?q=" + URLEncoder.encode(query, "UTF-8")
-                + "&lang=it&limit=20&fields=key,title,author_name,first_publish_year,cover_i", 2 * 1024 * 1024), StandardCharsets.UTF_8);
+                + "&lang=it&limit=12&fields=key,title,author_name,first_publish_year,cover_i", 2 * 1024 * 1024), StandardCharsets.UTF_8);
             if (cache.size() >= 8) cache.remove(cache.keySet().iterator().next());
             cache.put(query, response);
         }
@@ -70,10 +104,13 @@ final class OnlineCatalog {
         enrichFrom(book, response);
         JSONObject editions = new JSONObject(new String(request("https://openlibrary.org" + book.source + "/editions.json?limit=20", 2 * 1024 * 1024), StandardCharsets.UTF_8));
         enrichEdition(book, editions);
-        if (book.coverId > 0) {
-            try { book.onlineCover = request("https://covers.openlibrary.org/b/id/" + book.coverId + "-M.jpg?default=false", 2 * 1024 * 1024); }
-            catch (IOException ignored) { /* A missing cover never prevents consulting the record. */ }
-        }
+    }
+
+    static byte[] loadCover(Book book) {
+        if (book.onlineCover != null) return book.onlineCover;
+        if (book.coverId <= 0) return null;
+        try { return request("https://covers.openlibrary.org/b/id/"+book.coverId+"-M.jpg?default=false",2*1024*1024); }
+        catch (Exception ignored) { return null; }
     }
 
     static void enrichEdition(Book book, JSONObject response) throws Exception {

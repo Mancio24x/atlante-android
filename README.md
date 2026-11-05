@@ -8,6 +8,31 @@ della biblioteca sul computer.
 **APK disponibile nelle [release GitHub](https://github.com/Mancio24x/atlante-android/releases/latest).**
 La compilazione automatica esegue test JVM, lint e verifica della firma; la prova su telefono resta necessaria.
 
+## Navigazione e temi
+
+Il pulsante **☰** in alto a sinistra apre il menu laterale: Tutti i libri, Desideri,
+In lettura, Letti, Mappa, Autori e Saghe, più ricerca online, importazione e impostazioni.
+Il menu si chiude con **×**, toccando fuori o premendo Indietro.
+La rotella **⚙** apre le impostazioni, con temi e preferenze di lettura.
+
+Sono disponibili nove temi, ricordati al riavvio: **Atlante**, **Rosa petalo**,
+**Lavanda**, **Salvia**, **Blu polvere**, **Sabbia**, **Grafite**, **Notte viola**
+e **AMOLED nero**. L’AMOLED usa nero puro per lo sfondo della biblioteca.
+Pulsanti, schede, campi, menu e nodi della mappa hanno bordi arrotondati.
+La nuova icona usa sfondo nero, libro chiaro e bandiera pirata rossa.
+
+La ricerca lavora separatamente dalle importazioni e mostra una prima pagina
+leggera di risultati. Risposte e miniature vengono riutilizzate in una cache locale
+limitata: 15 minuti per la ricerca, 24 ore per schede e immagini. Le copertine
+si caricano senza bloccare l’apertura dei metadati. La velocità del primo accesso
+resta legata alla connessione e alla disponibilità di Open Library.
+La griglia carica 60 schede per volta con **Mostra altri libri**; la ricerca filtra
+comunque l’intero catalogo. I controlli sul contrasto coprono tutte le palette.
+
+Il workflow manuale **Android UI preview** esegue sull’emulatore Android 35 una
+prova di menu, impostazioni, temi e riavvio; le schermate sono disponibili tra gli
+artifact. Usa soltanto dati fittizi nell’app debug, separata dalla libreria personale.
+
 ## Ricerca online, schede e avanzamento
 
 Premi **Cerca libri online** e cerca un titolo, autore o ISBN su Open Library.
@@ -27,7 +52,7 @@ note personali, anche per un cartaceo. La percentuale viene calcolata dal totale
 Lo stato comprende Da leggere, In lettura, Letto, In pausa e Abbandonato; le sezioni
 **In lettura** e **Letti** aiutano a ritrovare i titoli. Il segnalibro del lettore
 digitale resta separato dalle pagine dell’edizione cartacea inserite manualmente.
-L’icona dell’app mostra un libro con bandiera pirata.
+L’icona dell’app mostra un libro chiaro con bandiera pirata rossa su sfondo nero.
 
 Le ricerche HTTPS avvengono solo su richiesta e inviano a Open Library il testo
 cercato; l’apertura di una scheda richiede metadati e copertina della scheda scelta.

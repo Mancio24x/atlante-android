@@ -10,4 +10,12 @@
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowBackground">#F2F0E7</item>
     </style>
+    <style name="AtlanteDialogLight" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_surface</item>
+        <item name="android:colorAccent">#326359</item>
+    </style>
+    <style name="AtlanteDialogDark" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_surface</item>
+        <item name="android:colorAccent">#D3B6FF</item>
+    </style>
 </resources>

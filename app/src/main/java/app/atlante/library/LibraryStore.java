@@ -114,6 +114,14 @@ final class LibraryStore {
         return candidate;
     }
 
+    synchronized void saveDownloadedCover(Book book, byte[] bytes) throws Exception {
+        if (find(book.id) == null) return;
+        if (!directory(book).isDirectory() && !directory(book).mkdirs()) return;
+        AtomicFile image = new AtomicFile(cover(book)); FileOutputStream out = null;
+        try { out=image.startWrite(); out.write(bytes); image.finishWrite(out); }
+        catch(Exception e) { if(out != null) image.failWrite(out); throw e; }
+    }
+
     synchronized void discardCandidate(Book candidate) {
         if (find(candidate.id) == null) deleteTree(directory(candidate));
     }
