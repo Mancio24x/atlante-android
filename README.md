@@ -1,0 +1,119 @@
+# Atlante Library per Android
+
+Progetto Android separato dall’app desktop, per telefoni e tablet Android 8 o successivi.
+Interfaccia nativa con i colori crema, petrolio, rame e salvia dei riferimenti, titoli
+serif, copertine e mappa autore → saga → libro. Non contiene libri personali o dati
+della biblioteca sul computer.
+
+**Stato attuale: sorgente preparato; APK non ancora compilato.** Nell’ambiente Craft
+Anything usato per questa modifica non sono presenti JDK/Gradle/SDK Android e il
+download degli strumenti non è disponibile. Le verifiche desktop non certificano
+la compilazione o l’esecuzione Android. Il workflow incluso eseguirà compilazione,
+test, lint e verifica della firma prima di pubblicare un APK.
+
+## Funzioni dell’edizione Android
+
+- Importazione multipla dal selettore file Android: EPUB, TXT UTF-8 e CBZ.
+- Copie private dei file, riconoscimento duplicati tramite SHA-256, catalogo scritto
+  atomicamente. Gli originali scelti nel selettore restano al loro posto.
+- Copertine incorporate e metadati EPUB/ComicInfo, ricerca, indici autori/saghe,
+  modifica di titolo, autore, saga, numero e genere.
+- Mappa scorrevole con numeri di lettura, fino a 250 opere per autore.
+- Lettore testuale EPUB/TXT con caratteri serif, tema chiaro/scuro, dimensione
+  regolabile e punto di lettura salvato. Il testo EPUB viene semplificato: non è
+  un’impaginazione completa con immagini, stili e tabelle.
+- Lettore CBZ a pagine con ordine numerico e direzione manga; avanzamento salvato.
+- Stato Da leggere/In lettura/Letto; esportazione del file originale e rimozione
+  della sola copia nella libreria Android.
+
+Questa prima edizione non comprende conversioni AZW3/EPUB, ricerca online,
+assistente AI, scaffali multipli, PDF/FB2/MOBI, sincronizzazione o importazione
+automatica del catalogo desktop. I libri si importano dal telefono.
+Nessun permesso Internet o di accesso generale alla memoria viene richiesto.
+Non aggira DRM. Limiti: 512 MB per file, 32 MB per voce ZIP/testo e 5000 pagine CBZ.
+I dati sono privati dell’app: disinstallandola vengono cancellati; un normale
+aggiornamento firmato con la stessa chiave li conserva.
+
+## Creare la release su GitHub, senza compilare sul computer
+
+La cartella `android` è la **radice di un repository separato**: `.github`, `app`,
+`build.gradle` e questo README devono trovarsi al primo livello. Puoi usare anche
+`../android-release/Atlante-Android-source.zip`, che include i file nascosti.
+
+1. Crea un repository GitHub pubblico, ad esempio `atlante-android`, con ramo
+   principale `main`, e carica il contenuto di questa cartella. Per conservare
+   anche `.github`, puoi usare GitHub Desktop: copia tutto nella cartella del
+   repository, poi **Commit to main → Publish repository / Push origin**.
+2. La firma è già stata generata **fuori dal repository**, in `../android-private/`.
+   Conserva una copia sicura di tutta quella cartella. Non caricarla come file
+   del repository o della release.
+3. Su GitHub apri **Settings → Secrets and variables → Actions → New repository secret**.
+   Crea questi due segreti, copiando il contenuto dei rispettivi file privati:
+
+   | Nome del segreto | File da aprire sul computer |
+   | --- | --- |
+   | `APK_KEYSTORE_BASE64` | `android-private/APK_KEYSTORE_BASE64.txt` |
+   | `APK_KEYSTORE_PASSWORD` | `android-private/APK_KEYSTORE_PASSWORD.txt` |
+
+4. Apri **Actions → Android APK → Run workflow → main → Run workflow**.
+   L’invio iniziale dei file può mostrare un errore se mancavano i segreti: dopo
+   averli aggiunti, avvia una nuova esecuzione con **Run workflow**.
+5. Quando il workflow è verde, apri **Releases**. Troverai
+   `Atlante-Library-1.0.N.apk` e il suo controllo SHA-256. Questo è il file
+   installabile; il file ZIP dei sorgenti non è un APK.
+
+Ogni successivo aggiornamento su `main` crea una nuova release con versione
+`1.0.N`, dove N è il contatore del workflow. Il `versionCode` è `100000 + N`.
+Una riesecuzione della stessa build aggiorna gli stessi allegati. Conserva
+nome del workflow, identificatore `app.atlante.library` e firma, per mantenere
+gli aggiornamenti installabili. Non usare il pacchetto `.debug` per Obtainium.
+
+Se si copia **solo lo ZIP sorgente** su un altro computer, la chiave non vi è
+contenuta. I due segreti vanno configurati dal proprietario usando la cartella
+privata conservata; il workflow non genera né sostituisce automaticamente firme.
+
+## Aggiungere l’app a Obtainium
+
+Dopo la prima release, apri **Obtainium → Aggiungi app** e incolla l’indirizzo
+del tuo repository, per esempio `https://github.com/TUO-NOME/atlante-android`.
+Scegli la sorgente GitHub e conferma. Viene distribuito un solo APK universale,
+senza scelta del processore. Le future release saranno rilevate da Obtainium.
+
+## Compilazione locale per chi sviluppa
+
+Servono JDK 17, Gradle 8.9, piattaforma Android 35 e Build Tools 35.0.0.
+Il progetto usa Android Gradle Plugin 8.7.3 e le sole API della piattaforma.
+Non è incluso un finto wrapper Gradle: il workflow installa Gradle esplicitamente.
+
+```sh
+# Versione di prova, con identità separata app.atlante.library.debug:
+bash build.sh debug
+
+# Release, usando la firma privata già conservata (nessuna password nel comando):
+export APK_KEYSTORE_PATH="/percorso/privato/atlante-release.p12"
+read -rs APK_KEYSTORE_PASSWORD
+export APK_KEYSTORE_PASSWORD
+bash build.sh release
+unset APK_KEYSTORE_PASSWORD
+```
+
+In alternativa, `signing.properties` locale, escluso da Git, può contenere
+`storeFile=/percorso/atlante-release.p12` e `storePassword=...`.
+La chiave deve avere alias `atlante` e formato PKCS12. Per una nuova installazione
+del progetto senza firma precedente, `python3 scripts/create-signing.py
+/cartella/privata/esterna/al/repository` la genera una volta sola.
+
+`build.sh` esegue i test JVM, Android Lint, la compilazione, `apksigner verify`
+e `zipalign -c`; salva APK e checksum in `dist/`. I test coprono percorsi EPUB,
+limiti degli archivi, ordine dei fumetti e paginazione Unicode. La prova su
+telefono/emulatore resta necessaria prima di considerare collaudata una release.
+
+## Riferimenti
+
+- [Compatibilità Android Gradle Plugin 8.7 / Gradle 8.9 / JDK 17](https://developer.android.com/build/releases/agp-8-7-0-release-notes)
+- [Firma delle applicazioni Android](https://developer.android.com/studio/publish/app-signing)
+- [Segreti per GitHub Actions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
+- [Aggiungere un’app a Obtainium](https://wiki.obtainium.imranr.dev/ui_overview/)
+
+Codice applicativo MIT, vedi LICENSE. Libri e copertine importati mantengono
+i diritti dei rispettivi autori e non fanno parte di questo progetto.

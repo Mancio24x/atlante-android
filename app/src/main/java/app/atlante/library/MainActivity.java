@@ -1,0 +1,500 @@
+package app.atlante.library;
+
+import android.app.*;
+import android.content.*;
+import android.content.res.Configuration;
+import android.graphics.*;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.os.Bundle;
+import android.text.*;
+import android.util.LruCache;
+import android.view.*;
+import android.widget.*;
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.*;
+
+/** Android edition. Uses only platform APIs, private storage and the system document picker. */
+public final class MainActivity extends Activity {
+    static final int INK = Color.rgb(25, 50, 57), PAPER = Color.rgb(242, 240, 231);
+    static final int WHITE = Color.rgb(255, 253, 246), SAGE = Color.rgb(76, 120, 107);
+    static final int COPPER = Color.rgb(196, 94, 53), GOLD = Color.rgb(201, 167, 106);
+    static final int MUTED = Color.rgb(107, 121, 119), LINE = Color.rgb(214, 220, 208);
+    private static final int IMPORT = 101, EXPORT = 102;
+    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final LruCache<String, Bitmap> covers = new LruCache<String, Bitmap>(8192) {
+        @Override protected int sizeOf(String key, Bitmap value) { return value.getByteCount() / 1024; }
+    };
+    private LibraryStore store;
+    private LinearLayout root, content;
+    private String tab = "Tutti i libri", query = "", mapAuthor = "", exportId;
+    private Book reading;
+    private List<String> pages;
+    private int page;
+    private float fontSize = 20;
+    private boolean readerDark, manga, busy;
+    private TextView notice;
+
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        if (state != null) {
+            tab = state.getString("tab", tab); query = state.getString("query", "");
+            mapAuthor = state.getString("author", ""); exportId = state.getString("export");
+        }
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        fontSize = Math.max(8, Math.min(80, prefs.getFloat("fontSize", 20)));
+        readerDark = prefs.getBoolean("dark", false); manga = prefs.getBoolean("manga", false);
+        try { store = new LibraryStore(this); }
+        catch (Exception e) {
+            new AlertDialog.Builder(this).setTitle("Libreria non disponibile")
+                .setMessage("I dati salvati non sono stati modificati. " + message(e))
+                .setCancelable(false).setPositiveButton("Chiudi", (d, w) -> finish()).show();
+            return;
+        }
+        showLibrary();
+        if (state != null && state.getString("reading") != null) {
+            Book b = store.find(state.getString("reading")); if (b != null) openReader(b);
+        }
+    }
+
+    @Override protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        state.putString("tab", tab); state.putString("query", query);
+        state.putString("author", mapAuthor); state.putString("export", exportId);
+        if (reading != null) state.putString("reading", reading.id);
+    }
+
+    @Override public void onConfigurationChanged(Configuration config) {
+        super.onConfigurationChanged(config);
+        if (store == null) return;
+        if (reading != null && pages != null) showReader(); else showLibrary();
+    }
+
+    int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+    LinearLayout column() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.VERTICAL); return v; }
+    LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); v.setGravity(Gravity.CENTER_VERTICAL); return v; }
+    TextView text(String value, float size, int color, boolean serif) {
+        TextView t = new TextView(this); t.setText(value); t.setTextSize(size); t.setTextColor(color);
+        t.setTypeface(serif ? Typeface.create("serif", Typeface.NORMAL) : Typeface.DEFAULT);
+        t.setLineSpacing(dp(2), 1); return t;
+    }
+    GradientDrawable background(int fill, int stroke) {
+        GradientDrawable d = new GradientDrawable(); d.setColor(fill);
+        if (stroke != Color.TRANSPARENT) d.setStroke(dp(1), stroke);
+        return d;
+    }
+    void gap(LinearLayout v, int height) { View s = new View(this); v.addView(s, new LinearLayout.LayoutParams(1, dp(height))); }
+    void rule(LinearLayout v) { View s = new View(this); s.setBackgroundColor(LINE); v.addView(s, new LinearLayout.LayoutParams(-1, dp(1))); }
+    Button button(String label, boolean primary, Runnable action) {
+        Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(14);
+        b.setTextColor(primary ? WHITE : INK); b.setMinHeight(dp(48));
+        b.setPadding(dp(14), dp(8), dp(14), dp(8));
+        b.setBackground(background(primary ? INK : WHITE, primary ? INK : LINE));
+        b.setOnClickListener(v -> action.run()); return b;
+    }
+    void base(int color) {
+        getWindow().getDecorView().setSystemUiVisibility(color == INK ? 0
+            : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        root = column(); root.setBackgroundColor(color);
+        // API 35 draws edge-to-edge: keep all controls clear of system bars and cutouts.
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            v.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets;
+        });
+        setContentView(root); root.requestApplyInsets();
+    }
+    void error(Exception e) { new AlertDialog.Builder(this).setTitle("Operazione non completata").setMessage(message(e)).setPositiveButton("Chiudi", null).show(); }
+    static String message(Exception e) { return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(); }
+    void save() { try { store.save(); } catch (Exception e) { error(e); } }
+
+    private void showLibrary() {
+        reading = null; pages = null;
+        base(PAPER);
+        LinearLayout header = column(); header.setPadding(dp(20), dp(18), dp(20), dp(18));
+        root.addView(header);
+        TextView brand = text("A /  ATLANTE LIBRARY", 13, SAGE, false);
+        brand.setLetterSpacing(.18f); header.addView(brand); gap(header, 8);
+        LinearLayout titleRow = row();
+        TextView title = text("La tua biblioteca", 30, INK, true);
+        titleRow.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        Button add = button("+ Importa", true, this::chooseBooks); add.setEnabled(!busy);
+        titleRow.addView(add); header.addView(titleRow); gap(header, 8);
+        header.addView(text("Libri, autori e connessioni. Sempre con te.", 14, MUTED, false));
+        gap(header, 16);
+        EditText search = new EditText(this); search.setSingleLine(true); search.setTextSize(15);
+        search.setTextColor(INK); search.setHintTextColor(MUTED); search.setHint("Cerca un titolo, un autore, una saga…");
+        search.setContentDescription("Cerca nella biblioteca"); search.setPadding(dp(14), dp(10), dp(14), dp(10));
+        search.setBackground(background(WHITE, LINE)); search.setText(query); header.addView(search);
+        search.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int c, int f) { }
+            public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString(); renderContent(); }
+            public void afterTextChanged(Editable e) { }
+        });
+        gap(header, 12);
+        HorizontalScrollView nav = new HorizontalScrollView(this); nav.setHorizontalScrollBarEnabled(false);
+        LinearLayout tabs = row(); nav.addView(tabs); header.addView(nav);
+        for (String name : new String[]{"Tutti i libri", "Mappa", "Autori", "Saghe"}) {
+            TextView t = text(name, 14, tab.equals(name) ? INK : MUTED, false);
+            t.setPadding(dp(12), dp(12), dp(12), dp(12)); t.setMinHeight(dp(48));
+            if (tab.equals(name)) { t.setTypeface(Typeface.DEFAULT_BOLD); t.setBackground(background(WHITE, LINE)); }
+            t.setOnClickListener(v -> { tab = name; showLibrary(); }); tabs.addView(t);
+        }
+        rule(root);
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        content = column(); content.setPadding(dp(20), dp(22), dp(20), dp(28)); scroll.addView(content);
+        notice = text("", 12, MUTED, false); notice.setPadding(dp(20), dp(10), dp(20), dp(10));
+        rule(root); root.addView(notice); renderContent();
+    }
+
+    private ArrayList<Book> filtered() {
+        ArrayList<Book> list = store.snapshot(); String needle = query.toLowerCase(Locale.ROOT).trim();
+        list.removeIf(b -> !(b.title + " " + b.author + " " + b.series + " " + b.genre).toLowerCase(Locale.ROOT).contains(needle));
+        list.sort((a, b) -> EbookParser.naturalCompare(a.title, b.title)); return list;
+    }
+
+    private void renderContent() {
+        if (content == null) return;
+        content.removeAllViews();
+        ArrayList<Book> list = filtered();
+        notice.setText(busy ? "Importazione in corso…" : store.snapshot().size() + " libri · Sul dispositivo · Lettura offline");
+        if (list.isEmpty()) {
+            gap(content, 32);
+            content.addView(text(store.snapshot().isEmpty() ? "Ogni libro è un punto di partenza." : "Nessun libro trovato.", 30, INK, true));
+            gap(content, 16);
+            content.addView(text(store.snapshot().isEmpty() ? "Aggiungi i tuoi EPUB, TXT e fumetti CBZ. Ritrova qui copertine, saghe e il punto in cui hai lasciato la lettura." : "Prova un altro titolo, autore o nome di saga.", 16, MUTED, false));
+            gap(content, 24);
+            if (store.snapshot().isEmpty()) content.addView(button("Importa i tuoi primi libri", true, this::chooseBooks));
+            return;
+        }
+        if (tab.equals("Mappa")) { showMap(list); return; }
+        if (tab.equals("Autori") || tab.equals("Saghe")) { showIndex(list, tab.equals("Autori")); return; }
+        content.addView(text("I tuoi libri", 28, INK, true)); gap(content, 5);
+        content.addView(text(list.size() + " titoli · Le copertine sono estratte dai tuoi libri", 13, MUTED, false));
+        gap(content, 20); grid(content, list);
+    }
+
+    private void grid(LinearLayout parent, List<Book> books) {
+        int width = getResources().getConfiguration().screenWidthDp;
+        int columns = width >= 1100 ? 6 : width >= 760 ? 4 : width >= 550 ? 3 : 2;
+        int coverHeight = Math.min(310, Math.max(170, (width - 40 - columns * 12) / columns * 14 / 10));
+        LinearLayout line = null;
+        for (int i = 0; i < books.size(); i++) {
+            if (i % columns == 0) { line = row(); line.setGravity(Gravity.TOP); parent.addView(line); }
+            Book b = books.get(i);
+            LinearLayout card = column(); card.setPadding(dp(6), 0, dp(6), dp(24));
+            line.addView(card, new LinearLayout.LayoutParams(0, -2, 1));
+            FrameLayout art = new FrameLayout(this); art.setBackgroundColor(LINE);
+            art.setPadding(dp(14), dp(14), dp(14), dp(14));
+            card.addView(art, new LinearLayout.LayoutParams(-1, dp(coverHeight)));
+            Bitmap cover = cover(b);
+            if (cover != null) {
+                ImageView image = new ImageView(this); image.setImageBitmap(cover);
+                image.setContentDescription("Copertina di " + b.title); image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                art.addView(image, new FrameLayout.LayoutParams(-1, -1));
+            } else {
+                TextView fallback = text(b.author + "\n\n" + b.title, 19, GOLD, true);
+                fallback.setBackgroundColor(INK); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
+                art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
+            }
+            TextView format = text(b.format, 10, INK, false); format.setTypeface(Typeface.DEFAULT_BOLD);
+            format.setPadding(dp(5), dp(3), dp(5), dp(3)); format.setBackgroundColor(WHITE);
+            art.addView(format, new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START));
+            gap(card, 10); card.addView(text(b.title, 19, INK, true)); gap(card, 3);
+            card.addView(text(b.author, 12, MUTED, false));
+            if (!b.series.isEmpty()) { gap(card, 5); card.addView(text("↳ " + b.series + order(b), 12, SAGE, false)); }
+            if (!b.status.equals("Da leggere")) { gap(card, 5); card.addView(text(b.status, 11, COPPER, false)); }
+            card.setOnClickListener(v -> details(b)); art.setOnClickListener(v -> details(b));
+        }
+        int remainder = books.size() % columns;
+        if (remainder != 0) for (int i = remainder; i < columns; i++) line.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+    }
+
+    static String order(Book b) { return b.number > 0 ? " · n. " + number(b.number) : ""; }
+    static String number(double number) { return number == (long)number ? Long.toString((long)number) : Double.toString(number); }
+    private Bitmap cover(Book b) {
+        Bitmap cached = covers.get(b.id); if (cached != null) return cached;
+        File file = store.cover(b); if (!file.exists()) return null;
+        Bitmap bitmap = decode(file.getPath(), null, 512);
+        if (bitmap != null) covers.put(b.id, bitmap); return bitmap;
+    }
+    static Bitmap decode(String file, byte[] bytes, int max) {
+        BitmapFactory.Options options = new BitmapFactory.Options(); options.inJustDecodeBounds = true;
+        if (file != null) BitmapFactory.decodeFile(file, options); else BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+        options.inSampleSize = 1;
+        while (options.outWidth / options.inSampleSize > max || options.outHeight / options.inSampleSize > max) options.inSampleSize *= 2;
+        options.inJustDecodeBounds = false;
+        return file != null ? BitmapFactory.decodeFile(file, options) : BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+    }
+
+    private void showIndex(List<Book> list, boolean authors) {
+        content.addView(text(authors ? "Ogni autore, un mondo." : "Una storia dopo l’altra.", 28, INK, true)); gap(content, 20);
+        TreeMap<String, ArrayList<Book>> groups = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (Book b : list) {
+            String name = authors ? b.author : b.series.isEmpty() ? "Libri singoli" : b.series;
+            groups.computeIfAbsent(name, key -> new ArrayList<>()).add(b);
+        }
+        for (Map.Entry<String, ArrayList<Book>> entry : groups.entrySet()) {
+            LinearLayout box = column(); box.setPadding(dp(18), dp(18), dp(18), dp(18));
+            box.setBackground(background(WHITE, LINE)); box.addView(text(entry.getKey(), 23, INK, true));
+            gap(box, 5); box.addView(text(entry.getValue().size() + " titoli  ↗", 13, SAGE, false));
+            box.setOnClickListener(v -> {
+                LinearLayout panel = column(); panel.setPadding(dp(16), dp(16), dp(16), dp(16));
+                ArrayList<Book> sorted = entry.getValue(); sorted.sort(Comparator.comparingDouble(b -> b.number));
+                for (Book b : sorted) { panel.addView(button((b.number > 0 ? number(b.number) + "  " : "") + b.title, false, () -> details(b))); gap(panel, 8); }
+                ScrollView scroll = new ScrollView(this); scroll.addView(panel);
+                new AlertDialog.Builder(this).setTitle(entry.getKey()).setView(scroll).setNegativeButton("Chiudi", null).show();
+            });
+            content.addView(box); gap(content, 12);
+        }
+    }
+
+    private void showMap(ArrayList<Book> list) {
+        TextView label = text("CONNESSIONI DI LETTURA", 11, SAGE, false); label.setLetterSpacing(.18f); content.addView(label);
+        gap(content, 8); content.addView(text("Ogni autore è un punto di partenza.", 28, INK, true));
+        gap(content, 8); content.addView(text("Scegli un autore e segui le frecce. Tocca un libro per aprire la sua scheda.", 14, MUTED, false)); gap(content, 18);
+        TreeSet<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (Book b : list) names.add(b.author);
+        ArrayList<String> authors = new ArrayList<>(names);
+        if (!authors.contains(mapAuthor)) mapAuthor = authors.get(0);
+        Spinner picker = new Spinner(this);
+        picker.setBackground(background(WHITE, LINE)); picker.setMinimumHeight(dp(52));
+        picker.setContentDescription("Autore della mappa");
+        picker.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, authors));
+        picker.setSelection(authors.indexOf(mapAuthor)); content.addView(picker); gap(content, 12);
+        LinearLayout graphHost = column(); content.addView(graphHost);
+        Runnable draw = () -> {
+            graphHost.removeAllViews(); ArrayList<Book> selected = new ArrayList<>();
+            for (Book b : list) if (b.author.equals(mapAuthor) && selected.size() < 250) selected.add(b);
+            HorizontalScrollView horizontal = new HorizontalScrollView(this);
+            horizontal.addView(new ReadingMap(this, mapAuthor, selected, this::details));
+            graphHost.addView(horizontal);
+        };
+        draw.run();
+        picker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> p, View v, int index, long id) { mapAuthor = authors.get(index); draw.run(); }
+            public void onNothingSelected(AdapterView<?> p) { }
+        });
+        gap(content, 12); content.addView(text("Autore → Saga → Libro · I numeri indicano l’ordine di lettura. Scorri in orizzontale. Fino a 250 opere per mappa; tutti i libri restano nella biblioteca.", 12, MUTED, false));
+    }
+
+    private void details(Book b) {
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(14), dp(24), dp(20));
+        Bitmap art = cover(b);
+        if (art != null) {
+            ImageView image = new ImageView(this); image.setImageBitmap(art); image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            panel.addView(image, new LinearLayout.LayoutParams(-1, dp(220))); gap(panel, 16);
+        }
+        panel.addView(text(b.title, 28, INK, true)); gap(panel, 6);
+        panel.addView(text(b.author, 16, SAGE, false)); gap(panel, 12);
+        if (!b.series.isEmpty()) panel.addView(text(b.series + order(b), 14, SAGE, false));
+        if (!b.genre.isEmpty()) panel.addView(text(b.genre, 13, MUTED, false));
+        panel.addView(text(b.format + " · " + b.status, 13, MUTED, false));
+        if (!b.description.isEmpty()) { gap(panel, 14); panel.addView(text(b.description, 15, INK, false)); }
+        gap(panel, 18);
+        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(scroll).setNegativeButton("Chiudi", null).create();
+        panel.addView(button(b.page > 0 ? "Riprendi la lettura" : "Leggi", true, () -> { dialog.dismiss(); openReader(b); })); gap(panel, 8);
+        panel.addView(button("Stato di lettura", false, () -> {
+            String[] values = {"Da leggere", "In lettura", "Letto"};
+            new AlertDialog.Builder(this).setTitle("Stato di lettura").setItems(values, (d, w) -> {
+                b.status = values[w]; save(); dialog.dismiss(); renderContent(); details(b);
+            }).show();
+        })); gap(panel, 8);
+        panel.addView(button("Modifica scheda", false, () -> { dialog.dismiss(); edit(b); })); gap(panel, 8);
+        panel.addView(button("Esporta il file originale", false, () -> {
+            exportId = b.id;
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType(b.format.equals("EPUB") ? "application/epub+zip" : b.format.equals("TXT") ? "text/plain" : "application/vnd.comicbook+zip")
+                .putExtra(Intent.EXTRA_TITLE, b.title.replaceAll("[\\/:*?\"<>|]", "_") + "." + b.format.toLowerCase(Locale.ROOT));
+            startActivityForResult(intent, EXPORT);
+        })); gap(panel, 8);
+        panel.addView(button("Rimuovi dalla libreria", false, () -> new AlertDialog.Builder(this).setTitle("Rimuovere il libro?")
+            .setMessage("La copia in Atlante e il punto di lettura verranno rimossi. Il file da cui hai importato il libro resta al suo posto.")
+            .setNegativeButton("Annulla", null).setPositiveButton("Rimuovi", (d, w) -> {
+                try { store.remove(b); covers.remove(b.id); dialog.dismiss(); renderContent(); } catch (Exception e) { error(e); }
+            }).show()));
+        dialog.show();
+    }
+
+    private EditText field(LinearLayout panel, String label, String value) {
+        panel.addView(text(label, 12, SAGE, false));
+        EditText input = new EditText(this); input.setText(value); input.setTextSize(16); input.setSingleLine(true);
+        input.setContentDescription(label); panel.addView(input); gap(panel, 10); return input;
+    }
+    private void edit(Book b) {
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(12));
+        EditText title = field(panel, "Titolo", b.title), author = field(panel, "Autore", b.author);
+        EditText series = field(panel, "Saga", b.series), number = field(panel, "Numero nella saga", b.number > 0 ? number(b.number) : "");
+        number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText genre = field(panel, "Genere", b.genre);
+        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Modifica scheda").setView(scroll)
+            .setNegativeButton("Annulla", null).setPositiveButton("Salva", null).create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            if (title.getText().toString().trim().isEmpty()) { title.setError("Inserisci un titolo"); return; }
+            double n = 0;
+            try { if (!number.getText().toString().isEmpty()) n = Double.parseDouble(number.getText().toString()); }
+            catch (NumberFormatException e) { number.setError("Inserisci un numero"); return; }
+            if (!Double.isFinite(n) || n < 0) { number.setError("Inserisci un numero positivo"); return; }
+            b.title = title.getText().toString().trim(); b.author = author.getText().toString().trim();
+            if (b.author.isEmpty()) b.author = "Autore sconosciuto";
+            b.series = series.getText().toString().trim(); b.number = n; b.genre = genre.getText().toString().trim();
+            save(); dialog.dismiss(); renderContent(); details(b);
+        })); dialog.show();
+    }
+
+    private void chooseBooks() {
+        if (busy) return;
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(intent, IMPORT);
+    }
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (result != RESULT_OK || data == null || store == null) return;
+        if (request == IMPORT) {
+            ArrayList<Uri> uris = new ArrayList<>();
+            if (data.getClipData() != null) {
+                for (int i = 0; i < data.getClipData().getItemCount(); i++) uris.add(data.getClipData().getItemAt(i).getUri());
+            } else if (data.getData() != null) uris.add(data.getData());
+            for (Uri uri : uris) {
+                try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+                catch (SecurityException ignored) { /* A temporary grant still allows this import. */ }
+            }
+            busy = true; showLibrary();
+            worker.execute(() -> {
+                int added = 0, duplicate = 0; ArrayList<String> errors = new ArrayList<>();
+                for (Uri uri : uris) {
+                    try { if (store.importBook(uri) == null) duplicate++; else added++; }
+                    catch (Exception e) { errors.add(message(e)); }
+                    finally {
+                        try { getContentResolver().releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+                        catch (SecurityException ignored) { }
+                    }
+                }
+                final String report = added + " libri aggiunti" + (duplicate > 0 ? " · " + duplicate + " già presenti" : "");
+                runOnUiThread(() -> {
+                    busy = false; if (isFinishing() || isDestroyed()) return;
+                    showLibrary();
+                    new AlertDialog.Builder(this).setTitle("Importazione completata").setMessage(report + (errors.isEmpty() ? "" : "\n\n" + String.join("\n", errors)))
+                        .setPositiveButton("Va bene", null).show();
+                });
+            });
+        } else if (request == EXPORT && data.getData() != null && exportId != null) {
+            Book b = store.find(exportId); Uri dest = data.getData(); exportId = null;
+            if (b == null) return;
+            worker.execute(() -> {
+                try (InputStream in = new FileInputStream(store.original(b)); OutputStream out = getContentResolver().openOutputStream(dest, "wt")) {
+                    if (out == null) throw new IOException("Destinazione non disponibile");
+                    byte[] buffer = new byte[32768]; int count;
+                    while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                    runOnUiThread(() -> Toast.makeText(this, "File esportato", Toast.LENGTH_SHORT).show());
+                } catch (Exception e) { runOnUiThread(() -> error(e)); }
+            });
+        }
+    }
+
+    private void openReader(Book b) {
+        if (busy) return;
+        busy = true;
+        ProgressDialog loading = ProgressDialog.show(this, "Apertura libro", "Un momento…", true, false);
+        worker.execute(() -> {
+            try {
+                List<String> result;
+                if (b.format.equals("CBZ")) {
+                    try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(store.original(b))) { result = EbookParser.comicPages(zip); }
+                    if (result.isEmpty()) throw new IOException("Nessuna pagina nel CBZ");
+                } else result = EbookParser.textPages(store.original(b), b.format);
+                runOnUiThread(() -> {
+                    loading.dismiss(); busy = false; if (isFinishing() || isDestroyed()) return;
+                    reading = b; pages = result; page = Math.min(b.page, result.size() - 1);
+                    if (!b.status.equals("Letto")) b.status = "In lettura";
+                    save(); showReader();
+                });
+            } catch (Exception e) { runOnUiThread(() -> { loading.dismiss(); busy = false; if (!isFinishing() && !isDestroyed()) error(e); }); }
+        });
+    }
+
+    private void rememberPage() {
+        if (reading == null) return;
+        reading.page = page; save();
+    }
+    private void turn(int direction) {
+        int next = page + direction;
+        if (next < 0 || next >= pages.size()) return;
+        page = next; rememberPage(); showReader();
+    }
+    private void showReader() {
+        int paper = readerDark ? INK : PAPER, ink = readerDark ? PAPER : INK;
+        base(paper);
+        LinearLayout header = column(); header.setPadding(dp(16), dp(12), dp(16), dp(12)); root.addView(header);
+        LinearLayout bar = row(); header.addView(bar);
+        bar.addView(button("‹ Biblioteca", false, () -> { rememberPage(); showLibrary(); }));
+        TextView title = text(reading.title, 16, ink, true); title.setMaxLines(2); title.setPadding(dp(14), 0, 0, 0);
+        bar.addView(title, new LinearLayout.LayoutParams(0, -2, 1)); gap(header, 12);
+        LinearLayout controls = row(); header.addView(controls);
+        if (reading.format.equals("CBZ")) {
+            controls.addView(button(manga ? "Manga ←" : "Occidentale →", false, () -> {
+                manga = !manga; getPreferences(MODE_PRIVATE).edit().putBoolean("manga", manga).apply(); showReader();
+            }));
+        } else {
+            controls.addView(button("A−", false, () -> changeFont(false)));
+            controls.addView(button("A+", false, () -> changeFont(true)));
+        }
+        controls.addView(button(readerDark ? "Chiaro" : "Scuro", false, () -> {
+            readerDark = !readerDark; getPreferences(MODE_PRIVATE).edit().putBoolean("dark", readerDark).apply(); showReader();
+        }));
+        rule(root);
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout body = column(); body.setPadding(dp(24), dp(24), dp(24), dp(32)); scroll.addView(body);
+        if (reading.format.equals("CBZ")) {
+            try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(store.original(reading))) {
+                byte[] bytes = EbookParser.entry(zip, pages.get(page)); Bitmap bitmap = decode(null, bytes, 2400);
+                if (bitmap == null) throw new IOException("Immagine non leggibile");
+                ImageView image = new ImageView(this); image.setImageBitmap(bitmap); image.setAdjustViewBounds(true);
+                image.setContentDescription("Pagina " + (page + 1)); image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                body.addView(image, new LinearLayout.LayoutParams(-1, -2));
+            } catch (Exception e) { body.addView(text("Pagina non disponibile: " + message(e), 16, ink, false)); }
+        } else {
+            TextView bookText = text(pages.get(page), fontSize, ink, true); bookText.setTextIsSelectable(true);
+            bookText.setLineSpacing(dp(6), 1.25f); body.addView(bookText);
+        }
+        LinearLayout footer = column(); footer.setPadding(dp(16), dp(10), dp(16), dp(14)); rule(root); root.addView(footer);
+        double fraction;
+        if (reading.format.equals("CBZ")) fraction = (page + 1.0) / pages.size();
+        else {
+            long total = 0, before = 0;
+            for (int i = 0; i < pages.size(); i++) { total += pages.get(i).length(); if (i < page) before += pages.get(i).length(); }
+            fraction = total == 0 ? 0 : (double)before / total;
+        }
+        footer.addView(text("Pagina " + (page + 1) + " di " + pages.size() + " · " + Math.round(fraction * 100) + "%", 12, readerDark ? LINE : MUTED, false)); gap(footer, 8);
+        LinearLayout turns = row(); footer.addView(turns);
+        boolean reverse = manga && reading.format.equals("CBZ");
+        Button previous = button(reverse ? "Seguente ←" : "‹ Precedente", false, () -> turn(reverse ? 1 : -1));
+        previous.setEnabled(reverse ? page + 1 < pages.size() : page > 0);
+        turns.addView(previous, new LinearLayout.LayoutParams(0, -2, 1));
+        Button next = button(reverse ? "→ Precedente" : "Seguente ›", true, () -> turn(reverse ? -1 : 1));
+        next.setEnabled(reverse ? page > 0 : page + 1 < pages.size()); turns.addView(next, new LinearLayout.LayoutParams(0, -2, 1));
+        if (page + 1 == pages.size() && !reading.status.equals("Letto")) {
+            gap(footer, 6); footer.addView(button("Segna come letto", false, () -> { reading.status = "Letto"; rememberPage(); showReader(); }));
+        }
+    }
+
+    private void changeFont(boolean increase) {
+        fontSize = Math.max(8, Math.min(80, Math.round(fontSize * (increase ? 1.2f : .8f))));
+        getPreferences(MODE_PRIVATE).edit().putFloat("fontSize", fontSize).apply(); showReader();
+    }
+
+    @Override public void onBackPressed() {
+        if (reading != null) { rememberPage(); showLibrary(); }
+        else if (!query.isEmpty()) { query = ""; showLibrary(); }
+        else super.onBackPressed();
+    }
+    @Override protected void onStop() { if (reading != null) rememberPage(); super.onStop(); }
+    @Override protected void onDestroy() { worker.shutdown(); super.onDestroy(); }
+}

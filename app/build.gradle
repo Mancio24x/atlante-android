@@ -1,0 +1,58 @@
+plugins { id 'com.android.application' }
+
+def version = new Properties()
+rootProject.file('version.properties').withInputStream { version.load(it) }
+def signing = new Properties()
+def signingFile = rootProject.file('signing.properties')
+if (signingFile.exists()) signingFile.withInputStream { signing.load(it) }
+def keyPath = System.getenv('APK_KEYSTORE_PATH') ?: signing.getProperty('storeFile')
+def releasePassword = System.getenv('APK_KEYSTORE_PASSWORD') ?: signing.getProperty('storePassword')
+
+android {
+    namespace 'app.atlante.library'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+    defaultConfig {
+        applicationId 'app.atlante.library'
+        minSdk 26
+        targetSdk 35
+        versionCode Integer.parseInt(System.getenv('VERSION_CODE') ?: version.getProperty('versionCode'))
+        versionName System.getenv('VERSION_NAME') ?: version.getProperty('versionName')
+    }
+    signingConfigs {
+        release {
+            if (keyPath && releasePassword) {
+                storeFile rootProject.file(keyPath)
+                storePassword releasePassword
+                storeType 'PKCS12'
+                keyAlias 'atlante'
+                keyPassword releasePassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        debug { applicationIdSuffix '.debug'; versionNameSuffix '-debug' }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    lint { abortOnError true; checkReleaseBuilds true }
+}
+
+// A release must never silently produce an unsigned APK or use a debug identity.
+tasks.configureEach { task ->
+    if (task.name == 'validateSigningRelease') {
+        task.doFirst {
+            if (!keyPath || !releasePassword) {
+                throw new GradleException('Firma mancante: configura APK_KEYSTORE_PATH e APK_KEYSTORE_PASSWORD, oppure signing.properties. Leggi README.md.')
+            }
+        }
+    }
+}
+
+dependencies { testImplementation 'junit:junit:4.13.2' }
