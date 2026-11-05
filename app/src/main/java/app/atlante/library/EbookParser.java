@@ -104,6 +104,10 @@ final class EbookParser {
                 else if (tag.equals("creator")) authors.add(p.nextText());
                 else if (tag.equals("subject")) subjects.add(p.nextText());
                 else if (tag.equals("description")) book.description = plain(p.nextText());
+                else if (tag.equals("publisher")) book.publisher = p.nextText();
+                else if (tag.equals("language")) book.language = p.nextText();
+                else if (tag.equals("date")) book.year = p.nextText();
+                else if (tag.equals("identifier") && book.isbn.isEmpty()) book.isbn = p.nextText();
             }
             if (opf.manifest.size() > 10000 || opf.spine.size() > MAX_PAGES) throw new IOException("EPUB troppo complesso");
         }

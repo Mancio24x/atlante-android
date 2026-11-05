@@ -94,17 +94,28 @@ final class LibraryStore {
             if (!dest.mkdirs()) throw new IOException("Impossibile salvare il libro");
             if (!temporary.renameTo(original(book))) throw new IOException("Impossibile copiare il libro");
             EbookParser.metadata(original(book), cover(book), book);
-            synchronized (this) {
-                books.add(book);
-                try { save(); }
-                catch (Exception e) { books.remove(book); throw e; }
-            }
             committed = true;
             return book;
         } finally {
             temporary.delete();
             if (!committed && dest != null) deleteTree(dest);
         }
+    }
+
+    synchronized Book addCatalog(Book candidate) throws Exception {
+        Book existing = find(candidate.id);
+        if (existing != null) return existing;
+        if (candidate.onlineCover != null) {
+            if (!directory(candidate).isDirectory() && !directory(candidate).mkdirs()) throw new IOException("Impossibile salvare la copertina");
+            try (OutputStream out = new FileOutputStream(cover(candidate))) { out.write(candidate.onlineCover); }
+        }
+        books.add(candidate);
+        try { save(); } catch (Exception e) { books.remove(candidate); throw e; }
+        return candidate;
+    }
+
+    synchronized void discardCandidate(Book candidate) {
+        if (find(candidate.id) == null) deleteTree(directory(candidate));
     }
 
     synchronized void remove(Book b) throws Exception {

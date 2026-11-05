@@ -122,7 +122,9 @@ public final class MainActivity extends Activity {
         Button add = button("+ Importa", true, this::chooseBooks); add.setEnabled(!busy);
         titleRow.addView(add); header.addView(titleRow); gap(header, 8);
         header.addView(text("Libri, autori e connessioni. Sempre con te.", 14, MUTED, false));
-        gap(header, 16);
+        gap(header, 10);
+        header.addView(button("Cerca libri online", false, this::onlineSearch));
+        gap(header, 10);
         EditText search = new EditText(this); search.setSingleLine(true); search.setTextSize(15);
         search.setTextColor(INK); search.setHintTextColor(MUTED); search.setHint("Cerca un titolo, un autore, una saga…");
         search.setContentDescription("Cerca nella biblioteca"); search.setPadding(dp(14), dp(10), dp(14), dp(10));
@@ -135,7 +137,7 @@ public final class MainActivity extends Activity {
         gap(header, 12);
         HorizontalScrollView nav = new HorizontalScrollView(this); nav.setHorizontalScrollBarEnabled(false);
         LinearLayout tabs = row(); nav.addView(tabs); header.addView(nav);
-        for (String name : new String[]{"Tutti i libri", "Mappa", "Autori", "Saghe"}) {
+        for (String name : new String[]{"Tutti i libri", "In lettura", "Desideri", "Letti", "Mappa", "Autori", "Saghe"}) {
             TextView t = text(name, 14, tab.equals(name) ? INK : MUTED, false);
             t.setPadding(dp(12), dp(12), dp(12), dp(12)); t.setMinHeight(dp(48));
             if (tab.equals(name)) { t.setTypeface(Typeface.DEFAULT_BOLD); t.setBackground(background(WHITE, LINE)); }
@@ -152,6 +154,9 @@ public final class MainActivity extends Activity {
     private ArrayList<Book> filtered() {
         ArrayList<Book> list = store.snapshot(); String needle = query.toLowerCase(Locale.ROOT).trim();
         list.removeIf(b -> !(b.title + " " + b.author + " " + b.series + " " + b.genre).toLowerCase(Locale.ROOT).contains(needle));
+        if (tab.equals("Desideri")) list.removeIf(b -> !b.format.equals("CATALOGO"));
+        if (tab.equals("In lettura")) list.removeIf(b -> !b.status.equals("In lettura"));
+        if (tab.equals("Letti")) list.removeIf(b -> !b.status.equals("Letto"));
         list.sort((a, b) -> EbookParser.naturalCompare(a.title, b.title)); return list;
     }
 
@@ -172,7 +177,7 @@ public final class MainActivity extends Activity {
         if (tab.equals("Mappa")) { showMap(list); return; }
         if (tab.equals("Autori") || tab.equals("Saghe")) { showIndex(list, tab.equals("Autori")); return; }
         content.addView(text("I tuoi libri", 28, INK, true)); gap(content, 5);
-        content.addView(text(list.size() + " titoli · Le copertine sono estratte dai tuoi libri", 13, MUTED, false));
+        content.addView(text(list.size() + " titoli · Libri importati e schede dal catalogo online", 13, MUTED, false));
         gap(content, 20); grid(content, list);
     }
 
@@ -206,6 +211,7 @@ public final class MainActivity extends Activity {
             card.addView(text(b.author, 12, MUTED, false));
             if (!b.series.isEmpty()) { gap(card, 5); card.addView(text("↳ " + b.series + order(b), 12, SAGE, false)); }
             if (!b.status.equals("Da leggere")) { gap(card, 5); card.addView(text(b.status, 11, COPPER, false)); }
+            card.addView(text(progressLabel(b), 11, SAGE, false));
             card.setOnClickListener(v -> details(b)); art.setOnClickListener(v -> details(b));
         }
         int remainder = books.size() % columns;
@@ -289,22 +295,29 @@ public final class MainActivity extends Activity {
         }
         panel.addView(text(b.title, 28, INK, true)); gap(panel, 6);
         panel.addView(text(b.author, 16, SAGE, false)); gap(panel, 12);
+        bibliographic(panel, b);
         if (!b.series.isEmpty()) panel.addView(text(b.series + order(b), 14, SAGE, false));
         if (!b.genre.isEmpty()) panel.addView(text(b.genre, 13, MUTED, false));
-        panel.addView(text(b.format + " · " + b.status, 13, MUTED, false));
+        panel.addView(text((b.format.equals("CATALOGO") ? "Scheda senza file" : b.format) + " · " + b.status, 13, MUTED, false));
+        panel.addView(text(progressLabel(b), 14, SAGE, false));
+        if (!b.notes.isEmpty()) panel.addView(text(b.notes, 15, INK, false));
+        if (!b.source.isEmpty()) panel.addView(button("Scheda su Open Library", false, () -> {
+            if (b.source.matches("/works/OL[0-9]+W")) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://openlibrary.org" + b.source)));
+        }));
         if (!b.description.isEmpty()) { gap(panel, 14); panel.addView(text(b.description, 15, INK, false)); }
         gap(panel, 18);
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
         AlertDialog dialog = new AlertDialog.Builder(this).setView(scroll).setNegativeButton("Chiudi", null).create();
-        panel.addView(button(b.page > 0 ? "Riprendi la lettura" : "Leggi", true, () -> { dialog.dismiss(); openReader(b); })); gap(panel, 8);
+        if (!b.format.equals("CATALOGO")) panel.addView(button(b.page > 0 ? "Riprendi la lettura" : "Leggi", true, () -> { dialog.dismiss(); openReader(b); })); gap(panel, 8);
         panel.addView(button("Stato di lettura", false, () -> {
-            String[] values = {"Da leggere", "In lettura", "Letto"};
+            String[] values = {"Da leggere", "In lettura", "Letto", "In pausa", "Abbandonato"};
             new AlertDialog.Builder(this).setTitle("Stato di lettura").setItems(values, (d, w) -> {
-                b.status = values[w]; save(); dialog.dismiss(); renderContent(); details(b);
+                b.status = values[w]; if (b.status.equals("Letto") && b.totalPages > 0) b.currentPage = b.totalPages; save(); dialog.dismiss(); renderContent(); details(b);
             }).show();
         })); gap(panel, 8);
+        panel.addView(button("Aggiorna avanzamento e note", false, () -> { dialog.dismiss(); progress(b); })); gap(panel, 8);
         panel.addView(button("Modifica scheda", false, () -> { dialog.dismiss(); edit(b); })); gap(panel, 8);
-        panel.addView(button("Esporta il file originale", false, () -> {
+        if (!b.format.equals("CATALOGO")) panel.addView(button("Esporta il file originale", false, () -> {
             exportId = b.id;
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType(b.format.equals("EPUB") ? "application/epub+zip" : b.format.equals("TXT") ? "text/plain" : "application/vnd.comicbook+zip")
@@ -319,6 +332,116 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void bibliographic(LinearLayout panel, Book b) {
+        panel.addView(text("Editore: " + available(b.publisher) + "\nAnno: " + available(b.year)
+            + "\nLingua: " + available(b.language) + "\nISBN / identificatore: " + available(b.isbn)
+            + "\nGenere: " + available(b.genre), 13, MUTED, false));
+    }
+    private static String available(String value) { return value.isEmpty() ? "Non disponibile" : value; }
+
+    private void previewImports(ArrayList<Book> candidates, int index) {
+        if (index >= candidates.size()) { renderContent(); return; }
+        preview(candidates.get(index), () -> previewImports(candidates, index + 1));
+    }
+
+    private void preview(Book b, Runnable next) {
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(16), dp(24), dp(20));
+        Bitmap image = b.onlineCover == null ? cover(b) : decode(null, b.onlineCover, 700);
+        if (image != null) {
+            ImageView art = new ImageView(this); art.setImageBitmap(image); art.setContentDescription("Copertina di " + b.title);
+            art.setScaleType(ImageView.ScaleType.FIT_CENTER); panel.addView(art, new LinearLayout.LayoutParams(-1, dp(220)));
+        }
+        panel.addView(text(b.title, 28, INK, true)); panel.addView(text(b.author, 18, SAGE, false)); gap(panel, 12);
+        bibliographic(panel, b); gap(panel, 14); panel.addView(text("Trama", 20, INK, true));
+        panel.addView(text(available(b.description), 16, INK, false)); gap(panel, 12);
+        panel.addView(text(b.source.isEmpty() ? "Dati estratti dal file scelto. Puoi correggerli dalla scheda dopo l’aggiunta." : "Fonte: Open Library · " + b.source + "\nEdizione di riferimento: " + available(b.edition) + " · I dati possono variare tra edizioni. La scheda non include il file del libro.", 13, MUTED, false));
+        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Anteprima del libro").setView(scroll)
+            .setNegativeButton("Non aggiungere", null).setPositiveButton("Aggiungi alla mia libreria", null).create();
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> { store.discardCandidate(b); dialog.dismiss(); next.run(); });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try { store.addCatalog(b); dialog.dismiss(); next.run(); }
+                catch (Exception e) { error(e); }
+            });
+        });
+        dialog.setOnCancelListener(d -> { store.discardCandidate(b); next.run(); }); dialog.show();
+    }
+
+    static String progressLabel(Book b) {
+        if (b.totalPages > 0) return "Pagina " + b.currentPage + " / " + b.totalPages + " · " + Math.round(100.0 * b.currentPage / b.totalPages) + "%";
+        return b.currentPage > 0 ? "Pagina " + b.currentPage : "Avanzamento da impostare";
+    }
+
+    private void progress(Book b) {
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(12));
+        panel.addView(text("Registra dove sei arrivato, anche per un libro cartaceo. Queste pagine sono separate dalla posizione del lettore digitale.", 14, MUTED, false));
+        EditText current = field(panel, "Pagina attuale", Integer.toString(b.currentPage));
+        EditText total = field(panel, "Pagine totali (0 se sconosciute)", Integer.toString(b.totalPages));
+        current.setInputType(android.text.InputType.TYPE_CLASS_NUMBER); total.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText notes = field(panel, "Note personali", b.notes); notes.setSingleLine(false); notes.setMinLines(3);
+        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Avanzamento di lettura").setView(scroll)
+            .setNegativeButton("Annulla", null).setPositiveButton("Salva", null).create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            int c, t;
+            try { c = Integer.parseInt(current.getText().toString()); t = Integer.parseInt(total.getText().toString()); }
+            catch (NumberFormatException e) { current.setError("Inserisci numeri interi validi"); return; }
+            if (c < 0 || t < 0 || (t > 0 && c > t)) { current.setError("La pagina attuale deve essere tra 0 e il totale"); return; }
+            int oldC = b.currentPage, oldT = b.totalPages; String oldNotes = b.notes, oldStatus = b.status;
+            b.currentPage = c; b.totalPages = t; b.notes = notes.getText().toString();
+            if (t > 0 && c == t) b.status = "Letto";
+            else if (c > 0 && (b.status.equals("Da leggere") || b.status.equals("Letto"))) b.status = "In lettura";
+            try { store.save(); } catch (Exception e) { b.currentPage = oldC; b.totalPages = oldT; b.notes = oldNotes; b.status = oldStatus; error(e); return; }
+            dialog.dismiss(); renderContent(); details(b);
+        })); dialog.show();
+    }
+
+    private void onlineSearch() {
+        LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
+        panel.addView(text("Cerca su Open Library per titolo, autore o ISBN. Si aggiunge una scheda personale, anche se non possiedi il file. La ricerca invia al servizio solo il testo inserito.", 14, MUTED, false));
+        EditText input = field(panel, "Titolo, autore o ISBN", "");
+        LinearLayout results = column();
+        Button search = button("Cerca", true, () -> { });
+        panel.addView(search); gap(panel, 12); panel.addView(results);
+        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Cerca libri online").setView(scroll).setNegativeButton("Chiudi", null).create();
+        search.setOnClickListener(v -> {
+            String term = input.getText().toString().trim();
+            if (term.length() < 2) { input.setError("Inserisci almeno due caratteri"); return; }
+            search.setEnabled(false); results.removeAllViews(); results.addView(text("Ricerca in corso…", 14, MUTED, false));
+            worker.execute(() -> {
+                try {
+                    ArrayList<Book> found = OnlineCatalog.search(term);
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed() || !dialog.isShowing()) return;
+                        search.setEnabled(true); results.removeAllViews();
+                        results.addView(text(found.isEmpty() ? "Nessun risultato. Prova titolo e autore o un ISBN." : "Primi " + found.size() + " risultati · Fonte: Open Library", 13, MUTED, false));
+                        for (Book candidate : found) {
+                            gap(results, 10); results.addView(text(candidate.title, 20, INK, true));
+                            results.addView(text(candidate.author, 14, SAGE, false));
+                            Book existing = store.find(candidate.id);
+                            results.addView(button(existing == null ? "Vedi la scheda completa" : "Già in libreria · Apri", false, () -> {
+                                if (existing != null) { dialog.dismiss(); details(existing); return; }
+                                ProgressDialog loading = ProgressDialog.show(this, "Scheda del libro", "Caricamento trama e metadati…", true, false);
+                                worker.execute(() -> {
+                                    try {
+                                        OnlineCatalog.enrich(candidate);
+                                        runOnUiThread(() -> { loading.dismiss(); if (!isFinishing() && !isDestroyed()) preview(candidate, () -> { dialog.dismiss(); showLibrary(); }); });
+                                    } catch (Exception e) { runOnUiThread(() -> { loading.dismiss(); if (!isFinishing() && !isDestroyed()) error(e); }); }
+                                });
+                            })); rule(results);
+                        }
+                    });
+                } catch (Exception e) { runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed() || !dialog.isShowing()) return;
+                    search.setEnabled(true); results.removeAllViews();
+                    results.addView(text("Ricerca non disponibile. Controlla la connessione e riprova. " + message(e), 14, COPPER, false));
+                }); }
+            });
+        }); dialog.show();
+    }
+
     private EditText field(LinearLayout panel, String label, String value) {
         panel.addView(text(label, 12, SAGE, false));
         EditText input = new EditText(this); input.setText(value); input.setTextSize(16); input.setSingleLine(true);
@@ -330,6 +453,9 @@ public final class MainActivity extends Activity {
         EditText series = field(panel, "Saga", b.series), number = field(panel, "Numero nella saga", b.number > 0 ? number(b.number) : "");
         number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         EditText genre = field(panel, "Genere", b.genre);
+        EditText description = field(panel, "Trama", b.description); description.setSingleLine(false); description.setMinLines(3);
+        EditText publisher = field(panel, "Editore", b.publisher), year = field(panel, "Anno", b.year);
+        EditText language = field(panel, "Lingua", b.language), isbn = field(panel, "ISBN / identificatore", b.isbn);
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Modifica scheda").setView(scroll)
             .setNegativeButton("Annulla", null).setPositiveButton("Salva", null).create();
@@ -342,6 +468,8 @@ public final class MainActivity extends Activity {
             b.title = title.getText().toString().trim(); b.author = author.getText().toString().trim();
             if (b.author.isEmpty()) b.author = "Autore sconosciuto";
             b.series = series.getText().toString().trim(); b.number = n; b.genre = genre.getText().toString().trim();
+            b.description = description.getText().toString().trim(); b.publisher = publisher.getText().toString().trim();
+            b.year = year.getText().toString().trim(); b.language = language.getText().toString().trim(); b.isbn = isbn.getText().toString().trim();
             save(); dialog.dismiss(); renderContent(); details(b);
         })); dialog.show();
     }
@@ -367,21 +495,22 @@ public final class MainActivity extends Activity {
             }
             busy = true; showLibrary();
             worker.execute(() -> {
-                int added = 0, duplicate = 0; ArrayList<String> errors = new ArrayList<>();
+                int duplicate = 0; ArrayList<String> errors = new ArrayList<>();
+                LinkedHashMap<String, Book> candidates = new LinkedHashMap<>();
                 for (Uri uri : uris) {
-                    try { if (store.importBook(uri) == null) duplicate++; else added++; }
+                    try { Book candidate = store.importBook(uri); if (candidate == null || candidates.containsKey(candidate.id)) duplicate++; else candidates.put(candidate.id, candidate); }
                     catch (Exception e) { errors.add(message(e)); }
                     finally {
                         try { getContentResolver().releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
                         catch (SecurityException ignored) { }
                     }
                 }
-                final String report = added + " libri aggiunti" + (duplicate > 0 ? " · " + duplicate + " già presenti" : "");
+                final String report = candidates.size() + " schede da confermare" + (duplicate > 0 ? " · " + duplicate + " già presenti" : "");
                 runOnUiThread(() -> {
                     busy = false; if (isFinishing() || isDestroyed()) return;
                     showLibrary();
                     new AlertDialog.Builder(this).setTitle("Importazione completata").setMessage(report + (errors.isEmpty() ? "" : "\n\n" + String.join("\n", errors)))
-                        .setPositiveButton("Va bene", null).show();
+                        .setPositiveButton("Vedi le schede", (d, w) -> previewImports(new ArrayList<>(candidates.values()), 0)).setCancelable(false).show();
                 });
             });
         } else if (request == EXPORT && data.getData() != null && exportId != null) {

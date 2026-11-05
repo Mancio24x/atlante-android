@@ -5,11 +5,37 @@ Interfaccia nativa con i colori crema, petrolio, rame e salvia dei riferimenti, 
 serif, copertine e mappa autore → saga → libro. Non contiene libri personali o dati
 della biblioteca sul computer.
 
-**Stato attuale: sorgente preparato; APK non ancora compilato.** Nell’ambiente Craft
-Anything usato per questa modifica non sono presenti JDK/Gradle/SDK Android e il
-download degli strumenti non è disponibile. Le verifiche desktop non certificano
-la compilazione o l’esecuzione Android. Il workflow incluso eseguirà compilazione,
-test, lint e verifica della firma prima di pubblicare un APK.
+**APK disponibile nelle [release GitHub](https://github.com/Mancio24x/atlante-android/releases/latest).**
+La compilazione automatica esegue test JVM, lint e verifica della firma; la prova su telefono resta necessaria.
+
+## Ricerca online, schede e avanzamento
+
+Premi **Cerca libri online** e cerca un titolo, autore o ISBN su Open Library.
+**Vedi la scheda completa** apre un’anteprima con copertina, autore, trama e
+metadati dell’edizione di riferimento (preferita italiana tra quelle restituite).
+I campi mancanti sono indicati come non disponibili. Verifica l’edizione e premi
+**Aggiungi alla mia libreria**: viene salvata una scheda senza file, disponibile
+anche offline e nella sezione **Desideri**. La ricerca non scarica ebook.
+Lo stesso lavoro di Open Library viene riconosciuto per evitare schede duplicate.
+
+Anche i file importati passano da una scheda di anteprima: ogni libro viene
+aggiunto solo dopo conferma. I dati del file, inclusa la trama se presente,
+restano modificabili in **Modifica scheda**. I cataloghi esistenti vengono conservati.
+
+Dalla scheda usa **Aggiorna avanzamento e note** per pagina attuale, totale e
+note personali, anche per un cartaceo. La percentuale viene calcolata dal totale.
+Lo stato comprende Da leggere, In lettura, Letto, In pausa e Abbandonato; le sezioni
+**In lettura** e **Letti** aiutano a ritrovare i titoli. Il segnalibro del lettore
+digitale resta separato dalle pagine dell’edizione cartacea inserite manualmente.
+L’icona dell’app mostra un libro con bandiera pirata.
+
+Le ricerche HTTPS avvengono solo su richiesta e inviano a Open Library il testo
+cercato; l’apertura di una scheda richiede metadati e copertina della scheda scelta.
+File, catalogo locale e note non vengono inviati. Timeout e dimensioni delle
+risposte sono limitati e le ricerche recenti sono riutilizzate in memoria.
+Riferimenti: [Search API](https://openlibrary.org/dev/docs/api/search),
+[Works API](https://openlibrary.org/dev/docs/api/books),
+[linee guida API](https://openlibrary.org/developers/api).
 
 ## Funzioni dell’edizione Android
 
@@ -26,10 +52,10 @@ test, lint e verifica della firma prima di pubblicare un APK.
 - Stato Da leggere/In lettura/Letto; esportazione del file originale e rimozione
   della sola copia nella libreria Android.
 
-Questa prima edizione non comprende conversioni AZW3/EPUB, ricerca online,
+Questa edizione non comprende conversioni AZW3/EPUB,
 assistente AI, scaffali multipli, PDF/FB2/MOBI, sincronizzazione o importazione
 automatica del catalogo desktop. I libri si importano dal telefono.
-Nessun permesso Internet o di accesso generale alla memoria viene richiesto.
+Il permesso Internet serve alla ricerca online; non è richiesto accesso generale alla memoria.
 Non aggira DRM. Limiti: 512 MB per file, 32 MB per voce ZIP/testo e 5000 pagine CBZ.
 I dati sono privati dell’app: disinstallandola vengono cancellati; un normale
 aggiornamento firmato con la stessa chiave li conserva.
