@@ -89,8 +89,9 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams size = new FrameLayout.LayoutParams(width,-1,Gravity.START); overlay.addView(scroll,size);
         LinearLayout menu = column(); menu.setPadding(dp(18), Math.max(dp(18),insetTop),dp(18),Math.max(dp(24),insetBottom)); scroll.addView(menu);
         LinearLayout top = row(); menu.addView(top);
-        top.addView(text("Atlante",28,INK,true),new LinearLayout.LayoutParams(0,-2,1));
-        Button close = button("×", false, this::closeDrawer); close.setContentDescription("Chiudi menu laterale"); top.addView(close);
+        Button close = button("☰", false, this::closeDrawer); close.setContentDescription("Chiudi menu laterale");
+        top.addView(close,new LinearLayout.LayoutParams(dp(52),dp(48)));
+        TextView brand = text("  Atlante",28,INK,true); top.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
         menu.addView(text("LA TUA BIBLIOTECA",11,SAGE,false)); gap(menu,18);
         for (String name : new String[]{"Tutti i libri","Desideri","In lettura","Letti","Mappa","Autori","Saghe"}) {
             Button item = button((tab.equals(name) ? "•  " : "") + name,tab.equals(name),() -> {
@@ -120,10 +121,14 @@ public final class MainActivity extends Activity {
         panel.addView(text("ASPETTO",11,SAGE,false)); gap(panel,8);
         panel.addView(button("◐ Temi · " + palette.name,false,() -> { dialog.dismiss(); chooseTheme(); })); gap(panel,20);
         panel.addView(text("LETTURA",11,SAGE,false)); gap(panel,10);
-        Switch dark = new Switch(this); dark.setText("Lettore scuro"); dark.setTextColor(INK); dark.setChecked(readerDark); dark.setMinHeight(dp(48)); panel.addView(dark);
+        Switch dark = new Switch(this); dark.setText("Lettore scuro"); dark.setTextColor(INK); dark.setChecked(readerDark); dark.setMinHeight(dp(48));
+        dark.setThumbTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{SAGE,MUTED}));
+        dark.setTrackTintList(android.content.res.ColorStateList.valueOf(LINE)); panel.addView(dark);
         dark.setOnCheckedChangeListener((v, checked) -> { readerDark=checked; getPreferences(MODE_PRIVATE).edit().putBoolean("dark",checked).apply(); });
         TextView label = text("Dimensione del testo · " + Math.round(fontSize),15,INK,false); panel.addView(label);
-        SeekBar font = new SeekBar(this); font.setMax(72); font.setProgress(Math.round(fontSize)-8); font.setContentDescription("Dimensione del testo del lettore"); panel.addView(font);
+        SeekBar font = new SeekBar(this); font.setMax(72); font.setProgress(Math.round(fontSize)-8); font.setContentDescription("Dimensione del testo del lettore");
+        font.setProgressTintList(android.content.res.ColorStateList.valueOf(SAGE)); font.setThumbTintList(android.content.res.ColorStateList.valueOf(SAGE));
+        font.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE)); panel.addView(font);
         font.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onProgressChanged(SeekBar bar,int value,boolean fromUser) { if(fromUser) { fontSize=value+8; label.setText("Dimensione del testo · "+Math.round(fontSize)); getPreferences(MODE_PRIVATE).edit().putFloat("fontSize",fontSize).apply(); } }
             public void onStartTrackingTouch(SeekBar bar) { }
@@ -315,8 +320,8 @@ public final class MainActivity extends Activity {
                 image.setContentDescription("Copertina di " + b.title); image.setScaleType(ImageView.ScaleType.FIT_CENTER);
                 art.addView(image, new FrameLayout.LayoutParams(-1, -1));
             } else {
-                TextView fallback = text(b.author + "\n\n" + b.title, 18, ON_ACCENT, true);
-                fallback.setBackground(background(SAGE, Color.TRANSPARENT)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
+                TextView fallback = text(b.author + "\n\n" + b.title, 18, SAGE, true);
+                fallback.setBackground(background(PAPER, LINE)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
                 art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
             }
             TextView format = text(b.format.equals("CATALOGO") ? "DESIDERIO" : b.format, 10, INK, false); format.setTypeface(Typeface.DEFAULT_BOLD);

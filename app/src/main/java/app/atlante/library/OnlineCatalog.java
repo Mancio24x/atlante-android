@@ -12,6 +12,7 @@ final class OnlineCatalog {
     private static final Map<String, Long> nextRequest = new HashMap<>();
     private static File cacheDirectory;
     private static final LinkedHashMap<String, String> cache = new LinkedHashMap<>();
+    private static final Map<String,Long> cacheTimes = new HashMap<>();
     static synchronized void configure(File directory) { cacheDirectory = directory; }
     private static String hash(String value) throws Exception {
         StringBuilder hex = new StringBuilder();
@@ -62,12 +63,19 @@ final class OnlineCatalog {
 
     static ArrayList<Book> search(String query) throws Exception {
         query = query.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
-        String response = cache.get(query);
+        String response;
+        synchronized (cache) {
+            response = cache.get(query);
+            Long time = cacheTimes.get(query);
+            if (time == null || System.currentTimeMillis()-time > 15*60*1000L) response=null;
+        }
         if (response == null) {
             response = new String(request("https://openlibrary.org/search.json?q=" + URLEncoder.encode(query, "UTF-8")
                 + "&lang=it&limit=12&fields=key,title,author_name,first_publish_year,cover_i", 2 * 1024 * 1024), StandardCharsets.UTF_8);
-            if (cache.size() >= 8) cache.remove(cache.keySet().iterator().next());
-            cache.put(query, response);
+            synchronized (cache) {
+                if (cache.size() >= 8) { String oldest = cache.keySet().iterator().next(); cache.remove(oldest); cacheTimes.remove(oldest); }
+                cache.put(query, response); cacheTimes.put(query,System.currentTimeMillis());
+            }
         }
         return parseSearch(response);
     }

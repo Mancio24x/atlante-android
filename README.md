@@ -12,7 +12,7 @@ La compilazione automatica esegue test JVM, lint e verifica della firma; la prov
 
 Il pulsante **☰** in alto a sinistra apre il menu laterale: Tutti i libri, Desideri,
 In lettura, Letti, Mappa, Autori e Saghe, più ricerca online, importazione e impostazioni.
-Il menu si chiude con **×**, toccando fuori o premendo Indietro.
+Il menu si chiude con **☰**, toccando fuori o premendo Indietro.
 La rotella **⚙** apre le impostazioni, con temi e preferenze di lettura.
 
 Sono disponibili nove temi, ricordati al riavvio: **Atlante**, **Rosa petalo**,
