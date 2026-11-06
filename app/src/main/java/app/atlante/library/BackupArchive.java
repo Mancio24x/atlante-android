@@ -31,6 +31,16 @@ final class BackupArchive {
         final ArrayList<Book> books = new ArrayList<>();
         long createdAt;
         boolean includesFiles;
+        /** What was recognized, shown in the summary (e.g. "Backup di Atlante", "Goodreads (CSV)"). */
+        String kind = "Backup di Atlante";
+        /** Atlante data with its own identifiers and possibly files; otherwise new catalog sheets. */
+        boolean atlante = true;
+        /** Inner ZIP that holds the backup, and the folder of the manifest inside it ("" at the root). */
+        String nested, prefix = "";
+        /** Read from a ZIP (book files and covers can then be extracted from it). */
+        boolean fromZip;
+        /** Covers carried inside the imported file (HTML catalogs, Calibre folders), by book id. */
+        final Map<String, byte[]> covers = new HashMap<>();
     }
 
     /** Writes the manifest first, then covers and, if requested, the imported book files. */
@@ -98,11 +108,28 @@ final class BackupArchive {
      * Returns the identifiers whose book file was restored.
      */
     static Set<String> extract(InputStream source, Map<String, Book> wanted, File staging) throws Exception {
+        return extract(source, wanted, staging, null, "");
+    }
+
+    /** As above, for a backup kept in a folder ({@code prefix}) or inside another ZIP ({@code nested}). */
+    static Set<String> extract(InputStream source, Map<String, Book> wanted, File staging, String nested, String prefix) throws Exception {
+        try (ZipInputStream outer = new ZipInputStream(new BufferedInputStream(source))) {
+            if (nested == null) return extractEntries(outer, wanted, staging, prefix);
+            ZipEntry entry;
+            while ((entry = outer.getNextEntry()) != null)
+                if (entry.getName().equals(nested)) return extractEntries(new ZipInputStream(outer), wanted, staging, prefix);
+        }
+        return new HashSet<>();
+    }
+
+    private static Set<String> extractEntries(ZipInputStream zip, Map<String, Book> wanted, File staging, String prefix) throws Exception {
         HashSet<String> restored = new HashSet<>();
-        try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(source))) {
+        {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
-                Matcher m = ENTRY.matcher(entry.getName());
+                String name = entry.getName();
+                if (!prefix.isEmpty()) { if (!name.startsWith(prefix)) continue; name = name.substring(prefix.length()); }
+                Matcher m = ENTRY.matcher(name);
                 if (entry.isDirectory() || !m.matches()) continue;
                 Book book = wanted.get(m.group(1));
                 if (book == null) continue;

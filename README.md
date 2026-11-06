@@ -68,9 +68,27 @@ leggero senza file. **Ripristina da backup** mostra un riepilogo e, dopo conferm
 aggiunge solo i libri non presenti: le schede già sul telefono non vengono toccate.
 I file ripristinati devono corrispondere alla loro impronta SHA-256; voci sconosciute
 o percorsi non sicuri nello ZIP vengono ignorati. Un libro ripristinato senza file
-conserva note e avanzamento: reimportando lo stesso file da **☰ › Importa file**
+conserva note e avanzamento: reimportando lo stesso file da **☰ › Importa ebook**
 viene ricollegato alla sua scheda. Durante la lettura, la posizione viene salvata
 poco dopo l’ultima pagina girata e all’uscita dal lettore.
+
+## Importare un catalogo da altre app
+
+**☰ › Importa catalogo o backup** (oppure **Impostazioni › Backup › Ripristina o importa
+un catalogo**) riconosce da solo il formato del file scelto:
+
+- **backup di Atlante**: lo ZIP di *Esporta backup*, anche se è stato estratto (il solo
+  `atlante-backup.json`), messo in una cartella o compresso dentro un altro ZIP;
+- **elenchi CSV** con intestazione, separati da virgola, punto e virgola o tabulazione,
+  anche esportati da **Goodreads** e **StoryGraph**: titolo, autore, saga e numero, ISBN,
+  editore, anno, pagine, genere, tag, stato, voto, date di lettura, note e trama;
+- **catalogo HTML di Atlante** (`Atlante_dei_libri.html`) con le copertine incorporate;
+- **librerie Calibre**: uno ZIP con le cartelle dei libri e i loro `metadata.opf`,
+  comprese copertine, serie e valutazioni.
+
+Prima di aggiungere mostra il formato riconosciuto e quanti libri sono nuovi. Un libro
+già presente (stesso identificativo, stesso ISBN o stesso titolo e autore) non viene
+duplicato né modificato. I libri importati da altre app diventano schede senza file.
 
 ## Filtri e ordinamento della biblioteca
 

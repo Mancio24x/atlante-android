@@ -154,7 +154,8 @@ public final class MainActivity extends AppCompatActivity {
         }
         gap(menu, 8); rule(menu); gap(menu, 8);
         menu.addView(drawerItem("Cerca libri online", false, () -> { closeDrawer(); onlineSearch(); }));
-        Button add = drawerItem("Importa file", false, () -> { closeDrawer(); chooseBooks(); }); add.setEnabled(!busy); menu.addView(add);
+        Button add = drawerItem("Importa ebook (EPUB, TXT, CBZ)", false, () -> { closeDrawer(); chooseBooks(); }); add.setEnabled(!busy); menu.addView(add);
+        Button catalog = drawerItem("Importa catalogo o backup", false, () -> { closeDrawer(); chooseBackup(); }); catalog.setEnabled(!busy); menu.addView(catalog);
         menu.addView(drawerItem("Impostazioni", false, () -> { closeDrawer(); settings(); }));
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         screen.addView(overlay,new FrameLayout.LayoutParams(-1,-1)); close.requestFocus();
@@ -193,9 +194,10 @@ public final class MainActivity extends AppCompatActivity {
         gap(panel,20); panel.addView(sectionLabel("RICERCA ONLINE")); gap(panel,8);
         panel.addView(text("Open Library · Le ricerche recenti e le schede vengono riutilizzate dalla cache. I libri e le note personali restano sul dispositivo.",14,MUTED,false));
         gap(panel,20); panel.addView(sectionLabel("BACKUP")); gap(panel,8);
-        panel.addView(text("Salva catalogo, note, avanzamento e copertine in un file ZIP da conservare fuori dall’app. Disinstallando Atlante i dati interni vengono cancellati.",14,MUTED,false)); gap(panel,8);
+        panel.addView(text("Salva catalogo, note, avanzamento e copertine in un file ZIP da conservare fuori dall’app. Disinstallando Atlante i dati interni vengono cancellati. "
+            + "Per importare puoi scegliere un backup di Atlante (anche estratto), un elenco CSV (anche Goodreads o StoryGraph), un catalogo HTML di Atlante o una libreria Calibre.",14,MUTED,false)); gap(panel,8);
         panel.addView(button("Esporta backup",false,() -> { dialog.dismiss(); exportBackup(); })); gap(panel,8);
-        Button restore = button("Ripristina da backup",false,() -> { dialog.dismiss(); chooseBackup(); }); restore.setEnabled(!busy); panel.addView(restore);
+        Button restore = button("Ripristina o importa un catalogo",false,() -> { dialog.dismiss(); chooseBackup(); }); restore.setEnabled(!busy); panel.addView(restore);
         gap(panel,20); panel.addView(sectionLabel("ATLANTE LIBRARY")); gap(panel,8);
         panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
         dialog.show();
@@ -589,7 +591,7 @@ public final class MainActivity extends AppCompatActivity {
         float round = dp(28); box.setBoxCornerRadii(round, round, round, round);
         MaterialAutoCompleteTextView field = new MaterialAutoCompleteTextView(box.getContext());
         field.setSingleLine(true); field.setThreshold(1); field.setContentDescription("Cerca l’autore della mappa");
-        field.setAdapter(new ArrayAdapter<>(this, com.google.android.material.R.layout.m3_auto_complete_simple_item, authors));
+        field.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, authors));
         field.setText(mapAuthor, false); field.setSelectAllOnFocus(true);
         // Tapping the field lists every author; typing narrows the list.
         field.setOnClickListener(v -> { if (!authors.isEmpty()) field.showDropDown(); });
@@ -1236,34 +1238,56 @@ public final class MainActivity extends AppCompatActivity {
         worker.execute(() -> {
             try (InputStream in = getContentResolver().openInputStream(source)) {
                 if (in == null) throw new IOException("File non disponibile");
-                BackupArchive.Contents contents = BackupArchive.readManifest(in);
+                BackupArchive.Contents contents = CatalogImport.read(in, store.name(source));
                 runOnUiThread(() -> { loading.dismiss(); busy = false; if (!isFinishing() && !isDestroyed()) confirmRestore(source, contents); });
             } catch (Exception e) { runOnUiThread(() -> { loading.dismiss(); busy = false; if (!isFinishing() && !isDestroyed()) error(e); }); }
         });
     }
 
     private void confirmRestore(Uri source, BackupArchive.Contents contents) {
+        // Already in the library: same identifier, or (for other apps' lists) same ISBN or same title and author.
+        ArrayList<Book> library = store.snapshot();
         LinkedHashMap<String, Book> fresh = new LinkedHashMap<>();
-        for (Book b : contents.books) if (store.find(b.id) == null) fresh.put(b.id, b);
+        for (Book b : contents.books) {
+            boolean present = store.find(b.id) != null;
+            if (!present && !contents.atlante) for (Book known : library) if (SbnCatalog.sameWork(known, b)) { present = true; break; }
+            if (!present) fresh.put(b.id, b);
+        }
         int kept = contents.books.size() - fresh.size();
-        String date = contents.createdAt > 0 ? java.text.DateFormat.getDateTimeInstance().format(new Date(contents.createdAt)) : "data sconosciuta";
-        String summary = "Backup del " + date + "\n" + contents.books.size() + " libri nel backup\n" + fresh.size() + " da aggiungere\n"
-            + kept + " già presenti: restano come sono sul telefono";
-        if (fresh.isEmpty()) { dialogBuilder().setTitle("Niente da ripristinare").setMessage(summary).setPositiveButton("OK", null).show(); return; }
-        dialogBuilder().setTitle("Ripristinare il backup?").setMessage(summary + "\n\nNessun libro già presente verrà modificato o rimosso.")
-            .setNegativeButton("Annulla", null).setPositiveButton("Ripristina", (d, w) -> applyRestore(source, fresh)).show();
+        String date = contents.createdAt > 0 ? " del " + java.text.DateFormat.getDateTimeInstance().format(new Date(contents.createdAt)) : "";
+        int read = 0, rated = 0, covers = 0;
+        for (Book b : fresh.values()) { if (b.status.equals(Book.READ)) read++; if (b.rating > 0) rated++; if (contents.covers.containsKey(b.id)) covers++; }
+        String summary = "Formato riconosciuto: " + contents.kind + date + "\n" + contents.books.size() + " libri nel file\n" + fresh.size() + " da aggiungere\n"
+            + kept + " già presenti: restano come sono sul telefono"
+            + (contents.atlante ? "" : "\n\nVerranno aggiunti come schede, senza file dei libri" + (read > 0 ? " · " + read + " già letti" : "")
+                + (rated > 0 ? " · " + rated + " con voto" : "") + (covers > 0 ? " · " + covers + " copertine" : "") + ".");
+        if (fresh.isEmpty()) { dialogBuilder().setTitle("Niente da aggiungere").setMessage(summary).setPositiveButton("OK", null).show(); return; }
+        dialogBuilder().setTitle(contents.atlante ? "Ripristinare il backup?" : "Importare i libri?").setMessage(summary + "\n\nNessun libro già presente verrà modificato o rimosso.")
+            .setNegativeButton("Annulla", null).setPositiveButton(contents.atlante ? "Ripristina" : "Importa", (d, w) -> applyRestore(source, contents, fresh)).show();
     }
 
-    private void applyRestore(Uri source, LinkedHashMap<String, Book> fresh) {
+    private void applyRestore(Uri source, BackupArchive.Contents contents, LinkedHashMap<String, Book> fresh) {
         busy = true;
-        AlertDialog loading = loading("Ripristino", "Copia di " + fresh.size() + " libri…");
+        AlertDialog loading = loading(contents.atlante ? "Ripristino" : "Importazione", "Aggiunta di " + fresh.size() + " libri…");
         worker.execute(() -> {
             File staging = store.staging();
             Exception failure = null; int added = 0, missing = 0;
-            try (InputStream in = getContentResolver().openInputStream(source)) {
-                if (in == null) throw new IOException("File non disponibile");
+            try {
                 LibraryStore.clear(staging);
-                Set<String> withFiles = BackupArchive.extract(in, fresh, staging);
+                Set<String> withFiles = new HashSet<>();
+                // Covers and book files of an Atlante backup are inside the ZIP; other formats carry their covers in contents.
+                if (contents.atlante && contents.fromZip) {
+                    try (InputStream in = getContentResolver().openInputStream(source)) {
+                        if (in == null) throw new IOException("File non disponibile");
+                        withFiles = BackupArchive.extract(in, fresh, staging, contents.nested, contents.prefix);
+                    }
+                }
+                for (Map.Entry<String, byte[]> cover : contents.covers.entrySet()) {
+                    if (!fresh.containsKey(cover.getKey())) continue;
+                    File folder = new File(staging, cover.getKey());
+                    if (!folder.isDirectory() && !folder.mkdirs()) continue;
+                    try (OutputStream out = new FileOutputStream(new File(folder, "cover"))) { out.write(cover.getValue()); }
+                }
                 for (Book b : fresh.values()) if (!b.format.equals("CATALOGO") && !withFiles.contains(b.id)) missing++;
                 added = store.restore(new ArrayList<>(fresh.values()), staging);
             } catch (Exception e) { failure = e; }
@@ -1273,8 +1297,8 @@ public final class MainActivity extends AppCompatActivity {
                 loading.dismiss(); busy = false; if (isFinishing() || isDestroyed()) return;
                 covers.clear(); showLibrary();
                 if (result != null) { error(result); return; }
-                dialogBuilder().setTitle("Ripristino completato").setMessage(count + " libri aggiunti alla biblioteca."
-                    + (withoutFile > 0 ? "\n\n" + withoutFile + " libri sono senza file: per leggerli reimportali da ☰ › Importa file. Note e avanzamento restano collegati." : ""))
+                dialogBuilder().setTitle(contents.atlante ? "Ripristino completato" : "Importazione completata").setMessage(count + " libri aggiunti alla biblioteca."
+                    + (withoutFile > 0 ? "\n\n" + withoutFile + " libri sono senza file: per leggerli reimportali da ☰ › Importa ebook. Note e avanzamento restano collegati." : ""))
                     .setPositiveButton("OK", null).show();
             });
         });
@@ -1360,7 +1384,7 @@ public final class MainActivity extends AppCompatActivity {
         worker.execute(() -> {
             try {
                 List<String> result;
-                if (!store.original(b).isFile()) throw new IOException("Il file di questo libro non è sul telefono: reimportalo da ☰ › Importa file. Note e avanzamento restano collegati.");
+                if (!store.original(b).isFile()) throw new IOException("Il file di questo libro non è sul telefono: reimportalo da ☰ › Importa ebook. Note e avanzamento restano collegati.");
                 if (b.format.equals("CBZ")) {
                     try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(store.original(b))) { result = EbookParser.comicPages(zip); }
                     if (result.isEmpty()) throw new IOException("Nessuna pagina nel CBZ");
