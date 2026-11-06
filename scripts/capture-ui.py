@@ -61,9 +61,9 @@ adb('shell','run-as',package,'cp','/data/local/tmp/atlante-sample.json','files/l
 adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
 tap('Biblioteca',exact=True);shot('01-library')
 tap('Apri menu laterale');shot('02-drawer');tap('Chiudi menu laterale')
-tap('Impostazioni');shot('03-settings');tap('◐ Temi');shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
+tap('Impostazioni');shot('03-settings');shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
 for theme,name in [('Lavanda','06-lavender'),('Blu polvere','07-blue'),('AMOLED nero','08-amoled')]:
-    tap('Impostazioni');tap('◐ Temi');tap(theme,True);shot(name)
+    tap('Impostazioni');tap(theme,True);shot(name)
 tap('Apri menu laterale');tap('Mappa');shot('09-map-amoled')
 # The map is full screen with an author search on top.
 tap('Anna Costa');time.sleep(.6);shot('09a-map-authors')
@@ -77,9 +77,10 @@ tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
 tap('Impostazioni')
 state=dump()
-assert any('Temi · AMOLED nero' in n.get('text','') for n in state.iter('node')), 'Theme preference was not restored'
+prefs=adb('exec-out','run-as',package,'cat','shared_prefs/MainActivity.xml').decode()
+assert '<string name="theme">amoled</string>' in prefs, 'Theme preference was not restored'
 shot('11-settings-restored')
-tap('Chiudi');shot('12-theme-restored')
+adb('shell','input','keyevent','4');time.sleep(.5);shot('12-theme-restored')
 # Manual cataloging must save only after confirmation, without requiring an ISBN.
 def catalog(): return json.loads(adb('exec-out','run-as',package,'cat','files/library.json'))
 def back(): adb('shell','input','keyevent','4');time.sleep(.5)
@@ -125,7 +126,7 @@ assert manual.get('isbn','')=='', 'Manual book unexpectedly requires ISBN'
 shot('13-manual-book');back()
 tap('Elenco');tap('Elenco',exact=True);shot('14-list-view')
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity')
-tap('Impostazioni');tap('Chiudi')
+tap('Impostazioni');back()
 assert any('Griglia' in (n.get('text',''),n.get('content-desc','')) for n in dump().iter('node')), 'List preference was not restored'
 assert any(b['title']=='AtlanteManualeProva' for b in catalog()), 'Manual book lost after restart'
 shot('15-manual-and-list-restored')
@@ -136,3 +137,11 @@ tap('Scopri',exact=True);shot('18-discover')
 tap('Sync',exact=True);shot('19-sync');tap('Collega Calibre',True);shot('19a-calibre-settings');tap('Annulla',exact=True)
 tap('Home',exact=True);shot('20-home-restored')
 print('Navigation, themes, reading states, progress wheels, chapters, manual entry, list view, bottom navigation and Sync completed.')
+
+# Dedicated settings page, returning to the originating destination, and KOReader first in Sync.
+back();tap('Sync',exact=True);shot('30-sync-koreader')
+assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'KOReader not first/visible in Sync'
+tap('Configura KOReader');shot('31-koreader-settings');tap('Annulla',exact=True)
+tap('Impostazioni');shot('32-settings-page')
+assert any('La tua biblioteca, come piace a te.' in n.get('text','') for n in dump().iter('node')), 'Settings is not a dedicated page'
+back();assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'Back did not restore Sync'

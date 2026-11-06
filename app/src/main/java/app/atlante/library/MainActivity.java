@@ -1,5 +1,7 @@
 package app.atlante.library;
 
+import org.json.JSONObject;
+
 import android.app.*;
 import android.content.*;
 import android.content.res.Configuration;
@@ -199,31 +201,41 @@ public final class MainActivity extends AppCompatActivity {
             if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing);
         }).start();
     }
-    private void settings() {
-        LinearLayout panel = column(); panel.setPadding(dp(20),dp(12),dp(20),dp(22));
-        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
-        AlertDialog dialog = dialogBuilder().setTitle("Impostazioni").setView(scroll).setNegativeButton("Chiudi",null).create();
+    private void settings() { if(!destination.equals("Impostazioni"))getPreferences(MODE_PRIVATE).edit().putString("settingsReturn",destination).apply(); navigate("Impostazioni"); }
+
+    private void settingsPage(LinearLayout panel) {
         panel.addView(sectionLabel("ASPETTO")); gap(panel,8);
-        panel.addView(button("◐ Temi · " + palette.name,false,() -> { dialog.dismiss(); chooseTheme(); })); gap(panel,20);
+        themeTiles(panel); gap(panel,20);
         panel.addView(sectionLabel("LETTURA")); gap(panel,10);
         MaterialSwitch dark = new MaterialSwitch(this); dark.setText("Lettore scuro"); dark.setTextSize(16); dark.setChecked(readerDark); dark.setMinHeight(dp(48));
         panel.addView(dark);
         dark.setOnCheckedChangeListener((v, checked) -> { readerDark=checked; getPreferences(MODE_PRIVATE).edit().putBoolean("dark",checked).apply(); });
         TextView label = text("Dimensione del testo · " + Math.round(fontSize),15,INK,false); panel.addView(label);
+        TextView sample=text("Il piacere di leggere, una pagina alla volta.",fontSize,INK,true); panel.addView(sample);
         Slider font = new Slider(this); font.setValueFrom(8); font.setValueTo(80); font.setStepSize(1); font.setValue(Math.round(fontSize));
         font.setContentDescription("Dimensione del testo del lettore"); panel.addView(font);
-        font.addOnChangeListener((slider, value, fromUser) -> { if (fromUser) { fontSize = value; label.setText("Dimensione del testo · " + Math.round(fontSize)); getPreferences(MODE_PRIVATE).edit().putFloat("fontSize", fontSize).apply(); } });
+        font.addOnChangeListener((slider, value, fromUser) -> { if (fromUser) { fontSize = value; sample.setTextSize(value); label.setText("Dimensione del testo · " + Math.round(fontSize)); getPreferences(MODE_PRIVATE).edit().putFloat("fontSize", fontSize).apply(); } });
+        gap(panel,20); panel.addView(sectionLabel("LINGUA DEI LIBRI")); gap(panel,8);
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        ArrayList<String> languages=new ArrayList<>();
+        for(String[] l:OnlineCatalog.LANGUAGES) languages.add(l[2]);
+        Picker language=new Picker(panel,"Lingua preferita per le ricerche",languages,OnlineCatalog.languageName(prefs.getString("bookLanguage","ita")));
+        MaterialSwitch only=new MaterialSwitch(this); only.setText("Cerca solo libri nella lingua scelta"); only.setChecked(prefs.getBoolean("onlyLanguage",false)); panel.addView(only);
+        panel.addView(button("Salva lingua",false,()->{ prefs.edit().putString("bookLanguage",OnlineCatalog.LANGUAGES[language.position()][0]).putBoolean("onlyLanguage",only.isChecked()).apply(); Toast.makeText(this,"Lingua di ricerca salvata",Toast.LENGTH_SHORT).show(); }));
+        panel.addView(text("Lingua dell’interfaccia: italiano.",12,MUTED,false));
+        gap(panel,20); panel.addView(sectionLabel("SAGHE E MAPPA")); gap(panel,8);
+        panel.addView(text("Riconosci saga e numero dai metadati e dai titoli. Controlla le proposte prima di applicarle. Puoi sempre correggere saga e ordine nella scheda del libro.",14,MUTED,false));
+        panel.addView(button("Riconosci saghe e ordine di lettura",false,this::recognizeSeries));
         gap(panel,20); panel.addView(sectionLabel("RICERCA ONLINE")); gap(panel,8);
-        panel.addView(text("Open Library · Le ricerche recenti e le schede vengono riutilizzate dalla cache. I libri e le note personali restano sul dispositivo.",14,MUTED,false));
+        panel.addView(text("Open Library e Google Books · Le ricerche recenti e le schede vengono riutilizzate dalla cache. I libri e le note personali restano sul dispositivo.",14,MUTED,false));
         gap(panel,20); panel.addView(sectionLabel("BACKUP")); gap(panel,8);
         panel.addView(text("Salva catalogo, note, avanzamento e copertine in un file ZIP da conservare fuori dall’app. Disinstallando Atlante i dati interni vengono cancellati. "
             + "Per importare puoi scegliere un backup di Atlante (anche estratto), un elenco CSV (anche Goodreads o StoryGraph), un catalogo HTML di Atlante o una libreria Calibre.",14,MUTED,false)); gap(panel,8);
-        panel.addView(button("Esporta backup",false,() -> { dialog.dismiss(); exportBackup(); })); gap(panel,8);
-        panel.addView(button("Scarica copertine mancanti",false,() -> { dialog.dismiss(); fetchMissingCovers(store.snapshot(), true); })); gap(panel,8);
-        Button restore = button("Ripristina o importa un catalogo",false,() -> { dialog.dismiss(); chooseBackup(); }); restore.setEnabled(!busy); panel.addView(restore);
+        panel.addView(button("Esporta backup",false,() -> { exportBackup(); })); gap(panel,8);
+        panel.addView(button("Scarica copertine mancanti",false,() -> { fetchMissingCovers(store.snapshot(), true); })); gap(panel,8);
+        Button restore = button("Ripristina o importa un catalogo",false,() -> { chooseBackup(); }); restore.setEnabled(!busy); panel.addView(restore);
         gap(panel,20); panel.addView(sectionLabel("ATLANTE LIBRARY")); gap(panel,8);
         panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
-        dialog.show();
     }
 
     /** Applies the Material theme of a palette; "dynamic" takes Material You colors from the wallpaper (Android 12+). */
@@ -283,11 +295,7 @@ public final class MainActivity extends AppCompatActivity {
             }
         };
     }
-    private void chooseTheme() {
-        LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(20));
-        panel.addView(text("Scegli l’atmosfera della tua biblioteca. Il tema viene ricordato sul dispositivo.", 14, MUTED, false)); gap(panel, 16);
-        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
-        AlertDialog dialog = dialogBuilder().setTitle("Aspetto e temi").setView(scroll).setNegativeButton("Chiudi", null).create();
+    private void themeTiles(LinearLayout panel) {
         ArrayList<ThemePalette> options = new ArrayList<>();
         if (DynamicColors.isDynamicColorAvailable()) {
             boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
@@ -307,10 +315,9 @@ public final class MainActivity extends AppCompatActivity {
             }
             tile.setContentDescription(option.name + ", " + option.description); tile.setMinimumHeight(dp(64));
             // Material themes apply when the activity is created: save and recreate.
-            tile.setOnClickListener(v -> { getPreferences(MODE_PRIVATE).edit().putString("theme", option.id).commit(); dialog.dismiss(); recreate(); });
+            tile.setOnClickListener(v -> { getPreferences(MODE_PRIVATE).edit().putString("theme", option.id).commit(); recreate(); });
             panel.addView(tile); gap(panel, 10);
         }
-        dialog.show();
     }
 
     int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
@@ -653,6 +660,8 @@ public final class MainActivity extends AppCompatActivity {
             content.setPadding(dp(20), dp(24), dp(20), dp(24));
             content.addView(text("Scegli un autore dalla ricerca in alto.", 18, MUTED, false)); return;
         }
+        content.addView(button("Riconosci saghe e ordine",false,this::recognizeSeries));
+        content.addView(text("I libri senza numero sono in fondo alla saga: assegna l’ordine dalla scheda.",12,MUTED,false));
         content.addView(new ReadingMap(this, mapAuthor, selected, this::details), new LinearLayout.LayoutParams(-1, -2));
         TextView hint = text("Autore → saga → libri nell’ordine di lettura. Tocca un libro per aprire la scheda."
             + (selected.size() == 250 ? " Sono mostrate le prime 250 opere." : ""), 12, MUTED, false);
@@ -1300,7 +1309,7 @@ public final class MainActivity extends AppCompatActivity {
         if (missing.isEmpty()) { if (announce) Toast.makeText(this, "Tutti i libri hanno già una copertina", Toast.LENGTH_SHORT).show(); return; }
         if (fetchingCovers) { if (announce) Toast.makeText(this, "Download delle copertine già in corso", Toast.LENGTH_SHORT).show(); return; }
         fetchingCovers = true;
-        if (announce) Toast.makeText(this, "Cerco " + missing.size() + " copertine su Open Library…", Toast.LENGTH_LONG).show();
+        if (announce) Toast.makeText(this, "Cerco " + missing.size() + " copertine su Open Library e Google Books…", Toast.LENGTH_LONG).show();
         coverWorker.execute(() -> {
             int found = 0;
             for (Book b : missing) {
@@ -1324,6 +1333,11 @@ public final class MainActivity extends AppCompatActivity {
 
     private void syncPage(LinearLayout p) {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        LinearLayout ko=surface(p,"KOREADER · AVANZAMENTO DI LETTURA");
+        ko.addView(text("Ricevi da KOReader la percentuale letta dei libri collegati. Funziona anche con le sole schede, senza EPUB sul telefono.",14,MUTED,false));
+        ko.addView(button("Configura KOReader",false,this::koreaderSettings));
+        ko.addView(button("Collega un libro",false,this::linkKoreader));
+        ko.addView(button("Ricevi avanzamento da KOReader",true,this::runKoreader));
         LinearLayout hc=surface(p,"HARDCOVER · STATO, PAGINA E VOTO");
         boolean hcOn=!prefs.getString("hardcoverToken","").isEmpty();
         hc.addView(text(hcOn?"Collegato"+(prefs.getString("hardcoverUser","").isEmpty()?"":" come @"+prefs.getString("hardcoverUser","")):"Non collegato. Serve una chiave personale creata nel tuo account Hardcover.",14,hcOn?INK:MUTED,false));
@@ -1351,6 +1365,68 @@ public final class MainActivity extends AppCompatActivity {
         files.addView(button("Esporta backup",false,this::exportBackup),new LinearLayout.LayoutParams(-1,-2));
         files.addView(button("Scarica copertine mancanti",R.style.Atlante_Button_Text,()->fetchMissingCovers(store.snapshot(),true)),new LinearLayout.LayoutParams(-1,-2));
         p.addView(text("Chiavi e password restano solo su questo telefono. A Hardcover e Calibre vengono inviati solo stato, pagina, capitolo e voto dei libri collegati.",12,MUTED,false));
+    }
+
+    private void recognizeSeries() {
+        ArrayList<Book> books=new ArrayList<>();ArrayList<SeriesCatalog.Proposal> proposals=new ArrayList<>();ArrayList<String> labels=new ArrayList<>();
+        for(Book b:store.snapshot()){
+            SeriesCatalog.Proposal p=SeriesCatalog.suggest(b);
+            if(p!=null&&(!p.series.equals(b.series)||p.number!=b.number)){books.add(b);proposals.add(p);labels.add(b.title+"\n"+(b.series.isEmpty()?"Senza saga":b.series+" · "+number(b.number))+" → "+p.series+" · "+number(p.number));}
+        }
+        if(books.isEmpty()){Toast.makeText(this,"Nessuna nuova saga riconosciuta. Puoi indicare saga e numero nella scheda del libro.",Toast.LENGTH_LONG).show();return;}
+        boolean[] selected=new boolean[books.size()];Arrays.fill(selected,true);
+        dialogBuilder().setTitle("Verifica "+books.size()+" proposte")
+            .setMultiChoiceItems(labels.toArray(new String[0]),selected,(d,w,checked)->selected[w]=checked)
+            .setNegativeButton("Annulla",null).setPositiveButton("Applica selezionate",(d,w)->{
+                for(int i=0;i<books.size();i++)if(selected[i]){Book b=books.get(i);SeriesCatalog.Proposal p=proposals.get(i);b.series=p.series;b.number=p.number;}
+                save();showLibrary();
+            }).show();
+    }
+
+    private void koreaderSettings() {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        LinearLayout p=column(); p.setPadding(dp(20),dp(12),dp(20),dp(12));
+        p.addView(text("In KOReader attiva Sincronizzazione avanzamento e usa lo stesso account. Per collegare tramite nome file scegli in KOReader «Metodo di identificazione: nome file», poi invia l’avanzamento. Atlante riceve la percentuale; non invia posizioni EPUB o note.",14,MUTED,false));
+        EditText server=field(p,"Server HTTPS",prefs.getString("koreaderUrl","https://sync.koreader.rocks"));
+        EditText user=field(p,"Nome utente",prefs.getString("koreaderUser",""));
+        EditText password=field(p,"Password (vuota = mantieni quella salvata)",""); password.setInputType(129);
+        dialogBuilder().setTitle("KOReader").setView(scrolled(p)).setNegativeButton("Annulla",null)
+            .setNeutralButton("Scollega",(d,w)->{prefs.edit().remove("koreaderKey").remove("koreaderUser").apply();})
+            .setPositiveButton("Salva",(d,w)->{android.content.SharedPreferences.Editor e=prefs.edit().putString("koreaderUrl",server.getText().toString().trim()).putString("koreaderUser",user.getText().toString().trim()); if(password.length()>0)e.putString("koreaderKey",SyncCore.md5(password.getText().toString())); e.apply();}).show();
+    }
+    private void linkKoreader() {
+        ArrayList<Book> books=store.snapshot();books.sort((a,b)->a.title.compareToIgnoreCase(b.title));
+        if(books.isEmpty()){Toast.makeText(this,"Aggiungi prima un libro alla biblioteca",Toast.LENGTH_SHORT).show();return;}
+        String[] names=new String[books.size()];for(int i=0;i<books.size();i++)names[i]=books.get(i).title+" · "+books.get(i).author;
+        dialogBuilder().setTitle("Collega un libro a KOReader").setItems(names,(d,w)->{
+            Book b=books.get(w);LinearLayout p=column();p.setPadding(dp(20),dp(12),dp(20),dp(12));
+            JSONObject existing=SyncCore.link(b,"koreader");
+            p.addView(text("Inserisci il nome esatto del file in KOReader, inclusa l’estensione. In alternativa usa il partial_md5_checksum presente nel file metadata.epub.lua di KOReader.",14,MUTED,false));
+            EditText filename=field(p,"Nome file",existing==null?(b.source.endsWith(".epub")?new File(b.source).getName():""):existing.optString("filename"));
+            EditText digest=field(p,"Checksum KOReader (facoltativo, 32 caratteri)",existing==null?"":existing.optString("document"));
+            dialogBuilder().setTitle(b.title).setView(scrolled(p)).setNegativeButton("Annulla",null).setPositiveButton("Collega",(dd,ww)->{
+                String name=filename.getText().toString().trim(), id=digest.getText().toString().trim().toLowerCase(Locale.ROOT);
+                if(id.isEmpty()&&!name.isEmpty())id=KoreaderSync.document(name);
+                if(!id.matches("[0-9a-f]{32}")){error(new Exception("Inserisci un nome file o un checksum valido"));return;}
+                try{JSONObject sync=b.journal.optJSONObject("sync");if(sync==null)sync=new JSONObject();sync.put("koreader",new JSONObject().put("document",id).put("filename",name));ReadingJournal.put(b,"sync",sync);save();}catch(Exception e){error(e);}
+            }).show();
+        }).show();
+    }
+    private void runKoreader() {
+        if(busy)return;
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        ArrayList<Book> books=store.snapshot();boolean linked=false;for(Book b:books)if(SyncCore.link(b,"koreader")!=null)linked=true;
+        if(!linked){linkKoreader();return;}
+        String server=prefs.getString("koreaderUrl","https://sync.koreader.rocks"),user=prefs.getString("koreaderUser",""),key=prefs.getString("koreaderKey","");
+        busy=true;AlertDialog loading=loading("KOReader","Ricezione dell’avanzamento…");
+        worker.execute(()->{try{
+            List<KoreaderSync.Progress> changes=KoreaderSync.receive(server,user,key,books);
+            runOnUiThread(()->{busy=false;loading.dismiss();if(isFinishing()||isDestroyed())return;
+                if(changes.isEmpty()){Toast.makeText(this,"Nessun avanzamento trovato. Controlla i collegamenti e invia prima da KOReader.",Toast.LENGTH_LONG).show();return;}
+                StringBuilder summary=new StringBuilder();for(KoreaderSync.Progress c:changes)summary.append(c.book.title).append(" → ").append(Math.round(c.percentage*100)).append("%\n");
+                dialogBuilder().setTitle("Applica avanzamento KOReader?").setMessage(summary.toString()).setNegativeButton("Annulla",null).setPositiveButton("Applica",(d,w)->{for(KoreaderSync.Progress c:changes)if(store.find(c.book.id)!=null)KoreaderSync.apply(c);save();showLibrary();}).show();
+            });
+        }catch(Exception e){runOnUiThread(()->{busy=false;loading.dismiss();error(e);});}});
     }
 
     private void hardcoverSettings() {
@@ -1675,6 +1751,7 @@ public final class MainActivity extends AppCompatActivity {
         else if (detailId != null) { Book b=store.find(detailId); if(editingPage && b!=null) details(b); else showLibrary(); }
         else if (searching()) { query = ""; showLibrary(); }
         else if (!tab.equals("Tutti i libri")) { tab = "Tutti i libri"; showLibrary(); }
+        else if (destination.equals("Impostazioni")) navigate(getPreferences(MODE_PRIVATE).getString("settingsReturn","Home"));
         else if (!destination.equals("Home")) navigate("Home");
         updateBack();
     }
@@ -1718,6 +1795,7 @@ public final class MainActivity extends AppCompatActivity {
         return panel;
     }
     private void showCompanion() {
+        if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("La tua biblioteca, come piace a te.","Aspetto, lettura e gestione dei dati."); settingsPage(p); updateBack(); return; }
         boolean sync=destination.equals("Sync");
         LinearLayout panel=companionPage(sync?"Invia e ricevi.":destination.equals("Statistiche")?"Ogni pagina conta.":destination.equals("Scopri")?"La prossima storia.":"Il tempo per un libro.",
             sync?"Stato, pagina e capitolo condivisi con i tuoi servizi di lettura.":destination.equals("Statistiche")?"Le tue letture, un giorno alla volta.":destination.equals("Scopri")?"Nuove idee da esplorare. La scelta è tua.":"Un piccolo spazio per le tue grandi storie.");

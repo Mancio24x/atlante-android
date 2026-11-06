@@ -31,7 +31,7 @@ final class LibraryQuery {
         if (order.equals("Saga")) comparator = ((Comparator<Book>) (a, b) -> {
             if (a.series.isEmpty() != b.series.isEmpty()) return a.series.isEmpty() ? 1 : -1;
             int series = EbookParser.naturalCompare(a.series, b.series);
-            return series != 0 ? series : Double.compare(a.number, b.number);
+            return series != 0 ? series : SeriesCatalog.compareNumber(a.number, b.number);
         }).thenComparing(title);
         result.sort(comparator);
         return result;

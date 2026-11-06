@@ -102,7 +102,7 @@ final class SyncCore {
 
     private static Response send(String method, String address, String body, Map<String, String> headers, String authorization, int limit) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
-        c.setConnectTimeout(12000); c.setReadTimeout(30000); c.setRequestMethod(method); c.setInstanceFollowRedirects(true);
+        c.setConnectTimeout(12000); c.setReadTimeout(30000); c.setRequestMethod(method); c.setInstanceFollowRedirects(headers == null || !headers.containsKey("x-auth-key"));
         c.setRequestProperty("User-Agent", "AtlanteLibraryAndroid (https://github.com/Mancio24x/atlante-android)");
         c.setRequestProperty("Accept", "application/json");
         if (headers != null) for (Map.Entry<String, String> h : headers.entrySet()) c.setRequestProperty(h.getKey(), h.getValue());

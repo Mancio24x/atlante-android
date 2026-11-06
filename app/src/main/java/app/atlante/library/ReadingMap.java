@@ -35,7 +35,7 @@ final class ReadingMap extends View {
         books.sort((a, b) -> {
             if (a.series.isEmpty() != b.series.isEmpty()) return a.series.isEmpty() ? 1 : -1; // single books last
             int c = a.series.compareToIgnoreCase(b.series);
-            if (c == 0) c = Double.compare(a.number, b.number);
+            if (c == 0) c = SeriesCatalog.compareNumber(a.number, b.number);
             if (c == 0) c = a.title.compareToIgnoreCase(b.title);
             return c;
         });

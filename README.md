@@ -322,3 +322,41 @@ chip Tutti, Da leggere, In lettura, In pausa, Letti e Preferiti.
 I nuovi dati personali stanno in un oggetto `journal` facoltativo di ogni libro e passano
 nei backup esistenti; obiettivi e timer restano nelle preferenze del telefono. Dettagli e
 limiti: [REDESIGN-MIGRATION.md](REDESIGN-MIGRATION.md).
+
+
+## KOReader, copertine e saghe
+
+In **Sync**, KOReader è la prima voce. Configura lo stesso server HTTPS e account
+usati nel plugin di sincronizzazione di KOReader, collega i libri e premi
+**Ricevi avanzamento da KOReader**. Prima del salvataggio compare l’elenco delle
+percentuali ricevute: puoi confermare o annullare. Per il collegamento tramite
+nome file, in KOReader scegli il metodo di identificazione «nome file» e invia
+l’avanzamento; in Atlante indica il nome esatto, estensione compresa. In alternativa
+puoi indicare il `partial_md5_checksum` di KOReader. Funziona anche con schede
+senza EPUB. Il servizio non offre un elenco dei libri: vanno collegati esplicitamente.
+
+Questa integrazione riceve percentuale e stato, non sincronizza note o evidenziazioni
+né invia posizioni ad altri dispositivi. La posizione EPUB di KOReader è un XPointer,
+non una pagina di Atlante: convertirla arbitrariamente danneggerebbe il segnalibro.
+Protocollo: [API ufficiale KOReader](https://github.com/koreader/koreader/blob/master/plugins/kosync.koplugin/api.json)
+e [client ufficiale](https://github.com/koreader/koreader/blob/master/plugins/kosync.koplugin/KOSyncClient.lua).
+Le credenziali restano nelle preferenze private e non vengono inoltrate sui redirect.
+
+Le copertine vengono cercate anche nel catalogo **Google Books**, per ISBN oppure
+per titolo e autore verificati, oltre ai tentativi su Open Library e Google per ISBN.
+I guasti di una fonte non impediscono di provare le altre. Le ricerche dei metadati
+inviano titolo/autore o ISBN ai fornitori, mai testi, note o file personali.
+[Documentazione Google Books](https://developers.google.com/books/docs/v1/reference/volumes).
+
+**Impostazioni** è una pagina a tutto schermo: anteprime dei temi con selezione
+visibile, dimensione e anteprima del testo, lettore scuro, lingua delle ricerche,
+backup, importazioni e download delle copertine. L’interfaccia resta in italiano.
+Il tasto Indietro torna alla sezione da cui hai aperto le impostazioni.
+
+Da Impostazioni o dalla Mappa usa **Riconosci saghe e ordine**. Le proposte mostrano
+prima/dopo e puoi deselezionarle singolarmente prima di applicarle. Il riconoscimento
+combina autore e titoli italiani/inglesi di dieci saghe, numerazione esplicita nei
+titoli e nei metadati. Mistborn distingue le due ere; raccolte e omnibus non ricevono
+un numero inventato. È un catalogo iniziale, non un riconoscimento universale.
+Per le altre saghe puoi modificare saga e numero nella scheda. I numeri sconosciuti
+vengono dopo quelli noti, sia nella mappa sia nell’ordinamento per saga.

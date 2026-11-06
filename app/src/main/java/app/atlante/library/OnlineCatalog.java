@@ -164,7 +164,7 @@ final class OnlineCatalog {
             if (book.coverId > 0) return request("https://covers.openlibrary.org/b/id/"+book.coverId+"-M.jpg?default=false",2*1024*1024);
             if (book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) return request("https://covers.openlibrary.org/b/isbn/"+book.isbn+"-M.jpg?default=false",2*1024*1024);
         } catch (Exception ignored) { /* Covers are optional. */ }
-        return null;
+        return googleCover(book);
     }
 
     /**
@@ -194,6 +194,7 @@ final class OnlineCatalog {
                 if (cover > 0) { byte[] image = image(request("https://covers.openlibrary.org/b/id/" + cover + "-M.jpg?default=false", 2 * 1024 * 1024)); if (image != null) return image; }
             }
         } catch (Exception ignored) { /* Try title and author. */ }
+        byte[] google=googleCover(book); if(google!=null)return google;
         try {
             String author = book.author.equals("Autore sconosciuto") ? "" : book.author.split(" & |, ")[0];
             JSONArray docs = new JSONObject(new String(request("https://openlibrary.org/search.json?title=" + URLEncoder.encode(book.title, "UTF-8")
@@ -205,6 +206,40 @@ final class OnlineCatalog {
             }
         } catch (Exception ignored) { /* Offline or not found: the book keeps its text cover. */ }
         return null;
+    }
+
+    /** Google Books fallback: exact ISBN, or title AND author. Never choose a cover by title alone. */
+    static byte[] googleCover(Book book) {
+        try {
+            String isbn=book.isbn.replaceAll("[^0-9Xx]","");
+            boolean hasIsbn=isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}");
+            String query=hasIsbn?"isbn:"+isbn:"intitle:"+book.title+" inauthor:"+book.author;
+            if(!hasIsbn&&(book.author.trim().isEmpty()||book.author.equals("Autore sconosciuto")))return null;
+            JSONObject data=new JSONObject(new String(request("https://www.googleapis.com/books/v1/volumes?q="+URLEncoder.encode(query,"UTF-8")+"&maxResults=5",1024*1024),StandardCharsets.UTF_8));
+            JSONArray items=data.optJSONArray("items");
+            for(int i=0;items!=null&&i<items.length();i++){
+                JSONObject info=items.getJSONObject(i).optJSONObject("volumeInfo");if(info==null||!googleMatches(book,info))continue;
+                JSONObject links=info.optJSONObject("imageLinks");if(links==null)continue;
+                String address=links.optString("thumbnail",links.optString("smallThumbnail")).replace("http://","https://");
+                URL url=new URL(address);String host=url.getHost();
+                if(!url.getProtocol().equals("https")||!(host.equals("books.google.com")||host.equals("books.googleusercontent.com")))continue;
+                byte[] cover=image(request(address,2*1024*1024));if(cover!=null)return cover;
+            }
+        }catch(Exception ignored){ /* An unavailable provider does not prevent the other sources. */ }
+        return null;
+    }
+    static boolean googleMatches(Book book,JSONObject info){
+        String isbn=book.isbn.replaceAll("[^0-9Xx]","");
+        JSONArray ids=info.optJSONArray("industryIdentifiers");
+        if(!isbn.isEmpty())for(int i=0;ids!=null&&i<ids.length();i++)if(isbn.equalsIgnoreCase(ids.optJSONObject(i)==null?"":ids.optJSONObject(i).optString("identifier")))return true;
+        if(!sameTitle(book.title,info.optString("title")))return false;
+        String author=SeriesCatalog.normalize(book.author);if(author.isEmpty()||author.equals("autore sconosciuto"))return false;
+        JSONArray authors=info.optJSONArray("authors");
+        for(int i=0;authors!=null&&i<authors.length();i++){
+            String remote=SeriesCatalog.normalize(authors.optString(i));
+            if(!remote.isEmpty()&&(author.equals(remote)||Arrays.asList(book.author.split(";\\s*")).stream().anyMatch(a->SeriesCatalog.normalize(a).equals(remote))))return true;
+        }
+        return false;
     }
 
     /** Same title after normalizing, or the same main title when one adds a subtitle after ":" or " - ". */
