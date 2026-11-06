@@ -147,6 +147,40 @@ object Hardcover {
         return best
     }
 
+    // ---- metadata and covers: Hardcover first in the whole app when connected ---------------------------
+
+    /** Edition fields read by MetadataSources.hardcover (the same shape as before, plus "featured" on series). */
+    const val EDITION = "title subtitle pages release_date isbn_13 isbn_10 image { url width height } publisher { name } language { code3 language }" +
+        " book { id title slug description release_year image { url width height } contributions { contribution author { name } }" +
+        " book_series(where:{compilation:{_eq:false}}) { position featured series { name } } }"
+
+    /** The edition with this ISBN, or null. */
+    fun editionByIsbn(isbn: String): JSONObject? = api.call("query(\$i:String!){ editions(where:{isbn_13:{_eq:\$i}}, limit:1) { $EDITION } }",
+        JSONObject().put("i", isbn)).optJSONArray("editions")?.optJSONObject(0)
+
+    /** For a book without ISBN: the Hardcover book found by title and author, its Italian edition when there is one. */
+    fun editionBySearch(book: Book): JSONObject? {
+        val (id, score) = search(book) ?: return null
+        if (score < 78) return null
+        val b = api.call("query(\$id:Int!){ books(where:{id:{_eq:\$id}}) { editions(where:{language:{code2:{_eq:\"it\"}}}, order_by:{users_count:desc_nulls_last}, limit:1) { $EDITION }" +
+            " default_physical_edition { $EDITION } } }", JSONObject().put("id", id)).optJSONArray("books")?.optJSONObject(0) ?: return null
+        return b.optJSONArray("editions")?.optJSONObject(0) ?: b.optJSONObject("default_physical_edition")
+    }
+
+    /** Cover addresses, most exact first: (url, same edition, Italian edition). */
+    fun covers(book: Book): List<Triple<String, Boolean, Boolean>> {
+        val out = ArrayList<Triple<String, Boolean, Boolean>>()
+        fun add(e: JSONObject?, exact: Boolean) {
+            val italian = e?.optJSONObject("language")?.optString("code3") == "ita"
+            e?.optJSONObject("image")?.optString("url")?.takeIf { it.startsWith("http") }?.let { out += Triple(it, exact, italian) }
+            e?.optJSONObject("book")?.optJSONObject("image")?.optString("url")?.takeIf { it.startsWith("http") }?.let { out += Triple(it, false, false) }
+        }
+        val isbn = BookMatcher.isbns(book.isbn).firstOrNull()
+        if (isbn != null) add(editionByIsbn(isbn), true)
+        if (out.isEmpty()) add(editionBySearch(book), false)
+        return out.distinctBy { it.first }
+    }
+
     // ---- book, series and volumes ------------------------------------------------------------------
 
     private const val MEMBERS = """book_series(where:{compilation:{_eq:false}, book:{canonical_id:{_is_null:true}, is_partial_book:{_neq:true}}}, order_by:{position:asc_nulls_last}, limit:150) {

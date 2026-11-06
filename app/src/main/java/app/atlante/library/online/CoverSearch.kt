@@ -11,7 +11,7 @@ import java.text.Normalizer
  * Cover engine: collects candidates from several free public sources, checks that each one belongs to this
  * book (same ISBN, or same title AND author), downloads them and keeps the sharpest real cover.
  *
- * Sources, most exact first: Open Library by ISBN (10 and 13), Apple Books by ISBN, the other editions of
+ * Sources, most exact first: Hardcover when connected (exact edition by ISBN, else the Italian one), Open Library by ISBN (10 and 13), Apple Books by ISBN, the other editions of
  * the same work on Open Library (Italian first), then title + author on Apple Books and Open Library.
  * (Google Books was removed: without a personal key its public quota is always exhausted, HTTP 429.)
  * Placeholders ("image not available", 1×1 pixels) are rejected.
@@ -55,6 +55,10 @@ object CoverSearch {
     /** Every candidate address, most exact first; the network is used lazily by [best] and [all]. */
     fun candidates(book: Book, get: (String, Int) -> ByteArray = fetch): Sequence<Candidate> = sequence {
         val isbns = isbns(book)
+        // Hardcover first when connected: covers curated per edition (the exact one by ISBN, else the Italian one).
+        if (app.atlante.library.saga.Hardcover.enabled)
+            for ((url, exact, italian) in runCatching { app.atlante.library.saga.Hardcover.covers(book) }.getOrDefault(emptyList()))
+                yield(Candidate(url, "Hardcover", exact, italian))
         for (i in isbns) yield(Candidate("https://covers.openlibrary.org/b/isbn/$i-L.jpg?default=false", "Open Library", true))
         for (i in isbns.filter { it.length == 13 }.take(1)) {
             yieldAll(apple(book, i, get, exact = true))

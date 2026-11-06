@@ -1,5 +1,6 @@
 package app.atlante.library.online;
 
+import app.atlante.library.model.Book;
 import app.atlante.library.model.BookMatcher;
 import app.atlante.library.storage.CatalogImport;
 import app.atlante.library.sync.SyncCore;
@@ -195,13 +196,28 @@ public final class MetadataSources {
                 if (name.isEmpty()) continue;
                 if (role.isEmpty() || role.contains("author")) c.authors.add(name); else if (role.contains("transl")) c.translators.add(name); else if (role.contains("illustr")) c.illustrators.add(name); else if (role.contains("edit")) c.editors.add(name);
             }
+            // The book's own saga: the series Hardcover features for it (The Mistborn Saga, not The Cosmere).
             JSONArray series = book.optJSONArray("book_series");
             JSONObject s = series == null ? null : series.optJSONObject(0);
+            for (int i = 0; series != null && i < series.length(); i++) if (series.optJSONObject(i) != null && series.optJSONObject(i).optBoolean("featured")) { s = series.optJSONObject(i); break; }
             if (s != null && s.optJSONObject("series") != null) { c.series = s.optJSONObject("series").optString("name"); c.number = s.optDouble("position", 0); }
             if (!str(book, "slug").isEmpty()) c.url = "https://hardcover.app/books/" + str(book, "slug");
             if (book.optInt("id") > 0) c.ids.put("hardcover", Integer.toString(book.optInt("id")));
         }
         return c;
+    }
+
+    /** Hardcover through the app's connection (personal key or OAuth), or null when it is not connected. */
+    public static Candidate hardcoverByIsbn(String isbn) throws Exception {
+        if (!app.atlante.library.saga.Hardcover.getEnabled()) return null;
+        JSONObject e = app.atlante.library.saga.Hardcover.INSTANCE.editionByIsbn(isbn);
+        if (e == null) return null;
+        Candidate c = hardcover(e); c.byIsbn = true; return c;
+    }
+    public static Candidate hardcoverBySearch(Book book) throws Exception {
+        if (!app.atlante.library.saga.Hardcover.getEnabled()) return null;
+        JSONObject e = app.atlante.library.saga.Hardcover.INSTANCE.editionBySearch(book);
+        return e == null ? null : hardcover(e);
     }
 
     public static Candidate hardcoverByIsbn(String isbn, String token) throws Exception {

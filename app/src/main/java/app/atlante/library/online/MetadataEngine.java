@@ -102,8 +102,9 @@ public final class MetadataEngine {
 
     /** Source order for edition data: Italian catalogs first for Italian books. */
     static List<String> order(String lang) {
-        return lang.equals("ita") ? Arrays.asList("SBN", "ISBNdb", "Hardcover", "Open Library", "Internet Archive")
-            : Arrays.asList("ISBNdb", "Hardcover", "Open Library", "SBN", "Internet Archive");
+        // Hardcover first when connected (curated data, the user's choice of 2026-11-07); it is absent otherwise.
+        return lang.equals("ita") ? Arrays.asList("Hardcover", "SBN", "ISBNdb", "Open Library", "Internet Archive")
+            : Arrays.asList("Hardcover", "ISBNdb", "Open Library", "SBN", "Internet Archive");
     }
 
     static void merge(Book book, Result r, String lang, Candidate chosen) {
@@ -269,10 +270,10 @@ public final class MetadataEngine {
         return new Catalogs() {
             public List<Candidate> byIsbn(String isbn, List<String> notes) {
                 List<Candidate> out = new ArrayList<>();
+                if (app.atlante.library.saga.Hardcover.getEnabled()) attempt(out, notes, "Hardcover", progress, () -> MetadataSources.hardcoverByIsbn(isbn));
                 attempt(out, notes, "SBN", progress, () -> MetadataSources.sbnByIsbn(isbn));
                 attempt(out, notes, "Open Library", progress, () -> MetadataSources.openLibraryByIsbn(isbn));
                 attempt(out, notes, "Internet Archive", progress, () -> MetadataSources.internetArchiveByIsbn(isbn));
-                // Hardcover is used only by Sync, not as a bibliographic source (user's choice, 2026-11-06).
                 if (!s.keys.isbndb.isEmpty()) attempt(out, notes, "ISBNdb", progress, () -> MetadataSources.isbndbByIsbn(isbn, s.keys.isbndb));
                 return out;
             }
@@ -280,6 +281,7 @@ public final class MetadataEngine {
                 List<Candidate> out = new ArrayList<>();
                 String author = book.author.equals("Autore sconosciuto") ? "" : book.author;
                 progress.update("Ricerca per titolo e autore…");
+                if (app.atlante.library.saga.Hardcover.getEnabled()) attempt(out, notes, "Hardcover", progress, () -> MetadataSources.hardcoverBySearch(book));
                 try {
                     int n = 0;
                     for (Book b : SbnCatalog.search(book.title + " " + author)) if (BookMatcher.same(book, b) && n++ < 3) {
