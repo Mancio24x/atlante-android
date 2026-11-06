@@ -30,6 +30,29 @@ public final class OnlineCatalog {
             try (InputStream in = new FileInputStream(file)) { return EbookParser.read(in,limit); }
             catch (IOException ignored) { /* A broken cache falls back to the network. */ }
         }
+        byte[] bytes = download(address, limit);
+        if (file != null) {
+            try {
+                if (!cacheDirectory.isDirectory() && !cacheDirectory.mkdirs()) throw new IOException("Cache non disponibile");
+                File temporary = File.createTempFile("cache-", ".tmp",cacheDirectory);
+                try {
+                    try (OutputStream out = new FileOutputStream(temporary)) { out.write(bytes); }
+                    if (!temporary.renameTo(file)) temporary.delete();
+                } finally { temporary.delete(); }
+                File[] entries = cacheDirectory.listFiles();
+                if (entries != null && entries.length > 64) {
+                    Arrays.sort(entries,Comparator.comparingLong(File::lastModified));
+                    for(int i=0;i<entries.length-64;i++) entries[i].delete();
+                }
+            } catch (IOException ignored) { /* Searches also work when the cache is full. */ }
+        }
+        return bytes;
+    }
+
+    public static synchronized File cacheDirectory() { return cacheDirectory; }
+
+    /** Network only: shared per-host rate limit (about one request per second), no cache. */
+    public static byte[] download(String address, int limit) throws Exception {
         String host = new URL(address).getHost(); long wait;
         synchronized (nextRequest) {
             long now = System.currentTimeMillis(); long slot = Math.max(now,nextRequest.containsKey(host) ? nextRequest.get(host) : now);
@@ -43,25 +66,7 @@ public final class OnlineCatalog {
             int status = connection.getResponseCode();
             if (status == 429) throw new IOException("Il catalogo è occupato: attendi e riprova.");
             if (status != 200) throw new IOException("Il catalogo ha risposto con codice " + status);
-            try (InputStream in = connection.getInputStream()) {
-                byte[] bytes = EbookParser.read(in, limit);
-                if (file != null) {
-                    try {
-                        if (!cacheDirectory.isDirectory() && !cacheDirectory.mkdirs()) throw new IOException("Cache non disponibile");
-                        File temporary = File.createTempFile("cache-", ".tmp",cacheDirectory);
-                        try {
-                            try (OutputStream out = new FileOutputStream(temporary)) { out.write(bytes); }
-                            if (!temporary.renameTo(file)) temporary.delete();
-                        } finally { temporary.delete(); }
-                        File[] entries = cacheDirectory.listFiles();
-                        if (entries != null && entries.length > 64) {
-                            Arrays.sort(entries,Comparator.comparingLong(File::lastModified));
-                            for(int i=0;i<entries.length-64;i++) entries[i].delete();
-                        }
-                    } catch (IOException ignored) { /* Searches also work when the cache is full. */ }
-                }
-                return bytes;
-            }
+            try (InputStream in = connection.getInputStream()) { return EbookParser.read(in, limit); }
         } finally { connection.disconnect(); }
     }
 

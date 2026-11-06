@@ -110,6 +110,12 @@ Le saghe vengono ricostruite da **Wikidata** (serie P179, numero P1545, autore P
   - **Potrebbero interessarti**: stesso genere normalizzato (Epic Fantasy → Fantasy) e libri usciti entro 30 anni dal tuo, i più pubblicati per primi, massimo due per autore, esclusi quelli che hai già. Lo stesso libro dà sempre lo stesso elenco.
 
   Toccando un libro che non hai si apre la ricerca online: nessun suggerimento entra in biblioteca da solo. Se la saga è incerta l'app chiede conferma. Se manca compare *Saga non identificata*, con le opzioni Riprova, Cerca per titolo originale, Scegli una saga, Crea una saga e Lascia senza saga. Le risposte online restano in cache per 30 giorni.
+- **Cache e dati temporanei** (Impostazioni, in Compose): mostra lo spazio usato da copertine dei suggerimenti, risposte dei cataloghi, suggerimenti e database delle saghe. Si può regolare:
+  - lo spazio massimo per le copertine (100 MB di default): oltre il limite vengono tolte per prime quelle usate meno di recente;
+  - la durata dei suggerimenti (30 giorni);
+  - l'intervallo di aggiornamento delle saghe (7 giorni): lo fa WorkManager in background, solo con rete e batteria non scarica, al massimo 20 saghe per volta.
+
+  All'avvio l'app pulisce da sola i dati scaduti, e da qui puoi svuotare tutto a mano. Libri, note, voti e avanzamento non vengono mai toccati.
 - **Il grafo bibliografico** è salvato in un database Room separato (`atlante-bibliography.db`, migrazioni versionate e non distruttive). La libreria personale resta in `library.json` ed è collegata per id del libro. Le correzioni manuali non vengono mai sovrascritte.
 
 I test (`SagaRecognizerTest`, `SagaDatabaseTest`) usano risposte reali di Wikidata salvate in `app/src/test/resources/wikidata`.

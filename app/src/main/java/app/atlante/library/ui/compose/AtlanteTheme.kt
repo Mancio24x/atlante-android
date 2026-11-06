@@ -46,7 +46,11 @@ private val AtlanteTypography = Typography().let { t ->
 
 @Composable
 fun AtlanteTheme(palette: ThemePalette, content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = palette.colorScheme(), typography = AtlanteTypography, content = content)
+    val scheme = palette.colorScheme()
+    // Screens embedded in the View pages have no Surface around them: text takes the theme color, not black.
+    MaterialTheme(colorScheme = scheme, typography = AtlanteTypography) {
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides scheme.onSurface, content = content)
+    }
 }
 
 /** The copper/warm accent of the palette (ratings, highlights). */

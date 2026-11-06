@@ -64,6 +64,13 @@ class SuggestionsTest {
         assertTrue(items.any { it.title == "The Way of Kings" })
     }
 
+    @Test fun authorsAreComparedByFullName() {
+        assertTrue(Suggestions.sameAuthor("J. K. Rowling", "J.K. Rowling"))
+        assertTrue(Suggestions.sameAuthor("Brandon Sanderson", "brandon sanderson"))
+        assertFalse(Suggestions.sameAuthor("Pierce Brown", "Dan Brown"))
+        assertFalse(Suggestions.sameAuthor("Pierce Brown", "Brown"))
+    }
+
     @Test fun mayInterestIsDeterministicAndExcludesWhatYouHave() = runBlocking {
         val a = suggestions.mayInterest(library[0]); val b = suggestions.mayInterest(library[0])
         assertEquals(a, b)

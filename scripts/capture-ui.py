@@ -195,3 +195,9 @@ for _ in range(20):
     adb('shell','input','swipe','540','1250','540','750','300');time.sleep(1.5)
 shot('52-book-author-carousel')
 print('Saga carousels completed.')
+
+# Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.
+back();tap('Impostazioni');tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
+assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
+assert any(b['title']=='Red Rising' for b in catalog()), 'Cache cleanup touched the library'
+print('Cache settings completed.')

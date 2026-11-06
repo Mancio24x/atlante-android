@@ -57,9 +57,10 @@ object BookSagaView {
     @JvmStatic
     fun create(activity: ComponentActivity, palette: ThemePalette, book: Book, host: SagaHost): View = ComposeView(activity).apply {
         val dao = AtlanteDatabase.get(activity).saga()
-        val repo = SagaRepository(dao)
-        val suggestions = Suggestions(dao, host::library)
-        SuggestionCovers.suggestions = suggestions
+        val cache = CacheManager.get(activity)
+        val repo = SagaRepository(dao).apply { refreshDays = cache.settings.sagaRefreshDays }
+        val suggestions = Suggestions(dao, host::library).apply { suggestionDays = cache.settings.suggestionDays }
+        SuggestionCovers.suggestions = suggestions; SuggestionCovers.cache = cache.covers
         setContent { AtlanteTheme(palette) { BookSagaSection(book, repo, suggestions, dao, host) } }
     }
 }
@@ -244,7 +245,7 @@ private fun Cover(item: ShelfItem, host: SagaHost, modifier: Modifier) {
                     item.ownedBookId != null -> host.coverFile(item.ownedBookId)?.let { Covers.decode(it, null, 320) }
                     else -> {
                         val url = item.coverUrl ?: item.coverWork?.let { w -> SuggestionCovers.forWork(w) }
-                        url?.let { u -> OnlineCatalog.request(u, 2 * 1024 * 1024).let { b -> Covers.decode(null, b, 320) } }
+                        url?.let { u -> SuggestionCovers.bytes(u)?.let { b -> Covers.decode(null, b, 320) } }
                     }
                 }
                 bitmap?.asImageBitmap()?.also { CoverMemory.put(key, it) }
@@ -265,6 +266,9 @@ private fun Cover(item: ShelfItem, host: SagaHost, modifier: Modifier) {
 /** Covers of saga volumes known only by their Open Library work (set by BookSagaView). */
 object SuggestionCovers {
     @Volatile var suggestions: Suggestions? = null
+    @Volatile var cache: CoverCache? = null
+    /** Through the size-limited cover cache (Impostazioni → Cache e dati temporanei). */
+    fun bytes(url: String): ByteArray? = cache?.get(url) ?: OnlineCatalog.request(url, 2 * 1024 * 1024)
     suspend fun forWork(olWork: String): String? = suggestions?.workCover(olWork)
 }
 

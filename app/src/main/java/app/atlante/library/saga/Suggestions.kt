@@ -69,7 +69,8 @@ class Suggestions(
         val owned = books.filter { it.id != book.id && BookMatcher.surnames(it.author).any { s -> s in surnames } }
             .sortedBy { it.year.ifBlank { "9999" } }.map { it.asItem() }
         val online = cachedSearch("author", name, "author=" + URLEncoder.encode(name, "UTF-8"))
-            .filter { w -> w.authors.any { a -> BookMatcher.surnames(a).any { it in surnames } } }
+            // The author search also returns anthologies and namesakes: the first author must be this very person.
+            .filter { w -> w.authors.firstOrNull()?.let { sameAuthor(it, name) } == true }
             .filterNot { w -> BookMatcher.same(Book().apply { title = w.title; author = name }, book) || owned.any { o -> sameTitle(w, o.title) } || listed(w, exclude) }
         return owned + online.map { it.asItem() }
     }
@@ -124,10 +125,19 @@ class Suggestions(
     private fun titlesOf(w: WorkEntity) = listOfNotNull(w.originalTitle, w.italianTitle) + w.altTitles.split('\n').filter { it.isNotBlank() } +
         listOfNotNull(w.originalTitle.substringAfter(": ", "").ifBlank { null }, w.italianTitle?.substringAfter(": ", "")?.ifBlank { null })
 
+    private fun sameAuthor(a: String, b: String) = Suggestions.sameAuthor(a, b)
     private fun sameTitle(w: Found, title: String) = OnlineCatalog.sameTitle(w.title, title)
     private fun listed(w: Found, items: List<ShelfItem>) = items.any { i -> (listOf(i.title) + i.alsoKnownAs).any { sameTitle(w, it) } }
 
     companion object {
+        /** "J. K. Rowling" = "J.K. Rowling" = "Joanne K. Rowling"? Same surname and same first initial. */
+        fun sameAuthor(a: String, b: String): Boolean {
+            fun words(s: String) = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+                .split(Regex("[^a-z]+")).filter { it.isNotEmpty() }
+            val x = words(a); val y = words(b)
+            return x.isNotEmpty() && y.isNotEmpty() && x.last() == y.last() && x.first()[0] == y.first()[0]
+        }
+
         /** Open Library search answer: the Italian edition title is preferred when there is one. Duplicates removed. */
         fun parse(json: String): List<Found> {
             val docs = JSONObject(json).optJSONArray("docs") ?: return emptyList()

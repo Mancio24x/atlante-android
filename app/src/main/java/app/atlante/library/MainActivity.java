@@ -141,6 +141,9 @@ public final class MainActivity extends AppCompatActivity {
         filterFormat = prefs.getString("filterFormat", ""); sortOrder = prefs.getString("sortOrder", "Titolo");
         listView = prefs.getBoolean("listView", false);
         OnlineCatalog.configure(new File(getCacheDir(), "catalog"));
+        // Temporary data: expired suggestions and covers over the limit go away; sagas refresh in the background.
+        app.atlante.library.saga.CacheManager.cleanupAsync(this);
+        try { app.atlante.library.saga.SagaRefreshWorker.schedule(this); } catch (RuntimeException ignored) { /* WorkManager unavailable: sagas refresh when opened. */ }
         fontSize = Math.max(8, Math.min(80, prefs.getFloat("fontSize", 20)));
         readerDark = prefs.getBoolean("dark", false); manga = prefs.getBoolean("manga", false);
         try { store = new LibraryStore(this); }
@@ -246,6 +249,8 @@ public final class MainActivity extends AppCompatActivity {
         gap(panel,20); panel.addView(sectionLabel("SAGHE E MAPPA")); gap(panel,8);
         panel.addView(text("Riconosci saga e numero dai metadati e dai titoli. Controlla le proposte prima di applicarle. Puoi sempre correggere saga e ordine nella scheda del libro.",14,MUTED,false));
         panel.addView(button("Riconosci saghe e ordine di lettura",false,this::recognizeSeries));
+        gap(panel,20); panel.addView(sectionLabel("CACHE E DATI TEMPORANEI")); gap(panel,8);
+        panel.addView(app.atlante.library.ui.compose.CacheSettingsView.create(this, palette));
         gap(panel,20); panel.addView(sectionLabel("RICERCA ONLINE")); gap(panel,8);
         panel.addView(text("Open Library e Google Books · Le ricerche recenti e le schede vengono riutilizzate dalla cache. I libri e le note personali restano sul dispositivo.",14,MUTED,false));
         gap(panel,20); panel.addView(sectionLabel("BACKUP")); gap(panel,8);
