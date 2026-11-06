@@ -1389,7 +1389,7 @@ public final class MainActivity extends AppCompatActivity {
         kin.addView(button("Importa My Clippings.txt",false,()->clippingsLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"))),new LinearLayout.LayoutParams(-1,-2));
 
         LinearLayout src=surface(p,"FONTI DEI DATI BIBLIOGRAFICI");
-        src.addView(text("Sempre attive: catalogo SBN, Open Library, Internet Archive. Facoltative con la tua chiave: Google Books (gratuita), ISBNdb (a pagamento) e Hardcover (la chiave di Sync).",14,MUTED,false)); gap(src,8);
+        src.addView(text("Sempre attive: catalogo SBN, Open Library, Internet Archive. Facoltative con la tua chiave: Google Books (gratuita) e ISBNdb (a pagamento). Hardcover resta solo per Sync.",14,MUTED,false)); gap(src,8);
         src.addView(text("Google Books: "+(prefs.getString("googleBooksKey","").isEmpty()?"non configurato":"chiave inserita")+" · ISBNdb: "+(prefs.getString("isbndbKey","").isEmpty()?"non configurato":"chiave inserita"),13,INK,false));
         src.addView(button("Chiavi delle fonti",R.style.Atlante_Button_Text,this::sourceKeys),new LinearLayout.LayoutParams(-1,-2));
         LinearLayout files=surface(p,"FILE E ALTRE APP");
@@ -1622,7 +1622,7 @@ public final class MainActivity extends AppCompatActivity {
     private app.atlante.library.online.MetadataEngine.Settings metadataSettings() {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         app.atlante.library.online.MetadataEngine.Settings s=new app.atlante.library.online.MetadataEngine.Settings();
-        s.keys.google=prefs.getString("googleBooksKey",""); s.keys.isbndb=prefs.getString("isbndbKey",""); s.keys.hardcover=prefs.getString("hardcoverToken","");
+        s.keys.google=prefs.getString("googleBooksKey",""); s.keys.isbndb=prefs.getString("isbndbKey","");
         String lang=prefs.getString("bookLanguage","ita"); s.language=lang.isEmpty()?"ita":lang;
         return s;
     }

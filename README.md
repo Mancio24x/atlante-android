@@ -77,7 +77,7 @@ poco dopo l’ultima pagina girata e all’uscita dal lettore.
 **Completa i dati online** (pagina del libro o menu ⋮) interroga insieme più cataloghi:
 catalogo **SBN** (ICCU), **Open Library** (edizione e opera), **Internet Archive** e, se
 inserisci la tua chiave in *Sync › Fonti dei dati bibliografici*, **Google Books** (chiave
-gratuita), **Hardcover** (la chiave di Sync) e **ISBNdb** (servizio a pagamento, facoltativo).
+gratuita) e **ISBNdb** (servizio a pagamento, facoltativo). Hardcover è usato solo da Sync.
 
 Cerca prima per ISBN; senza ISBN cerca per titolo e autore e, se trova edizioni diverse,
 chiede quale possiedi invece di sceglierne una. I dati dell’**edizione** (titolo, editore,

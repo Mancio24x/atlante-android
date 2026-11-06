@@ -276,7 +276,7 @@ public final class MetadataEngine {
                     List<Candidate> g = MetadataSources.googleBooksQuery("isbn:" + isbn, s.keys.google, "");
                     if (g.isEmpty()) return null; g.get(0).byIsbn = g.get(0).isbns.contains(isbn) || g.get(0).isbns.isEmpty(); return g.get(0);
                 });
-                if (!s.keys.hardcover.isEmpty()) attempt(out, notes, "Hardcover", progress, () -> MetadataSources.hardcoverByIsbn(isbn, s.keys.hardcover));
+                // Hardcover is used only by Sync, not as a bibliographic source (user's choice, 2026-11-06).
                 if (!s.keys.isbndb.isEmpty()) attempt(out, notes, "ISBNdb", progress, () -> MetadataSources.isbndbByIsbn(isbn, s.keys.isbndb));
                 return out;
             }
