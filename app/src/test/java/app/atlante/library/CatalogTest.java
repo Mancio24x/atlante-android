@@ -58,4 +58,20 @@ public class CatalogTest {
         assertEquals("2026-11-06", b.started); assertEquals("2026-12-01", b.finished); assertEquals(300, b.currentPage);
         Book.applyStatusEffects(b, "2027-01-01"); assertEquals("2026-12-01", b.finished);
     }
+    @Test public void preferredLanguageComesFirstWithItsEditionTitle() throws Exception {
+        String json = "{\"docs\":["
+            + "{\"key\":\"/works/OL1W\",\"title\":\"Dune\",\"language\":[\"eng\"],\"editions\":{\"docs\":[{\"key\":\"/books/OL9M\",\"title\":\"Dune (FR)\",\"language\":[\"fre\"]}]}},"
+            + "{\"key\":\"/works/OL2W\",\"title\":\"Cr\u00f3nica de una muerte anunciada\",\"language\":[\"spa\",\"ita\"],\"editions\":{\"docs\":[{\"key\":\"/books/OL5M\",\"title\":\"Cronaca di una morte annunciata\",\"language\":[\"ita\"],\"cover_i\":42}]}}]}";
+        java.util.List<Book> any = OnlineCatalog.parseSearch(json, "ita", false);
+        assertEquals("Cronaca di una morte annunciata", any.get(0).title);
+        assertEquals("/books/OL5M", any.get(0).edition); assertEquals(42, any.get(0).coverId); assertEquals("ita", any.get(0).language);
+        assertEquals("Dune", any.get(1).title); // a French edition is not used for an Italian search
+        assertEquals(1, OnlineCatalog.parseSearch(json, "ita", true).size());
+        assertEquals("Dune", OnlineCatalog.parseSearch(json, "", false).get(0).title); // no preference: relevance order
+    }
+    @Test public void searchedEditionWinsOverOtherEditions() throws Exception {
+        Book b = new Book(); b.edition = "/books/OL7M";
+        OnlineCatalog.enrichEdition(b, new JSONObject("{\"entries\":[{\"key\":\"/books/OL6M\",\"title\":\"Altra\",\"languages\":[{\"key\":\"/languages/ita\"}]},{\"key\":\"/books/OL7M\",\"title\":\"Trovata\"}]}"), "ita");
+        assertEquals("Trovata", b.title);
+    }
 }

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Atlante icon: open book with a map route, bookmark ribbon and a compass star. Safe zone: 66dp circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M36,31 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="54" android:centerY="31" android:gradientRadius="18"
+                android:startColor="#59F6C86A" android:endColor="#00F6C86A" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#B99D6E" android:pathData="M54,50 C47,45.5 39,44.5 29,46 L29,72 C39,70.5 47,71.5 54,75 C61,71.5 69,70.5 79,72 L79,46 C69,44.5 61,45.5 54,50 Z" />
+    <path android:pathData="M54,47 C47,42.5 39,41.5 31,43 L31,69 C39,67.5 47,68.5 54,72 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="31" android:startY="43" android:endX="54" android:endY="72"
+                android:startColor="#FFFFF8E9" android:endColor="#FFEADCC0" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M54,47 C61,42.5 69,41.5 77,43 L77,69 C69,67.5 61,68.5 54,72 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="77" android:startY="43" android:endX="54" android:endY="72"
+                android:startColor="#FFFFF8E9" android:endColor="#FFE4D3B3" />
+        </aapt:attr>
+    </path>
+    <path android:strokeColor="#C9B48C" android:strokeWidth="0.8" android:pathData="M54,47 L54,72" />
+    <path android:strokeColor="#CDBC98" android:strokeWidth="1.1" android:strokeLineCap="round"
+        android:pathData="M35,49.5 C40,48.6 45.5,49.2 50.5,51.2 M35,54 C40,53.1 45.5,53.7 50.5,55.7 M35,58.5 C40,57.6 45.5,58.2 50.5,60.2 M35,63 C39,62.3 42.5,62.6 45.5,63.6" />
+    <path android:fillColor="#C8743E" android:pathData="M56.9,64.5 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0 Z M59.5,61 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0 Z M62.699999999999996,58.6 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0 Z M65.30000000000001,55.4 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0 Z" />
+    <path android:strokeColor="#C8743E" android:strokeWidth="1.4" android:strokeLineCap="round" android:pathData="M67.3,49.2 L70.3,52.2 M70.3,49.2 L67.3,52.2" />
+    <path android:fillColor="#D2483A" android:pathData="M72.2,43.4 L75.4,43.1 L75.4,79 L73.8,76.6 L72.2,79 Z" />
+    <path android:fillColor="#F6C86A" android:pathData="M54,22 L55.8,28.2 L62,30 L55.8,31.8 L54,38 L52.2,31.8 L46,30 L52.2,28.2 Z" />
+    <path android:fillColor="#D9963A" android:pathData="M54,22 L54,30 L55.8,28.2 Z M62,30 L54,30 L55.8,31.8 Z M54,38 L54,30 L52.2,31.8 Z M46,30 L54,30 L52.2,28.2 Z" />
+</vector>

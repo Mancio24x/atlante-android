@@ -61,29 +61,52 @@ final class OnlineCatalog {
         } finally { connection.disconnect(); }
     }
 
-    static ArrayList<Book> search(String query) throws Exception {
+    /** Book languages: Open Library (MARC) code, ISO code for the {@code lang} parameter, name. "" means any language. */
+    static final String[][] LANGUAGES = {
+        {"ita", "it", "Italiano"}, {"eng", "en", "English"}, {"fre", "fr", "Français"}, {"ger", "de", "Deutsch"},
+        {"spa", "es", "Español"}, {"por", "pt", "Português"}, {"", "", "Tutte le lingue"}
+    };
+    static String languageName(String code) {
+        for (String[] l : LANGUAGES) if (l[0].equals(code)) return l[2];
+        return "Tutte le lingue";
+    }
+
+    static ArrayList<Book> search(String query) throws Exception { return search(query, "ita", false); }
+
+    /**
+     * Searches works, preferring {@code language}: works with an edition in that language come first and
+     * show that edition's title and cover; with {@code only} the others are left out.
+     */
+    static ArrayList<Book> search(String query, String language, boolean only) throws Exception {
         query = query.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        String iso = "";
+        for (String[] l : LANGUAGES) if (l[0].equals(language)) iso = l[1];
+        String key = language + "|" + only + "|" + query;
         String response;
         synchronized (cache) {
-            response = cache.get(query);
-            Long time = cacheTimes.get(query);
+            response = cache.get(key);
+            Long time = cacheTimes.get(key);
             if (time == null || System.currentTimeMillis()-time > 15*60*1000L) response=null;
         }
         if (response == null) {
             response = new String(request("https://openlibrary.org/search.json?q=" + URLEncoder.encode(query, "UTF-8")
-                + "&lang=it&limit=12&fields=key,title,author_name,first_publish_year,cover_i", 2 * 1024 * 1024), StandardCharsets.UTF_8);
+                + (iso.isEmpty() ? "" : "&lang=" + iso) + "&limit=" + (only ? 40 : 20)
+                + "&fields=key,title,author_name,first_publish_year,cover_i,language,editions,editions.key,editions.title,editions.language,editions.cover_i",
+                4 * 1024 * 1024), StandardCharsets.UTF_8);
             synchronized (cache) {
                 if (cache.size() >= 8) { String oldest = cache.keySet().iterator().next(); cache.remove(oldest); cacheTimes.remove(oldest); }
-                cache.put(query, response); cacheTimes.put(query,System.currentTimeMillis());
+                cache.put(key, response); cacheTimes.put(key,System.currentTimeMillis());
             }
         }
-        return parseSearch(response);
+        return parseSearch(response, language, only);
     }
 
-    static ArrayList<Book> parseSearch(String response) throws Exception {
+    static ArrayList<Book> parseSearch(String response) throws Exception { return parseSearch(response, "", false); }
+
+    static ArrayList<Book> parseSearch(String response, String language, boolean only) throws Exception {
         JSONArray docs = new JSONObject(response).getJSONArray("docs");
-        ArrayList<Book> books = new ArrayList<>();
-        for (int i = 0; i < docs.length() && books.size() < 20; i++) {
+        ArrayList<Book> preferred = new ArrayList<>(), others = new ArrayList<>();
+        for (int i = 0; i < docs.length(); i++) {
             JSONObject doc = docs.getJSONObject(i); String key = doc.optString("key");
             if (key.matches("OL[0-9]+W")) key = "/works/" + key;
             if (!key.matches("/works/OL[0-9]+W") || doc.optString("title").trim().isEmpty()) continue;
@@ -95,9 +118,28 @@ final class OnlineCatalog {
             JSONArray authors = doc.optJSONArray("author_name");
             if (authors != null && authors.length() > 0) b.author = join(authors, 10);
             b.year = doc.optString("first_publish_year", ""); b.coverId = Math.max(0, doc.optLong("cover_i", 0));
-            books.add(b);
+            boolean inLanguage = language.isEmpty() || contains(doc.optJSONArray("language"), language);
+            // Open Library returns its best edition for the requested language; use it only if it really is in that language.
+            JSONObject editions = doc.optJSONObject("editions");
+            JSONArray editionDocs = editions == null ? null : editions.optJSONArray("docs");
+            JSONObject edition = editionDocs == null ? null : editionDocs.optJSONObject(0);
+            if (!language.isEmpty() && edition != null && contains(edition.optJSONArray("language"), language)) {
+                inLanguage = true; b.language = language;
+                if (!edition.optString("title").trim().isEmpty()) b.title = edition.optString("title").trim();
+                if (edition.optString("key").matches("/books/OL[0-9]+M")) b.edition = edition.optString("key");
+                if (edition.optLong("cover_i", 0) > 0) b.coverId = edition.optLong("cover_i");
+            }
+            if (inLanguage) preferred.add(b); else if (!only) others.add(b);
         }
+        ArrayList<Book> books = new ArrayList<>(preferred); books.addAll(others);
+        while (books.size() > 20) books.remove(books.size() - 1);
         return books;
+    }
+
+    private static boolean contains(JSONArray values, String value) {
+        if (values == null) return false;
+        for (int i = 0; i < values.length(); i++) if (value.equals(values.optString(i))) return true;
+        return false;
     }
 
     static String join(JSONArray values, int maximum) {
@@ -106,12 +148,14 @@ final class OnlineCatalog {
         return String.join(", ", strings);
     }
 
-    static void enrich(Book book) throws Exception {
+    static void enrich(Book book) throws Exception { enrich(book, book.language.isEmpty() ? "ita" : book.language); }
+
+    static void enrich(Book book, String language) throws Exception {
         if (!book.source.matches("/works/OL[0-9]+W")) throw new IOException("Scheda non valida");
         String response = new String(request("https://openlibrary.org" + book.source + ".json", 2 * 1024 * 1024), StandardCharsets.UTF_8);
         enrichFrom(book, response);
-        JSONObject editions = new JSONObject(new String(request("https://openlibrary.org" + book.source + "/editions.json?limit=20", 2 * 1024 * 1024), StandardCharsets.UTF_8));
-        enrichEdition(book, editions);
+        JSONObject editions = new JSONObject(new String(request("https://openlibrary.org" + book.source + "/editions.json?limit=50", 4 * 1024 * 1024), StandardCharsets.UTF_8));
+        enrichEdition(book, editions, language);
     }
 
     static byte[] loadCover(Book book) {
@@ -121,14 +165,19 @@ final class OnlineCatalog {
         catch (Exception ignored) { return null; }
     }
 
-    static void enrichEdition(Book book, JSONObject response) throws Exception {
+    static void enrichEdition(Book book, JSONObject response) throws Exception { enrichEdition(book, response, "ita"); }
+
+    /** Picks the edition found by the search, else the first one in the preferred language, else the first one. */
+    static void enrichEdition(Book book, JSONObject response, String language) throws Exception {
         JSONArray entries = response.optJSONArray("entries");
         if (entries == null || entries.length() == 0) return;
-        JSONObject chosen = entries.getJSONObject(0);
+        JSONObject chosen = entries.getJSONObject(0), inLanguage = null, found = null;
         for (int i = 0; i < entries.length(); i++) {
             JSONObject edition = entries.getJSONObject(i); JSONArray languages = edition.optJSONArray("languages");
-            if (languages != null && languages.toString().contains("/languages/ita")) { chosen = edition; break; }
+            if (!book.edition.isEmpty() && book.edition.equals(edition.optString("key"))) found = edition;
+            if (inLanguage == null && !language.isEmpty() && languages != null && languages.toString().contains("/languages/" + language + "\"")) inLanguage = edition;
         }
+        if (found != null) chosen = found; else if (inLanguage != null) chosen = inLanguage;
         String editionKey = chosen.optString("key");
         if (editionKey.matches("/books/OL[0-9]+M")) book.edition = editionKey;
         if (!chosen.optString("title").isEmpty()) book.title = chosen.optString("title");

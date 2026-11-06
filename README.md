@@ -23,7 +23,7 @@ al riavvio: **Atlante**, **Rosa petalo**, **Lavanda**, **Salvia**, **Blu polvere
 
 La **Mappa** occupa tutto lo schermo: in alto si cerca l’autore, sotto si scorre in
 verticale autore → saghe → libri nell’ordine di lettura.
-La nuova icona usa sfondo nero, libro chiaro e bandiera pirata rossa.
+L’icona adattiva mostra un libro aperto con una rotta da mappa, un segnalibro rosso e una stella polare dorata su fondo petrolio con le linee di un mappamondo; su Android 13+ segue anche le icone a tema.
 
 La ricerca lavora separatamente dalle importazioni e mostra una prima pagina
 leggera di risultati. Risposte e miniature vengono riutilizzate in una cache locale
@@ -89,6 +89,10 @@ né scansione dei codici a barre.
 ## Ricerca online, schede e avanzamento
 
 Premi **Cerca libri online** e cerca un titolo, autore o ISBN su Open Library.
+Scegli la **Lingua preferita** (Italiano predefinito, poi English, Français, Deutsch,
+Español, Português o tutte): i libri con un’edizione in quella lingua compaiono per
+primi, con titolo e copertina di quell’edizione, che viene poi usata per la scheda.
+**Mostra solo libri in questa lingua** esclude gli altri. La scelta viene ricordata.
 **Vedi la scheda completa** apre un’anteprima con copertina, autore, trama e
 metadati dell’edizione di riferimento (preferita italiana tra quelle restituite).
 I campi mancanti sono indicati come non disponibili. Verifica l’edizione e premi
@@ -105,11 +109,18 @@ create con le versioni precedenti vengono convertite all’apertura: «In pausa�
 In lettura, «Abbandonato» diventa Da leggere. Nella scheda del libro la sezione
 **Lettura** cambia lo stato con un tocco (In lettura imposta la data di inizio, Letto
 quella di fine e l’ultima pagina) e mostra avanzamento, date, voto e note.
-**Aggiorna pagina, date e voto** apre un’unica finestra con stato, pagina attuale e
-totale, date scelte dal calendario, valutazione da 0 a 5 stelle e note; si salva solo
-con **Salva**. **Modifica scheda** resta per i dati del libro. Il segnalibro del lettore
+**Posizione** apre due rotelle, pagina e totale, oppure una rotella in percentuale:
+il piccolo selettore **Pagina / %** si ricorda l’ultima scelta. **Date, voto e note**
+raccoglie stato, date scelte dal calendario, valutazione da 0 a 5 stelle e note; si
+salva solo con **Salva**.
+
+Toccando un libro si apre la sua finestra dal basso: stato di lettura, posizione,
+**Trama** e **Dettagli della scheda** chiusi finché non li tocchi, e **Capitoli**.
+Per gli EPUB i capitoli si leggono dall’indice del libro (EPUB 3 o NCX); per gli altri
+**Aggiungi capitoli** ne crea quanti ne scegli con una rotella. Toccando un capitolo
+puoi rinominarlo, dargli da 1 a 5 stelle e scrivere un commento; la sezione mostra la
+media dei capitoli votati. Voti e commenti sono salvati nella scheda e nel backup. **Modifica scheda** resta per i dati del libro. Il segnalibro del lettore
 digitale resta separato dalle pagine dell’edizione cartacea inserite manualmente.
-L’icona dell’app mostra un libro chiaro con bandiera pirata rossa su sfondo nero.
 
 Le ricerche HTTPS avvengono solo su richiesta e inviano a Open Library il testo
 cercato; l’apertura di una scheda richiede metadati e copertina della scheda scelta.

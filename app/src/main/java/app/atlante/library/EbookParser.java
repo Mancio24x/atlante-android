@@ -60,7 +60,7 @@ final class EbookParser {
     }
 
     static final class Package {
-        String file, coverId = "";
+        String file, coverId = "", nav, ncx;
         Map<String, String> manifest = new LinkedHashMap<>();
         List<String> spine = new ArrayList<>();
     }
@@ -85,7 +85,10 @@ final class EbookParser {
             if (tag.equals("item")) {
                 String id = attr(p, "id");
                 opf.manifest.put(id, path(opf.file, attr(p, "href")));
-                if (Arrays.asList(attr(p, "properties").split("\\s+")).contains("cover-image")) opf.coverId = id;
+                List<String> properties = Arrays.asList(attr(p, "properties").split("\\s+"));
+                if (properties.contains("cover-image")) opf.coverId = id;
+                if (properties.contains("nav")) opf.nav = opf.manifest.get(id);
+                if (attr(p, "media-type").equals("application/x-dtbncx+xml")) opf.ncx = opf.manifest.get(id);
             } else if (tag.equals("itemref")) {
                 if (!attr(p, "linear").equals("no")) opf.spine.add(attr(p, "idref"));
             } else if (metadataDepth >= 0 && tag.equals("meta")) {
@@ -116,6 +119,55 @@ final class EbookParser {
             book.genre = String.join(", ", subjects);
         }
         return opf;
+    }
+
+    static final int MAX_CHAPTERS = 2000;
+
+    /** Chapter titles from the EPUB table of contents: EPUB 3 navigation first, then the EPUB 2 NCX. */
+    static List<String> tableOfContents(File file) throws Exception {
+        try (ZipFile zip = new ZipFile(file)) {
+            Package p = epub(zip, null);
+            List<String> titles = new ArrayList<>();
+            if (p.nav != null && zip.getEntry(p.nav) != null) titles = navTitles(xml(entry(zip, p.nav)));
+            if (titles.isEmpty() && p.ncx != null && zip.getEntry(p.ncx) != null) titles = ncxTitles(xml(entry(zip, p.ncx)));
+            return titles;
+        }
+    }
+
+    /** Links inside the {@code <nav epub:type="toc">} of an EPUB 3 navigation document. */
+    static List<String> navTitles(XmlPullParser p) throws Exception {
+        List<String> titles = new ArrayList<>(); int tocDepth = -1;
+        for (int t = p.getEventType(); t != XmlPullParser.END_DOCUMENT && titles.size() < MAX_CHAPTERS; t = p.next()) {
+            if (t == XmlPullParser.END_TAG && p.getDepth() == tocDepth && p.getName().equals("nav")) tocDepth = -1;
+            if (t != XmlPullParser.START_TAG) continue;
+            if (p.getName().equals("nav") && Arrays.asList(attr(p, "type").split("\\s+")).contains("toc")) tocDepth = p.getDepth();
+            else if (tocDepth >= 0 && p.getName().equals("a")) addTitle(titles, text(p));
+        }
+        return titles;
+    }
+
+    /** {@code navPoint/navLabel/text} entries of an EPUB 2 NCX, in document order. */
+    static List<String> ncxTitles(XmlPullParser p) throws Exception {
+        List<String> titles = new ArrayList<>(); boolean label = false;
+        for (int t = p.getEventType(); t != XmlPullParser.END_DOCUMENT && titles.size() < MAX_CHAPTERS; t = p.next()) {
+            if (t == XmlPullParser.START_TAG && p.getName().equals("navLabel")) label = true;
+            else if (t == XmlPullParser.END_TAG && p.getName().equals("navLabel")) label = false;
+            else if (t == XmlPullParser.START_TAG && label && p.getName().equals("text")) addTitle(titles, text(p));
+        }
+        return titles;
+    }
+
+    private static void addTitle(List<String> titles, String title) {
+        title = title.replaceAll("\\s+", " ").trim();
+        if (!title.isEmpty()) titles.add(title.length() > 200 ? title.substring(0, 200) : title);
+    }
+
+    /** All text inside the current element, including nested tags such as {@code <span>}. */
+    static String text(XmlPullParser p) throws Exception {
+        StringBuilder out = new StringBuilder(); int depth = p.getDepth();
+        for (int t = p.next(); !(t == XmlPullParser.END_TAG && p.getDepth() == depth) && t != XmlPullParser.END_DOCUMENT; t = p.next())
+            if (t == XmlPullParser.TEXT) out.append(p.getText());
+        return out.toString();
     }
 
     static void metadata(File file, File cover, Book book) throws Exception {

@@ -1,5 +1,7 @@
 package app.atlante.library;
 
+import java.util.ArrayList;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -30,6 +32,23 @@ final class Book {
     /** Set by an import that restored the missing file of a book already in the catalog. */
     transient boolean reattached;
     int currentPage, totalPages;
+    /** Progress in percent, used only while the number of pages is unknown. */
+    int percent;
+    /** Table of contents with the reader's own rating and comment for each chapter. */
+    final ArrayList<Chapter> chapters = new ArrayList<>();
+
+    static final class Chapter {
+        String title = "", comment = "";
+        int rating;
+        Chapter() { }
+        Chapter(String title) { this.title = title; }
+        JSONObject json() throws JSONException { return new JSONObject().put("title", title).put("rating", rating).put("comment", comment); }
+        static Chapter from(JSONObject j) {
+            Chapter c = new Chapter(j.optString("title"));
+            c.rating = Math.max(0, Math.min(5, j.optInt("rating"))); c.comment = j.optString("comment");
+            return c;
+        }
+    }
     double number;
     int page;
 
@@ -39,6 +58,7 @@ final class Book {
         if (b.status.equals(READ)) {
             if (b.finished.isEmpty()) b.finished = today;
             if (b.totalPages > 0) b.currentPage = b.totalPages;
+            else b.percent = 100;
         }
     }
 
@@ -47,7 +67,14 @@ final class Book {
             .put("subtitle", subtitle).put("tags", tags).put("location", location).put("medium", medium)
             .put("started", started).put("finished", finished).put("rating", rating).put("addedAt", addedAt)
             .put("series", series).put("genre", genre).put("description", description)
-            .put("edition", edition).put("isbn", isbn).put("publisher", publisher).put("language", language).put("year", year).put("coverId", coverId).put("source", source).put("notes", notes).put("currentPage", currentPage).put("totalPages", totalPages).put("format", format).put("status", status).put("number", number).put("page", page);
+            .put("edition", edition).put("isbn", isbn).put("publisher", publisher).put("language", language).put("year", year).put("coverId", coverId).put("source", source).put("notes", notes).put("currentPage", currentPage).put("totalPages", totalPages).put("format", format).put("status", status).put("number", number).put("page", page)
+            .put("percent", percent).put("chapters", chaptersJson());
+    }
+
+    private JSONArray chaptersJson() throws JSONException {
+        JSONArray array = new JSONArray();
+        for (Chapter c : chapters) array.put(c.json());
+        return array;
     }
 
     static Book from(JSONObject j) throws JSONException {
@@ -67,6 +94,11 @@ final class Book {
         b.source = j.optString("source"); b.notes = j.optString("notes");
         b.currentPage = Math.max(0, j.optInt("currentPage", 0));
         b.totalPages = Math.max(0, j.optInt("totalPages", 0));
+        b.percent = Math.max(0, Math.min(100, j.optInt("percent", 0)));
+        JSONArray chapters = j.optJSONArray("chapters");
+        if (chapters != null) for (int i = 0; i < chapters.length() && i < EbookParser.MAX_CHAPTERS; i++) {
+            JSONObject c = chapters.optJSONObject(i); if (c != null) b.chapters.add(Chapter.from(c));
+        }
         return b;
     }
 }

@@ -16,6 +16,9 @@ import java.util.*;
 import java.util.concurrent.*;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.widget.NestedScrollView;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.card.MaterialCardView;
@@ -53,6 +56,8 @@ public final class MainActivity extends AppCompatActivity {
     private String gridKey;
     private static final int IMPORT = 101, EXPORT = 102, COVER = 103, BACKUP = 104, RESTORE = 105;
     private boolean backupFiles = true;
+    /** EPUBs whose table of contents was already read in this session (found or not). */
+    private final Set<String> tocChecked = new HashSet<>();
     private final Runnable savePosition = () -> { if (this.store != null) save(); };
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ActivityResultLauncher<Intent> importLauncher = results(IMPORT), exportLauncher = results(EXPORT),
@@ -497,7 +502,8 @@ public final class MainActivity extends AppCompatActivity {
 
     private LinearProgressIndicator progressBar(Book b) {
         LinearProgressIndicator bar = new LinearProgressIndicator(this);
-        bar.setMax(Math.max(1, b.totalPages)); bar.setProgressCompat(Math.min(b.currentPage, b.totalPages), false);
+        if (b.totalPages > 0) { bar.setMax(b.totalPages); bar.setProgressCompat(Math.min(b.currentPage, b.totalPages), false); }
+        else { bar.setMax(100); bar.setProgressCompat(b.percent, false); }
         bar.setTrackCornerRadius(dp(4)); bar.setTrackThickness(dp(6));
         return bar;
     }
@@ -521,7 +527,7 @@ public final class MainActivity extends AppCompatActivity {
         art.setPadding(dp(7), dp(7), dp(7), dp(7));
         card.addView(art, new LinearLayout.LayoutParams(-1, dp(coverHeight)));
         TextView fallback = text(b.author + "\n\n" + b.title, 18, SAGE, true);
-        fallback.setBackground(background(PAPER, LINE)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
+        fallback.setBackground(background(PAPER, Color.TRANSPARENT)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
         art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
         ImageView image = new ImageView(this); image.setContentDescription("Copertina di " + b.title);
         image.setScaleType(ImageView.ScaleType.FIT_CENTER); art.addView(image, new FrameLayout.LayoutParams(-1, -1));
@@ -534,7 +540,7 @@ public final class MainActivity extends AppCompatActivity {
         if (!b.series.isEmpty()) { gap(card, 5); card.addView(text("↳ " + b.series + order(b), 12, SAGE, false)); }
         if (!b.status.equals("Da leggere")) { gap(card, 5); card.addView(text(b.status, 11, COPPER, false)); }
         gap(card, 6); card.addView(text(progressLabel(b), 11, SAGE, false));
-        if (b.totalPages > 0) { gap(card, 4); card.addView(progressBar(b), new LinearLayout.LayoutParams(-1, -2)); }
+        if (b.totalPages > 0 || b.percent > 0) { gap(card, 4); card.addView(progressBar(b), new LinearLayout.LayoutParams(-1, -2)); }
         frame.setOnClickListener(v -> details(b)); art.setOnClickListener(v -> details(b));
         return cell;
     }
@@ -614,41 +620,58 @@ public final class MainActivity extends AppCompatActivity {
         hint.setPadding(dp(20), dp(4), dp(20), 0); content.addView(hint);
     }
 
+    /** Book window: a Material bottom sheet with reading state, plot, chapters and the book's details. */
     private void details(Book b) {
-        LinearLayout panel = column(); panel.setPadding(dp(24), dp(16), dp(24), dp(8));
+        BottomSheetDialog sheet = new BottomSheetDialog(this);
+        LinearLayout panel = column(); panel.setPadding(dp(20), dp(4), dp(20), dp(24));
+        NestedScrollView scroll = new NestedScrollView(this); scroll.addView(panel);
+        sheet.setContentView(scroll);
+        sheet.getBehavior().setState(BottomSheetBehavior.STATE_EXPANDED); sheet.getBehavior().setSkipCollapsed(true);
+
+        LinearLayout top = row(); panel.addView(top);
+        LinearLayout heading = column(); top.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
+        MaterialButton close = button("Chiudi", R.style.Atlante_Button_Text, sheet::dismiss); top.addView(close);
         Bitmap art = cover(b);
+        LinearLayout identity = row(); identity.setGravity(Gravity.TOP); panel.addView(identity);
         if (art != null) {
-            ImageView image = new ImageView(this); image.setImageBitmap(art); image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            ImageView image = new ImageView(this); image.setImageBitmap(art); image.setScaleType(ImageView.ScaleType.FIT_START);
             image.setContentDescription("Copertina di " + b.title);
-            panel.addView(image, new LinearLayout.LayoutParams(-1, dp(220))); gap(panel, 16);
+            LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(dp(96), dp(144)); size.setMargins(0, 0, dp(16), 0);
+            identity.addView(image, size);
         }
-        panel.addView(text(b.title, 26, INK, true)); gap(panel, 4);
-        if (!b.subtitle.isEmpty()) panel.addView(text(b.subtitle, 17, MUTED, true));
-        panel.addView(text(b.author, 16, SAGE, false));
-        if (!b.series.isEmpty()) panel.addView(text(b.series + order(b), 14, MUTED, false));
+        LinearLayout names = column(); identity.addView(names, new LinearLayout.LayoutParams(0, -2, 1));
+        names.addView(text(b.title, 24, INK, true));
+        if (!b.subtitle.isEmpty()) names.addView(text(b.subtitle, 16, MUTED, true));
+        gap(names, 4); names.addView(text(b.author, 15, SAGE, false));
+        if (!b.series.isEmpty()) names.addView(text(b.series + order(b), 13, MUTED, false));
         gap(panel, 16);
-        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
-        AlertDialog dialog = dialogBuilder().setView(scroll).setNegativeButton("Chiudi", null).create();
         if (!b.format.equals("CATALOGO")) {
-            panel.addView(button(b.page > 0 ? "Riprendi la lettura" : "Leggi", 0, () -> { dialog.dismiss(); openReader(b); }), new LinearLayout.LayoutParams(-1, -2));
+            panel.addView(button(b.page > 0 ? "Riprendi la lettura" : "Leggi", 0, () -> { sheet.dismiss(); openReader(b); }), new LinearLayout.LayoutParams(-1, -2));
             gap(panel, 12);
         }
-        panel.addView(readingCard(b, dialog)); gap(panel, 20);
+        panel.addView(readingCard(b, sheet)); gap(panel, 12);
 
-        panel.addView(sectionLabel("SCHEDA")); gap(panel, 6);
-        if (!b.tags.isEmpty()) panel.addView(text("Tag: " + b.tags, 14, INK, false));
-        if (!b.location.isEmpty()) panel.addView(text("Posizione: " + b.location, 14, INK, false));
-        panel.addView(text((b.format.equals("CATALOGO") ? "Scheda senza file" : "File " + b.format) + (b.medium.isEmpty() ? "" : " · " + b.medium)
+        if (!b.description.isEmpty()) {
+            TextView plot = text(b.description, 15, INK, false); plot.setPadding(0, 0, 0, dp(8));
+            panel.addView(expander("Trama", plot, false));
+        }
+        panel.addView(chaptersSection(b));
+
+        LinearLayout info = column();
+        if (!b.tags.isEmpty()) info.addView(text("Tag: " + b.tags, 14, INK, false));
+        if (!b.location.isEmpty()) info.addView(text("Posizione: " + b.location, 14, INK, false));
+        info.addView(text((b.format.equals("CATALOGO") ? "Scheda senza file" : "File " + b.format) + (b.medium.isEmpty() ? "" : " · " + b.medium)
             + (b.totalPages > 0 ? " · " + b.totalPages + " pagine" : ""), 14, INK, false));
-        gap(panel, 4); bibliographic(panel, b);
-        if (!b.description.isEmpty()) { gap(panel, 14); panel.addView(text(b.description, 15, INK, false)); }
-        if (!b.source.isEmpty()) panel.addView(button("Apri su Open Library", R.style.Atlante_Button_Text, () -> {
+        gap(info, 4); bibliographic(info, b);
+        if (!b.source.isEmpty()) info.addView(button("Apri su Open Library", R.style.Atlante_Button_Text, () -> {
             if (b.source.matches("/works/OL[0-9]+W")) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://openlibrary.org" + b.source)));
         }));
-        gap(panel, 16);
-        panel.addView(button("Modifica scheda", R.style.Atlante_Button_Tonal, () -> { dialog.dismiss(); edit(b); }), new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(expander("Dettagli della scheda", info, false));
+        gap(panel, 12);
+
+        panel.addView(button("Modifica scheda", R.style.Atlante_Button_Tonal, () -> { sheet.dismiss(); edit(b); }), new LinearLayout.LayoutParams(-1, -2));
         panel.addView(button("Scegli copertina dalla galleria", R.style.Atlante_Button_Tonal, () -> {
-            coverBookId = b.id; dialog.dismiss();
+            coverBookId = b.id; sheet.dismiss();
             coverLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"));
         }), new LinearLayout.LayoutParams(-1, -2));
         if (!b.format.equals("CATALOGO")) panel.addView(button("Esporta il file originale", R.style.Atlante_Button_Tonal, () -> {
@@ -661,15 +684,33 @@ public final class MainActivity extends AppCompatActivity {
         MaterialButton remove = button("Rimuovi dalla libreria", R.style.Atlante_Button_Text, () -> dialogBuilder().setTitle("Rimuovere il libro?")
             .setMessage("La copia in Atlante e il punto di lettura verranno rimossi. Il file da cui hai importato il libro resta al suo posto.")
             .setNegativeButton("Annulla", null).setPositiveButton("Rimuovi", (d, w) -> {
-                try { store.remove(b); forgetCover(b.id); dialog.dismiss(); renderContent(); } catch (Exception e) { error(e); }
+                try { store.remove(b); forgetCover(b.id); sheet.dismiss(); renderContent(); } catch (Exception e) { error(e); }
             }).show());
         remove.setTextColor(attr(getTheme(), androidx.appcompat.R.attr.colorError)); panel.addView(remove, new LinearLayout.LayoutParams(-1, -2));
-        dialog.show();
+        sheet.show();
     }
 
-    /** Reading state at a glance: the state can be changed with one tap; pages, dates, rating and notes in one window. */
-    private View readingCard(Book b, AlertDialog sheet) {
-        LinearLayout box = column(); box.setPadding(dp(16), dp(14), dp(16), dp(8));
+    /** A section title that shows or hides its content when tapped (closed by default). */
+    private View expander(String title, View body, boolean open) {
+        LinearLayout box = column();
+        MaterialButton header = button(title, R.style.Atlante_Button_Text, () -> { });
+        header.setGravity(Gravity.START | Gravity.CENTER_VERTICAL); header.setTextColor(INK); header.setTextSize(16);
+        header.setPadding(0, 0, 0, 0); header.setIconGravity(MaterialButton.ICON_GRAVITY_END);
+        header.setIconTint(android.content.res.ColorStateList.valueOf(MUTED));
+        Runnable update = () -> {
+            boolean shown = body.getVisibility() == View.VISIBLE;
+            header.setIconResource(shown ? R.drawable.ic_expand_less : R.drawable.ic_expand_more);
+            header.setContentDescription(title + (shown ? ", aperta. Tocca per chiudere" : ", chiusa. Tocca per aprire"));
+        };
+        body.setVisibility(open ? View.VISIBLE : View.GONE); update.run();
+        header.setOnClickListener(v -> { body.setVisibility(body.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE); update.run(); });
+        box.addView(header, new LinearLayout.LayoutParams(-1, -2)); box.addView(body);
+        return box;
+    }
+
+    /** Reading state at a glance: one tap changes the state, the position opens a wheel. */
+    private View readingCard(Book b, Dialog sheet) {
+        LinearLayout box = column(); box.setPadding(dp(16), dp(14), dp(16), dp(6));
         MaterialCardView card = card(box);
         box.addView(sectionLabel("LETTURA")); gap(box, 8);
         MaterialButtonToggleGroup states = statusToggle(b.status);
@@ -681,16 +722,176 @@ public final class MainActivity extends AppCompatActivity {
             changeStatus(b, status); renderContent(); sheet.dismiss(); details(b);
         });
         gap(box, 12);
-        box.addView(text(progressLabel(b), 15, INK, false));
-        if (b.totalPages > 0) { gap(box, 6); box.addView(progressBar(b), new LinearLayout.LayoutParams(-1, -2)); }
+        LinearLayout position = column(); position.setClickable(true); position.setFocusable(true);
+        position.setBackgroundResource(outValue(android.R.attr.selectableItemBackground));
+        position.setContentDescription(progressLabel(b) + ". Tocca per cambiare la posizione");
+        position.addView(text(progressLabel(b), 15, INK, false));
+        if (b.totalPages > 0 || b.percent > 0) { gap(position, 6); position.addView(progressBar(b), new LinearLayout.LayoutParams(-1, -2)); }
+        position.setOnClickListener(v -> { sheet.dismiss(); positionDialog(b); });
+        box.addView(position);
         if (!b.started.isEmpty() || !b.finished.isEmpty()) { gap(box, 6);
             box.addView(text((b.started.isEmpty() ? "" : "Iniziato il " + italianDate(b.started)) + (!b.started.isEmpty() && !b.finished.isEmpty() ? " · " : "")
                 + (b.finished.isEmpty() ? "" : "Finito il " + italianDate(b.finished)), 13, MUTED, false)); }
         if (b.rating > 0) { gap(box, 4); box.addView(text(stars(b.rating), 18, COPPER, false)); }
         if (!b.notes.isEmpty()) { gap(box, 6); box.addView(text(b.notes, 14, INK, false)); }
         gap(box, 4);
-        box.addView(button("Aggiorna pagina, date e voto", R.style.Atlante_Button_Text, () -> { sheet.dismiss(); readingDialog(b); }));
+        LinearLayout actions = row(); box.addView(actions);
+        actions.addView(button("Posizione", R.style.Atlante_Button_Tonal, () -> { sheet.dismiss(); positionDialog(b); }));
+        actions.addView(button("Date, voto e note", R.style.Atlante_Button_Text, () -> { sheet.dismiss(); readingDialog(b); }));
         return card;
+    }
+    private int outValue(int attribute) {
+        android.util.TypedValue value = new android.util.TypedValue(); getTheme().resolveAttribute(attribute, value, true); return value.resourceId;
+    }
+
+    /** Chapters with the reader's stars and comments. EPUB chapters come from the table of contents. */
+    private View chaptersSection(Book b) {
+        LinearLayout list = column();
+        Runnable[] refresh = new Runnable[1];
+        refresh[0] = () -> {
+            list.removeAllViews();
+            if (b.chapters.isEmpty()) {
+                boolean loading = b.format.equals("EPUB") && !tocChecked.contains(b.id);
+                list.addView(text(loading ? "Lettura dell’indice…" : "Nessun capitolo. Puoi aggiungerli per votarli e commentarli.", 14, MUTED, false));
+            }
+            int rated = 0, sum = 0;
+            for (int i = 0; i < b.chapters.size(); i++) {
+                Book.Chapter c = b.chapters.get(i); int index = i;
+                if (c.rating > 0) { rated++; sum += c.rating; }
+                LinearLayout item = column(); item.setPadding(0, dp(10), 0, dp(10)); item.setClickable(true); item.setFocusable(true);
+                item.setBackgroundResource(outValue(android.R.attr.selectableItemBackground));
+                LinearLayout line = row(); item.addView(line);
+                TextView title = text(c.title, 15, INK, false); title.setMaxLines(2); title.setEllipsize(TextUtils.TruncateAt.END);
+                line.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+                if (c.rating > 0) line.addView(text(stars(c.rating), 13, COPPER, false));
+                if (!c.comment.isEmpty()) { TextView note = text(c.comment, 13, MUTED, false); note.setMaxLines(2); note.setEllipsize(TextUtils.TruncateAt.END); item.addView(note); }
+                item.setContentDescription(c.title + (c.rating > 0 ? ", " + c.rating + " stelle" : ", senza voto") + (c.comment.isEmpty() ? "" : ", con commento"));
+                item.setOnClickListener(v -> chapterDialog(b, index, refresh[0]));
+                list.addView(item);
+            }
+            MaterialButton add = button(b.chapters.isEmpty() ? "Aggiungi capitoli" : "Aggiungi altri capitoli", R.style.Atlante_Button_Text, () -> addChapters(b, refresh[0]));
+            add.setIconResource(R.drawable.ic_add); list.addView(add);
+            if (rated > 0) list.addView(text(String.format(Locale.ITALIAN, "%d capitoli votati · media %.1f ★", rated, (double) sum / rated), 13, COPPER, false), 0);
+        };
+        refresh[0].run();
+        if (b.format.equals("EPUB") && b.chapters.isEmpty() && tocChecked.add(b.id)) worker.execute(() -> {
+            List<String> titles;
+            try { titles = EbookParser.tableOfContents(store.original(b)); } catch (Exception e) { titles = new ArrayList<>(); }
+            final List<String> found = titles;
+            runOnUiThread(() -> {
+                if (!found.isEmpty() && b.chapters.isEmpty()) { for (String t : found) b.chapters.add(new Book.Chapter(t)); save(); }
+                refresh[0].run();
+            });
+        });
+        String label = "Capitoli" + (b.chapters.isEmpty() ? "" : " · " + b.chapters.size());
+        return expander(label, list, false);
+    }
+
+    private void chapterDialog(Book b, int index, Runnable refresh) {
+        Book.Chapter c = b.chapters.get(index);
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(8), dp(24), dp(4));
+        EditText title = field(panel, "Titolo del capitolo", c.title);
+        panel.addView(sectionLabel("IL TUO VOTO")); gap(panel, 4);
+        RatingBar rating = new RatingBar(this); rating.setNumStars(5); rating.setStepSize(1); rating.setRating(c.rating);
+        rating.setProgressTintList(android.content.res.ColorStateList.valueOf(COPPER));
+        rating.setSecondaryProgressTintList(android.content.res.ColorStateList.valueOf(COPPER));
+        rating.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE));
+        rating.setContentDescription("Voto del capitolo da 1 a 5 stelle");
+        LinearLayout stars = row(); stars.addView(rating, new LinearLayout.LayoutParams(-2, -2));
+        stars.addView(button("Nessun voto", R.style.Atlante_Button_Text, () -> rating.setRating(0)));
+        panel.addView(stars); gap(panel, 8);
+        EditText comment = field(panel, "Commento", c.comment); comment.setSingleLine(false); comment.setMinLines(3);
+        AlertDialog dialog = dialogBuilder().setTitle("Capitolo " + (index + 1)).setView(scrolled(panel))
+            .setNegativeButton("Annulla", null)
+            .setNeutralButton("Elimina", (d, w) -> dialogBuilder().setTitle("Eliminare il capitolo?").setMessage(c.title)
+                .setNegativeButton("Annulla", null).setPositiveButton("Elimina", (d2, w2) -> { b.chapters.remove(c); save(); refresh.run(); }).show())
+            .setPositiveButton("Salva", (d, w) -> {
+                String name = title.getText().toString().trim(); if (!name.isEmpty()) c.title = name;
+                c.rating = Math.round(rating.getRating()); c.comment = comment.getText().toString().trim();
+                save(); refresh.run();
+            }).create();
+        dialog.show();
+    }
+
+    /** Adds numbered chapters ("Capitolo N") chosen with a wheel, after the existing ones. */
+    private void addChapters(Book b, Runnable refresh) {
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(8), dp(24), dp(4)); panel.setGravity(Gravity.CENTER_HORIZONTAL);
+        panel.addView(text("Quanti capitoli vuoi aggiungere? Potrai rinominarli toccandoli.", 14, MUTED, false));
+        NumberPicker count = wheel(1, 200, 10); panel.addView(count);
+        dialogBuilder().setTitle("Aggiungi capitoli").setView(panel).setNegativeButton("Annulla", null)
+            .setPositiveButton("Aggiungi", (d, w) -> {
+                int start = b.chapters.size();
+                for (int i = 1; i <= count.getValue() && b.chapters.size() < EbookParser.MAX_CHAPTERS; i++) b.chapters.add(new Book.Chapter("Capitolo " + (start + i)));
+                save(); refresh.run();
+            }).show();
+    }
+
+    private NumberPicker wheel(int min, int max, int value) {
+        NumberPicker picker = new NumberPicker(this); picker.setMinValue(min); picker.setMaxValue(max);
+        picker.setValue(Math.max(min, Math.min(max, value))); picker.setWrapSelectorWheel(false);
+        picker.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        if (android.os.Build.VERSION.SDK_INT >= 29) picker.setTextColor(INK);
+        return picker;
+    }
+    private View scrolled(View content) { ScrollView scroll = new ScrollView(this); scroll.addView(content); return scroll; }
+
+    /**
+     * Where you are, with wheels instead of typing: page of total, or a percentage.
+     * The small Pagina / % switch is remembered.
+     */
+    private void positionDialog(Book original) {
+        final Book b;
+        try { b = Book.from(original.json()); } catch (Exception e) { error(e); return; }
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(4), dp(24), dp(4)); panel.setGravity(Gravity.CENTER_HORIZONTAL);
+        MaterialButtonToggleGroup mode = new MaterialButtonToggleGroup(this); mode.setSingleSelection(true); mode.setSelectionRequired(true);
+        MaterialButton pages = button("Pagina", R.style.Atlante_Button_Outlined, () -> { }), percent = button("%", R.style.Atlante_Button_Outlined, () -> { });
+        for (MaterialButton m : new MaterialButton[]{pages, percent}) { m.setId(View.generateViewId()); m.setTextSize(12); m.setMinHeight(dp(36)); m.setMinimumHeight(dp(36)); mode.addView(m); }
+        LinearLayout modeRow = row(); modeRow.setGravity(Gravity.END); modeRow.addView(mode); panel.addView(modeRow, new LinearLayout.LayoutParams(-1, -2));
+
+        int totalGuess = b.totalPages;
+        NumberPicker current = wheel(0, totalGuess > 0 ? totalGuess : 5000, b.currentPage);
+        NumberPicker total = wheel(0, 5000, totalGuess);
+        total.setFormatter(v -> v == 0 ? "?" : Integer.toString(v));
+        total.setOnValueChangedListener((picker, old, value) -> current.setMaxValue(value > 0 ? value : 5000));
+        LinearLayout pageWheels = row(); pageWheels.setGravity(Gravity.CENTER);
+        pageWheels.addView(text("Pagina", 15, MUTED, false)); pageWheels.addView(current);
+        pageWheels.addView(text("di", 15, MUTED, false)); pageWheels.addView(total);
+        for (View v : new View[]{current, total}) ((LinearLayout.LayoutParams) v.getLayoutParams()).setMargins(dp(12), 0, dp(12), 0);
+        int startPercent = b.totalPages > 0 ? Math.round(100f * b.currentPage / b.totalPages) : b.percent;
+        NumberPicker share = wheel(0, 100, startPercent); share.setFormatter(v -> v + "%");
+        LinearLayout percentWheel = row(); percentWheel.setGravity(Gravity.CENTER); percentWheel.addView(share);
+        panel.addView(pageWheels); panel.addView(percentWheel);
+        TextView hint = text("", 12, MUTED, false); hint.setGravity(Gravity.CENTER); panel.addView(hint);
+
+        Runnable showMode = () -> {
+            boolean byPage = mode.getCheckedButtonId() == pages.getId();
+            pageWheels.setVisibility(byPage ? View.VISIBLE : View.GONE); percentWheel.setVisibility(byPage ? View.GONE : View.VISIBLE);
+            hint.setText(byPage ? "Lascia «?» se non conosci il numero di pagine." : "Utile per ebook o se non conosci le pagine.");
+            prefs.edit().putBoolean("positionByPercent", !byPage).apply();
+        };
+        mode.check(prefs.getBoolean("positionByPercent", false) ? percent.getId() : pages.getId());
+        mode.addOnButtonCheckedListener((g, id, checked) -> { if (checked) showMode.run(); });
+        showMode.run();
+
+        dialogBuilder().setTitle("Dove sei arrivato?").setView(panel).setNegativeButton("Annulla", null)
+            .setPositiveButton("Salva", (d, w) -> {
+                boolean byPage = mode.getCheckedButtonId() == pages.getId();
+                if (byPage) {
+                    b.totalPages = total.getValue(); b.currentPage = Math.min(current.getValue(), b.totalPages > 0 ? b.totalPages : current.getValue());
+                    b.percent = b.totalPages > 0 ? Math.round(100f * b.currentPage / b.totalPages) : 0;
+                } else {
+                    b.percent = share.getValue();
+                    if (b.totalPages > 0) b.currentPage = Math.round(b.percent * b.totalPages / 100f);
+                }
+                boolean done = b.totalPages > 0 ? b.currentPage == b.totalPages && b.currentPage > 0 : b.percent == 100;
+                boolean started = b.currentPage > 0 || b.percent > 0;
+                if (done) b.status = Book.READ;
+                else if (started && b.status.equals(Book.TO_READ)) b.status = Book.READING;
+                Book.applyStatusEffects(b, java.time.LocalDate.now().toString());
+                try { store.replace(b); } catch (Exception e) { error(e); return; }
+                renderContent(); details(b);
+            }).show();
     }
 
     private MaterialButtonToggleGroup statusToggle(String selected) {
@@ -722,9 +923,6 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout panel = column(); panel.setPadding(dp(24), dp(8), dp(24), dp(4));
         panel.addView(sectionLabel("STATO")); gap(panel, 6);
         MaterialButtonToggleGroup states = statusToggle(b.status); panel.addView(states, new LinearLayout.LayoutParams(-1, -2)); gap(panel, 14);
-        EditText current = field(panel, "Pagina attuale", b.currentPage > 0 ? Integer.toString(b.currentPage) : "");
-        EditText total = field(panel, "Pagine totali", b.totalPages > 0 ? Integer.toString(b.totalPages) : "");
-        current.setInputType(android.text.InputType.TYPE_CLASS_NUMBER); total.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         EditText started = dateField(panel, "Iniziato il", b.started), finished = dateField(panel, "Finito il", b.finished);
         TextView ratingLabel = sectionLabel("VALUTAZIONE · " + (b.rating == 0 ? "nessuna" : stars(b.rating))); panel.addView(ratingLabel);
         Slider rating = new Slider(this); rating.setValueFrom(0); rating.setValueTo(5); rating.setStepSize(1); rating.setValue(b.rating);
@@ -732,25 +930,14 @@ public final class MainActivity extends AppCompatActivity {
         rating.addOnChangeListener((slider, value, fromUser) -> ratingLabel.setText("VALUTAZIONE · " + (value == 0 ? "nessuna" : stars(Math.round(value)))));
         panel.addView(rating); gap(panel, 6);
         EditText notes = field(panel, "Note personali", b.notes); notes.setSingleLine(false); notes.setMinLines(3);
-        panel.addView(text("Le pagine sono quelle dell’edizione cartacea; il segno del lettore digitale resta separato.", 12, MUTED, false));
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
-        AlertDialog dialog = dialogBuilder().setTitle("Lettura").setView(scroll)
+        AlertDialog dialog = dialogBuilder().setTitle("Date, voto e note").setView(scroll)
             .setNegativeButton("Annulla", null).setPositiveButton("Salva", null).create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            int c, t;
-            try {
-                c = current.getText().toString().trim().isEmpty() ? 0 : Integer.parseInt(current.getText().toString().trim());
-                t = total.getText().toString().trim().isEmpty() ? 0 : Integer.parseInt(total.getText().toString().trim());
-            } catch (NumberFormatException e) { current.setError("Inserisci numeri interi validi"); return; }
-            if (c < 0 || t < 0 || (t > 0 && c > t)) { current.setError("La pagina attuale deve essere tra 0 e il totale"); return; }
             String start = started.getText().toString().trim(), end = finished.getText().toString().trim();
             if (!start.isEmpty() && !end.isEmpty() && start.compareTo(end) > 0) { finished.setError("La fine precede l’inizio"); return; }
-            String status = Book.STATES[states.indexOfChild(states.findViewById(states.getCheckedButtonId()))];
-            // Pages can imply the state: last page read means finished, a started book is being read.
-            if (!status.equals(original.status)) { /* the explicit choice wins */ }
-            else if (t > 0 && c == t) status = Book.READ;
-            else if (c > 0 && status.equals(Book.TO_READ)) status = Book.READING;
-            b.status = status; b.currentPage = c; b.totalPages = t; b.started = start; b.finished = end;
+            b.status = Book.STATES[states.indexOfChild(states.findViewById(states.getCheckedButtonId()))];
+            b.started = start; b.finished = end;
             b.rating = Math.round(rating.getValue()); b.notes = notes.getText().toString();
             Book.applyStatusEffects(b, java.time.LocalDate.now().toString());
             try { store.replace(b); } catch (Exception e) { error(e); return; }
@@ -810,15 +997,24 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     static String progressLabel(Book b) {
-        if (b.totalPages > 0) return "Pagina " + b.currentPage + " / " + b.totalPages + " · " + Math.round(100.0 * b.currentPage / b.totalPages) + "%";
-        return b.currentPage > 0 ? "Pagina " + b.currentPage : "Avanzamento da impostare";
+        if (b.totalPages > 0) return "Pagina " + b.currentPage + " di " + b.totalPages + " · " + Math.round(100.0 * b.currentPage / b.totalPages) + "%";
+        if (b.percent > 0) return "Al " + b.percent + "%";
+        return b.currentPage > 0 ? "Pagina " + b.currentPage : "Posizione da impostare";
     }
 
     private void onlineSearch() {
         LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
         panel.addView(text("Cerca su Open Library per titolo, autore o ISBN. Si aggiunge una scheda personale, anche se non possiedi il file. La ricerca invia al servizio solo il testo inserito.", 14, MUTED, false));
+        gap(panel, 8);
         EditText input = field(panel, "Titolo, autore o ISBN", lastOnlineQuery.isEmpty() ? getPreferences(MODE_PRIVATE).getString("onlineQuery", "") : lastOnlineQuery);
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        // Preferred language: its editions come first, with their own title and cover. Remembered.
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        ArrayList<String> languageNames = new ArrayList<>();
+        for (String[] l : OnlineCatalog.LANGUAGES) languageNames.add(l[2]);
+        Picker language = new Picker(panel, "Lingua preferita", languageNames, OnlineCatalog.languageName(prefs.getString("bookLanguage", "ita")));
+        MaterialSwitch only = new MaterialSwitch(this); only.setText("Mostra solo libri in questa lingua"); only.setTextSize(14);
+        only.setChecked(prefs.getBoolean("onlyLanguage", false)); only.setMinHeight(dp(48)); panel.addView(only);
         LinearLayout results = column();
         Button search = button("Cerca", true, () -> { });
         panel.addView(search); gap(panel, 12); panel.addView(results);
@@ -831,17 +1027,21 @@ public final class MainActivity extends AppCompatActivity {
             if (keyboard != null) keyboard.hideSoftInputFromWindow(input.getWindowToken(),0);
             if (term.length() < 2) { input.setError("Inserisci almeno due caratteri"); return; }
             search.setEnabled(false); results.removeAllViews(); results.addView(text("Ricerca in corso…", 14, MUTED, false));
+            String code = OnlineCatalog.LANGUAGES[language.position()][0]; boolean onlyLanguage = only.isChecked() && !code.isEmpty();
+            prefs.edit().putString("bookLanguage", code).putBoolean("onlyLanguage", only.isChecked()).apply();
             catalogWorker.execute(() -> {
                 try {
-                    ArrayList<Book> found = OnlineCatalog.search(term);
+                    ArrayList<Book> found = OnlineCatalog.search(term, code, onlyLanguage);
                     runOnUiThread(() -> {
                         if (isFinishing() || isDestroyed() || !dialog.isShowing()) return;
                         search.setEnabled(true); results.removeAllViews();
-                        results.addView(text(found.isEmpty() ? "Nessun risultato. Prova titolo e autore o un ISBN." : "Primi " + found.size() + " risultati · Fonte: Open Library", 13, MUTED, false));
+                        results.addView(text(found.isEmpty() ? (onlyLanguage ? "Nessun risultato in " + OnlineCatalog.languageName(code) + ". Prova a disattivare «solo in questa lingua»." : "Nessun risultato. Prova titolo e autore o un ISBN.")
+                            : found.size() + " risultati" + (code.isEmpty() ? "" : " · prima quelli in " + OnlineCatalog.languageName(code)) + " · Fonte: Open Library", 13, MUTED, false));
                         for (Book candidate : found) {
                             gap(results, 12); LinearLayout tile = column(); tile.setPadding(dp(16),dp(16),dp(16),dp(16));
-                            tile.setBackground(background(WHITE,LINE)); results.addView(tile);
+                            results.addView(card(tile));
                             tile.addView(text(candidate.title, 21, INK, true)); gap(tile,4);
+                            if (!code.isEmpty() && candidate.language.equals(code)) { tile.addView(text("Edizione in " + OnlineCatalog.languageName(code), 12, COPPER, false)); gap(tile, 2); }
                             tile.addView(text(candidate.author + (candidate.year.isEmpty() ? "" : " · " + candidate.year), 14, SAGE, false)); gap(tile,12);
                             Book existing = store.find(candidate.id);
                             tile.addView(button(existing == null ? "Vedi la scheda completa" : "Già in libreria · Apri", false, () -> {
@@ -849,7 +1049,7 @@ public final class MainActivity extends AppCompatActivity {
                                 AlertDialog loading = loading("Scheda del libro", "Caricamento trama e metadati…");
                                 catalogWorker.execute(() -> {
                                     try {
-                                        OnlineCatalog.enrich(candidate);
+                                        OnlineCatalog.enrich(candidate, code.isEmpty() ? "ita" : code);
                                         runOnUiThread(() -> { loading.dismiss(); if (!isFinishing() && !isDestroyed()) preview(candidate, () -> { dialog.dismiss(); showLibrary(); }); });
                                     } catch (Exception e) { runOnUiThread(() -> { loading.dismiss(); if (!isFinishing() && !isDestroyed()) error(e); }); }
                                 });

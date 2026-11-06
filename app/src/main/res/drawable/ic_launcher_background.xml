@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Atlante icon background: deep petrol with faint globe lines. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108"
+                android:startColor="#FF145059" android:endColor="#FF05191D" />
+        </aapt:attr>
+    </path>
+    <path android:strokeColor="#9FE0DA" android:strokeAlpha="0.13" android:strokeWidth="0.7"
+        android:pathData="M14,54 a40,40 0 1,0 80,0 a40,40 0 1,0 -80,0 Z M54,14 A18,40 0 0,0 54,94 A18,40 0 0,0 54,14 M54,14 A33,40 0 0,0 54,94 A33,40 0 0,0 54,14 M14,54 L94,54 M19.4,34 L88.6,34 M19.4,74 L88.6,74" />
+</vector>
