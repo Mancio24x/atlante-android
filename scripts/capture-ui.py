@@ -161,7 +161,7 @@ assert any('La tua biblioteca, come piace a te.' in n.get('text','') for n in du
 back();assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'Back did not restore Sync'
 
 # Multi-source metadata: the review page opens and lists the catalogs consulted (nothing is applied automatically).
-tap('Biblioteca',exact=True);tap('Tutti',exact=True);tap('Il sentiero di casa')
+tap('Biblioteca',exact=True);tap('Tutti',exact=True);tap('Il sentiero di casa',True)   # list view: the book may be further down
 tap('Completa i dati online',True)
 for _ in range(60):
     if any('Fonti consultate' in n.get('text','') for n in dump().iter('node')): break
