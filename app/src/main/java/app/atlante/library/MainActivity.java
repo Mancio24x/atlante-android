@@ -54,14 +54,14 @@ public final class MainActivity extends AppCompatActivity {
     private RecyclerView grid;
     private BookAdapter adapter;
     private String gridKey;
-    private static final int IMPORT = 101, EXPORT = 102, COVER = 103, BACKUP = 104, RESTORE = 105;
+    private static final int IMPORT = 101, EXPORT = 102, COVER = 103, BACKUP = 104, RESTORE = 105, CLIPPINGS = 106;
     private boolean backupFiles = true;
     /** EPUBs whose table of contents was already read in this session (found or not). */
     private final Set<String> tocChecked = new HashSet<>();
     private final Runnable savePosition = () -> { if (this.store != null) save(); };
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ActivityResultLauncher<Intent> importLauncher = results(IMPORT), exportLauncher = results(EXPORT),
-        coverLauncher = results(COVER), backupLauncher = results(BACKUP), restoreLauncher = results(RESTORE);
+        coverLauncher = results(COVER), backupLauncher = results(BACKUP), restoreLauncher = results(RESTORE), clippingsLauncher = results(CLIPPINGS);
     /** Enabled only when Back has something to close inside the app, so the system can animate leaving it. */
     private final OnBackPressedCallback back = new OnBackPressedCallback(false) {
         @Override public void handleOnBackPressed() { goBack(); }
@@ -129,6 +129,7 @@ public final class MainActivity extends AppCompatActivity {
             return;
         }
         destination = state == null ? prefs.getString("destination", "Home") : state.getString("destination", "Home");
+        if (destination.equals("Cerca")) destination = "Biblioteca"; // "Cerca" was replaced by Sync: the library has the search bar
         shelfView = prefs.getBoolean("shelfView", false);
         restoreTimer(); showLibrary();
         if (state != null && state.getString("detail") != null) { Book b = store.find(state.getString("detail")); if (b != null) details(b); }
@@ -1319,6 +1320,180 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
+    // ---- Sync: Hardcover, Calibre, Kindle highlights ----------------------------------------------
+
+    private void syncPage(LinearLayout p) {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        LinearLayout hc=surface(p,"HARDCOVER · STATO, PAGINA E VOTO");
+        boolean hcOn=!prefs.getString("hardcoverToken","").isEmpty();
+        hc.addView(text(hcOn?"Collegato"+(prefs.getString("hardcoverUser","").isEmpty()?"":" come @"+prefs.getString("hardcoverUser","")):"Non collegato. Serve una chiave personale creata nel tuo account Hardcover.",14,hcOn?INK:MUTED,false));
+        if(!prefs.getString("hardcoverLast","").isEmpty()) hc.addView(text(prefs.getString("hardcoverLast",""),12,MUTED,false));
+        gap(hc,8);
+        if(hcOn) hc.addView(button("Sincronizza ora",true,this::runHardcover),new LinearLayout.LayoutParams(-1,-2));
+        hc.addView(button(hcOn?"Impostazioni di Hardcover":"Collega Hardcover",hcOn?R.style.Atlante_Button_Text:0,this::hardcoverSettings),new LinearLayout.LayoutParams(-1,-2));
+
+        LinearLayout cal=surface(p,"CALIBRE · STATO, PAGINA E CAPITOLO");
+        boolean calOn=!prefs.getString("calibreUrl","").isEmpty();
+        cal.addView(text(calOn?prefs.getString("calibreUrl",""):"Non collegato. Usa il server di contenuti di Calibre sulla rete di casa.",14,calOn?INK:MUTED,false));
+        if(!prefs.getString("calibreLast","").isEmpty()) cal.addView(text(prefs.getString("calibreLast",""),12,MUTED,false));
+        gap(cal,8);
+        if(calOn) cal.addView(button("Sincronizza ora",true,this::runCalibre),new LinearLayout.LayoutParams(-1,-2));
+        cal.addView(button(calOn?"Impostazioni di Calibre":"Collega Calibre",calOn?R.style.Atlante_Button_Text:0,this::calibreSettings),new LinearLayout.LayoutParams(-1,-2));
+        cal.addView(button("Come preparare Calibre",R.style.Atlante_Button_Text,this::calibreHelp),new LinearLayout.LayoutParams(-1,-2));
+
+        LinearLayout kin=surface(p,"KINDLE · EVIDENZIAZIONI E NOTE");
+        kin.addView(text("Collega il Kindle al computer o al telefono e scegli il file documents/My Clippings.txt. Evidenziazioni e note entrano nel taccuino del libro. Amazon non condivide stato e pagina con altre app.",14,MUTED,false)); gap(kin,8);
+        kin.addView(button("Importa My Clippings.txt",false,()->clippingsLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"))),new LinearLayout.LayoutParams(-1,-2));
+
+        LinearLayout files=surface(p,"FILE E ALTRE APP");
+        files.addView(text("Backup di Atlante, elenchi CSV (Goodreads, StoryGraph, Bookshelf), cataloghi HTML e librerie Calibre in ZIP.",14,MUTED,false)); gap(files,8);
+        files.addView(button("Importa catalogo o backup",false,this::chooseBackup),new LinearLayout.LayoutParams(-1,-2));
+        files.addView(button("Esporta backup",false,this::exportBackup),new LinearLayout.LayoutParams(-1,-2));
+        files.addView(button("Scarica copertine mancanti",R.style.Atlante_Button_Text,()->fetchMissingCovers(store.snapshot(),true)),new LinearLayout.LayoutParams(-1,-2));
+        p.addView(text("Chiavi e password restano solo su questo telefono. A Hardcover e Calibre vengono inviati solo stato, pagina, capitolo e voto dei libri collegati.",12,MUTED,false));
+    }
+
+    private void hardcoverSettings() {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        LinearLayout panel=column(); panel.setPadding(dp(24),dp(8),dp(24),dp(4));
+        panel.addView(text("Su hardcover.app apri Impostazioni › Hardcover API, crea una chiave con accesso alla libreria e incollala qui.",14,MUTED,false)); gap(panel,8);
+        panel.addView(button("Apri la pagina delle chiavi ↗",R.style.Atlante_Button_Text,()->openLink("https://hardcover.app/account/api")));
+        EditText token=field(panel,"Chiave personale",prefs.getString("hardcoverToken",""));
+        token.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        MaterialSwitch create=new MaterialSwitch(this); create.setText("Crea in Atlante i libri presenti solo su Hardcover"); create.setChecked(prefs.getBoolean("hardcoverCreate",true)); panel.addView(create);
+        MaterialSwitch toRead=new MaterialSwitch(this); toRead.setText("Invia anche i libri «Da leggere» non ancora su Hardcover"); toRead.setChecked(prefs.getBoolean("hardcoverToRead",false)); panel.addView(toRead);
+        dialogBuilder().setTitle("Hardcover").setView(scrolled(panel)).setNegativeButton("Annulla",null)
+            .setNeutralButton("Scollega",(d,w)->{prefs.edit().remove("hardcoverToken").remove("hardcoverUser").remove("hardcoverLast").apply(); showLibrary();})
+            .setPositiveButton("Salva",(d,w)->{prefs.edit().putString("hardcoverToken",token.getText().toString().trim()).putBoolean("hardcoverCreate",create.isChecked()).putBoolean("hardcoverToRead",toRead.isChecked()).apply(); showLibrary();}).show();
+    }
+
+    private void calibreSettings() {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        LinearLayout panel=column(); panel.setPadding(dp(24),dp(8),dp(24),dp(4));
+        EditText url=field(panel,"Indirizzo, es. http://192.168.1.10:8080",prefs.getString("calibreUrl",""));
+        url.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        EditText user=field(panel,"Nome utente (se richiesto)",prefs.getString("calibreUser",""));
+        EditText password=field(panel,"Password",prefs.getString("calibrePassword",""));
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        EditText library=field(panel,"Biblioteca (vuoto = predefinita)",prefs.getString("calibreLibrary",""));
+        panel.addView(sectionLabel("COLONNE PERSONALIZZATE IN CALIBRE")); gap(panel,4);
+        EditText status=field(panel,"Stato (testo)",prefs.getString("calibreStatus","#stato"));
+        EditText page=field(panel,"Pagina (numero intero)",prefs.getString("calibrePage","#pagina"));
+        EditText chapter=field(panel,"Capitolo (testo)",prefs.getString("calibreChapter","#capitolo"));
+        MaterialSwitch create=new MaterialSwitch(this); create.setText("Crea in Atlante i libri presenti solo in Calibre"); create.setChecked(prefs.getBoolean("calibreCreate",true)); panel.addView(create);
+        dialogBuilder().setTitle("Calibre").setView(scrolled(panel)).setNegativeButton("Annulla",null)
+            .setNeutralButton("Scollega",(d,w)->{prefs.edit().remove("calibreUrl").remove("calibreUser").remove("calibrePassword").remove("calibreLast").apply(); showLibrary();})
+            .setPositiveButton("Salva",(d,w)->{prefs.edit().putString("calibreUrl",url.getText().toString().trim()).putString("calibreUser",user.getText().toString().trim())
+                .putString("calibrePassword",password.getText().toString()).putString("calibreLibrary",library.getText().toString().trim())
+                .putString("calibreStatus",column(status)).putString("calibrePage",column(page)).putString("calibreChapter",column(chapter)).putBoolean("calibreCreate",create.isChecked()).apply(); showLibrary();}).show();
+    }
+    private static String column(EditText field) { String v=field.getText().toString().trim(); return v.isEmpty()?"":v.startsWith("#")?v:"#"+v; }
+
+    private void calibreHelp() {
+        dialogBuilder().setTitle("Come preparare Calibre").setMessage(
+            "1. In Calibre: Preferenze › Aggiungi colonne personalizzate. Crea tre colonne: «stato» (testo), «pagina» (numeri interi) e «capitolo» (testo). I nomi di ricerca diventano #stato, #pagina e #capitolo.\n\n"
+            + "2. Avvia il server: Collega/condividi › Avvia server di contenuti. L’indirizzo è quello del computer, per esempio http://192.168.1.10:8080.\n\n"
+            + "3. Per scrivere stato e pagina serve un utente con permesso di modifica: Preferenze › Condivisione in rete › Richiedi nome utente e password, poi Utenti › Aggiungi utente, senza «sola lettura».\n\n"
+            + "Il telefono e il computer devono essere sulla stessa rete. Senza le colonne Atlante legge comunque la biblioteca.").setPositiveButton("OK",null).show();
+    }
+
+    /** A loading dialog whose message can change while the work goes on. */
+    private TextView progressDialog(String title, AlertDialog[] holder) {
+        LinearLayout panel=row(); panel.setPadding(dp(24),dp(16),dp(24),dp(16));
+        CircularProgressIndicator spinner=new CircularProgressIndicator(this); spinner.setIndeterminate(true); panel.addView(spinner);
+        TextView label=text("Un momento…",15,INK,false); label.setPadding(dp(16),0,0,0); panel.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+        holder[0]=dialogBuilder().setTitle(title).setView(panel).setCancelable(false).create(); holder[0].show(); return label;
+    }
+
+    private void runHardcover() {
+        if(busy) return; busy=true;
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        HardcoverSync.Settings s=new HardcoverSync.Settings(); s.token=prefs.getString("hardcoverToken",""); s.createMissing=prefs.getBoolean("hardcoverCreate",true); s.sendToRead=prefs.getBoolean("hardcoverToRead",false);
+        AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Hardcover",dialog);
+        worker.execute(()->{
+            Exception failure=null; HardcoverSync.Report r=null;
+            try { r=HardcoverSync.sync(store,s,m->runOnUiThread(()->label.setText(m))); } catch(Exception e){ failure=e; }
+            final Exception error=failure; final HardcoverSync.Report report=r;
+            runOnUiThread(()->{ dialog[0].dismiss(); busy=false; if(isFinishing()||isDestroyed()) return;
+                if(error!=null){ error(error); return; }
+                String when=java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm",Locale.ITALIAN));
+                String line=when+" · "+report.pushed+" inviati, "+report.pulled+" ricevuti, "+(report.created+report.added)+" nuovi";
+                prefs.edit().putString("hardcoverUser",report.user).putString("hardcoverLast","Ultima sincronizzazione: "+line).apply();
+                syncReport("Hardcover sincronizzato", report.remote+" libri su Hardcover · "+report.linked+" collegati\n"+report.pushed+" aggiornati su Hardcover · "+report.pulled+" aggiornati in Atlante\n"
+                    +report.added+" aggiunti a Hardcover · "+report.created+" nuove schede in Atlante", report.notes); });
+        });
+    }
+
+    private void runCalibre() {
+        if(busy) return; busy=true;
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        CalibreSync.Settings s=new CalibreSync.Settings(); s.url=prefs.getString("calibreUrl",""); s.user=prefs.getString("calibreUser",""); s.password=prefs.getString("calibrePassword","");
+        s.library=prefs.getString("calibreLibrary",""); s.statusColumn=prefs.getString("calibreStatus","#stato"); s.pageColumn=prefs.getString("calibrePage","#pagina");
+        s.chapterColumn=prefs.getString("calibreChapter","#capitolo"); s.createMissing=prefs.getBoolean("calibreCreate",true);
+        AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Calibre",dialog);
+        worker.execute(()->{
+            Exception failure=null; CalibreSync.Report r=null;
+            try { r=CalibreSync.sync(store,s,m->runOnUiThread(()->label.setText(m))); } catch(Exception e){ failure=e; }
+            final Exception error=failure; final CalibreSync.Report report=r;
+            runOnUiThread(()->{ dialog[0].dismiss(); busy=false; if(isFinishing()||isDestroyed()) return;
+                if(error!=null){ error(error); return; }
+                String when=java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm",Locale.ITALIAN));
+                prefs.edit().putString("calibreLast","Ultima sincronizzazione: "+when+" · "+report.pushed+" inviati, "+report.pulled+" ricevuti, "+report.created+" nuovi").apply();
+                syncReport("Calibre sincronizzato", report.remote+" libri in Calibre ("+report.library+") · "+report.linked+" collegati\n"+report.pushed+" aggiornati in Calibre · "+report.pulled+" aggiornati in Atlante\n"
+                    +report.created+" nuove schede in Atlante", report.notes); });
+        });
+    }
+
+    private void syncReport(String title, String summary, List<String> notes) {
+        covers.clear(); showLibrary();
+        StringBuilder text=new StringBuilder(summary);
+        for(int i=0;i<notes.size()&&i<12;i++) text.append(i==0?"\n\n":"\n").append("• ").append(notes.get(i));
+        if(notes.size()>12) text.append("\n• … e altre ").append(notes.size()-12).append(" note");
+        dialogBuilder().setTitle(title).setMessage(text.toString()).setPositiveButton("OK",null).show();
+        fetchMissingCovers(store.snapshot(),false);
+    }
+
+    /** Kindle highlights: grouped by book, matched to the library (or new sheets), added to the notebook. */
+    private void readClippings(Uri source) {
+        busy=true;
+        worker.execute(()->{
+            try (InputStream in=getContentResolver().openInputStream(source)) {
+                if(in==null) throw new IOException("File non disponibile");
+                List<KindleClippings.Clip> clips=KindleClippings.parse(new String(EbookParser.read(in,CatalogImport.TEXT_LIMIT),java.nio.charset.StandardCharsets.UTF_8));
+                if(clips.isEmpty()) throw new IOException("Nessuna evidenziazione trovata: scegli il file My Clippings.txt del Kindle.");
+                LinkedHashMap<String,List<KindleClippings.Clip>> byBook=new LinkedHashMap<>();
+                for(KindleClippings.Clip c:clips) byBook.computeIfAbsent(c.title+"\u0000"+c.author,k->new ArrayList<>()).add(c);
+                Map<String,Book> matches=new HashMap<>(); List<Book> library=store.snapshot();
+                for(Map.Entry<String,List<KindleClippings.Clip>> e:byBook.entrySet()) {
+                    KindleClippings.Clip first=e.getValue().get(0); Book probe=new Book(); probe.title=first.title; probe.author=first.author.isEmpty()?"Autore sconosciuto":first.author;
+                    for(Book b:library) if(SbnCatalog.sameWork(b,probe)||OnlineCatalog.sameTitle(b.title,probe.title)&&(first.author.isEmpty()||SbnCatalog.sameWork(b,probe))) { matches.put(e.getKey(),b); break; }
+                }
+                runOnUiThread(()->{ busy=false; if(isFinishing()||isDestroyed()) return;
+                    int known=matches.size(), fresh=byBook.size()-known;
+                    dialogBuilder().setTitle("Evidenziazioni del Kindle").setMessage(clips.size()+" evidenziazioni e note in "+byBook.size()+" libri\n"+known+" libri già in biblioteca\n"+fresh+" libri nuovi: verranno create le schede (formato Kindle)\n\nLe note già presenti non vengono ripetute.")
+                        .setNegativeButton("Annulla",null).setPositiveButton("Importa",(d,w)->applyClippings(byBook,matches)).show(); });
+            } catch(Exception e) { runOnUiThread(()->{ busy=false; if(!isFinishing()&&!isDestroyed()) error(e); }); }
+        });
+    }
+
+    private void applyClippings(LinkedHashMap<String,List<KindleClippings.Clip>> byBook, Map<String,Book> matches) {
+        int added=0, sheets=0; String today=java.time.LocalDate.now().toString();
+        try {
+            for(Map.Entry<String,List<KindleClippings.Clip>> e:byBook.entrySet()) {
+                Book target=matches.get(e.getKey());
+                if(target==null) {
+                    KindleClippings.Clip first=e.getValue().get(0); Map<String,String> f=new HashMap<>(); f.put("title",first.title); f.put("author",first.author);
+                    Book b=CatalogImport.fromFields(f); if(b==null) continue; b.medium="Kindle";
+                    Book existing=store.find(b.id); if(existing!=null) target=existing; else { added+=KindleClippings.addTo(b,e.getValue(),today); store.addCatalog(b); sheets++; continue; }
+                }
+                Book copy=Book.from(target.json()); added+=KindleClippings.addTo(copy,e.getValue(),today); store.replace(copy);
+            }
+        } catch(Exception e) { error(e); }
+        final int notes=added, created=sheets; showLibrary();
+        dialogBuilder().setTitle("Importazione completata").setMessage(notes+" note aggiunte ai taccuini"+(created>0?"\n"+created+" nuove schede create":"")+".").setPositiveButton("OK",null).show();
+        if(created>0) fetchMissingCovers(store.snapshot(),false);
+    }
+
     private void chooseBooks() {
         if (busy) return;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
@@ -1348,6 +1523,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         if (request == BACKUP && data.getData() != null) { writeBackup(data.getData()); return; }
         if (request == RESTORE && data.getData() != null) { if (!busy) readBackup(data.getData()); return; }
+        if (request == CLIPPINGS && data.getData() != null) { if (!busy) readClippings(data.getData()); return; }
         if (request == IMPORT) {
             ArrayList<Uri> uris = new ArrayList<>();
             if (data.getClipData() != null) {
@@ -1520,8 +1696,8 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void addBottomNav() {
         com.google.android.material.bottomnavigation.BottomNavigationView nav = new com.google.android.material.bottomnavigation.BottomNavigationView(this);
-        String[] names={"Home","Biblioteca","Scopri","Statistiche","Cerca"};
-        int[] icons={R.drawable.ic_home,R.drawable.ic_library,R.drawable.ic_discover,R.drawable.ic_stats,R.drawable.ic_search};
+        String[] names={"Home","Biblioteca","Scopri","Statistiche","Sync"};
+        int[] icons={R.drawable.ic_home,R.drawable.ic_library,R.drawable.ic_discover,R.drawable.ic_stats,R.drawable.ic_sync};
         nav.setLabelVisibilityMode(com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_LABELED);
         nav.setBackgroundColor(WHITE);
         for(int i=0;i<names.length;i++) { nav.getMenu().add(0,i+1,i,names[i]).setIcon(icons[i]); if(names[i].equals(destination)) nav.setSelectedItemId(i+1); }
@@ -1542,9 +1718,10 @@ public final class MainActivity extends AppCompatActivity {
         return panel;
     }
     private void showCompanion() {
-        LinearLayout panel=companionPage(destination.equals("Statistiche")?"Ogni pagina conta.":destination.equals("Scopri")?"La prossima storia.":"Il tempo per un libro.",
-            destination.equals("Statistiche")?"Le tue letture, un giorno alla volta.":destination.equals("Scopri")?"Nuove idee da esplorare. La scelta è tua.":"Un piccolo spazio per le tue grandi storie.");
-        if(destination.equals("Statistiche")) statistics(panel); else if(destination.equals("Scopri")) discover(panel); else home(panel);
+        boolean sync=destination.equals("Sync");
+        LinearLayout panel=companionPage(sync?"Invia e ricevi.":destination.equals("Statistiche")?"Ogni pagina conta.":destination.equals("Scopri")?"La prossima storia.":"Il tempo per un libro.",
+            sync?"Stato, pagina e capitolo condivisi con i tuoi servizi di lettura.":destination.equals("Statistiche")?"Le tue letture, un giorno alla volta.":destination.equals("Scopri")?"Nuove idee da esplorare. La scelta è tua.":"Un piccolo spazio per le tue grandi storie.");
+        if(sync) syncPage(panel); else if(destination.equals("Statistiche")) statistics(panel); else if(destination.equals("Scopri")) discover(panel); else home(panel);
         addBottomNav(); updateBack(); animateIn(panel);
         int y=pagePositions.getOrDefault(destination,0); companionScroll.post(() -> { if(companionScroll!=null) companionScroll.scrollTo(0,y); });
     }
@@ -1681,6 +1858,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout line=row(); p.addView(line);
         CircularProgressIndicator circle=new CircularProgressIndicator(this); circle.setIndeterminate(false); circle.setIndicatorColor(SAGE); circle.setTrackColor(LINE); circle.setIndicatorSize(dp(64)); circle.setProgressCompat(progress(b),motion()); circle.setContentDescription(progress(b)+" per cento"); line.addView(circle);
         LinearLayout info=column(); info.setPadding(dp(16),0,0,0); line.addView(info,new LinearLayout.LayoutParams(0,-2,1)); info.addView(text(progress(b)+"%",28,INK,true)); info.addView(text(progressLabel(b),14,MUTED,false)); if(b.totalPages>0) info.addView(text(Math.max(0,b.totalPages-b.currentPage)+" pagine rimaste"+estimate(b),12,SAGE,false));
+        if(!b.journal.optString("chapter").isEmpty()) info.addView(text("Capitolo: "+b.journal.optString("chapter"),13,INK,false));
         gap(p,12); if(!b.started.isEmpty()) p.addView(text("Iniziato il "+italianDate(b.started),13,MUTED,false));
         if(!b.finished.isEmpty()) p.addView(text("Terminato il "+italianDate(b.finished),13,MUTED,false));
         gap(p,12);
@@ -1803,6 +1981,17 @@ public final class MainActivity extends AppCompatActivity {
         p.addView(pageWheels); p.addView(percentWheel); p.addView(readWheel);
         TextView hint=text("",12,MUTED,false); hint.setGravity(Gravity.CENTER); p.addView(hint,new LinearLayout.LayoutParams(-1,-2)); gap(p,16);
 
+        // Chapter reached: a wheel with the book's chapter titles (shared with Calibre).
+        NumberPicker chapter=null;
+        if(!b.chapters.isEmpty()) {
+            p.addView(sectionLabel("CAPITOLO A CUI SEI ARRIVATO"));
+            String[] titles=new String[b.chapters.size()+1]; titles[0]="—";
+            for(int i=0;i<b.chapters.size();i++){ String t=b.chapters.get(i).title; titles[i+1]=t.length()>38?t.substring(0,37)+"…":t; }
+            chapter=wheel(0,titles.length-1,0); chapter.setDisplayedValues(titles);
+            String now=b.journal.optString("chapter"); for(int i=0;i<b.chapters.size();i++) if(b.chapters.get(i).title.equals(now)) chapter.setValue(i+1);
+            LinearLayout chapterRow=row(); chapterRow.setGravity(Gravity.CENTER); chapterRow.addView(chapter,new LinearLayout.LayoutParams(-1,-2)); p.addView(chapterRow,new LinearLayout.LayoutParams(-1,-2)); gap(p,16);
+        }
+        final NumberPicker chapterWheel=chapter;
         p.addView(sectionLabel(timed?"TEMPO DELLA SESSIONE":"MINUTI DI LETTURA (FACOLTATIVO)"));
         NumberPicker minutes=wheel(0,1440,(int)Math.min(1440,seconds/60)); minutes.setFormatter(v->v+" min");
         LinearLayout minuteRow=row(); minuteRow.setGravity(Gravity.CENTER); minuteRow.addView(minutes); p.addView(minuteRow,new LinearLayout.LayoutParams(-1,-2)); gap(p,16);
@@ -1826,6 +2015,7 @@ public final class MainActivity extends AppCompatActivity {
                 if(done) c.status=Book.READ; else if(moved&&!c.status.equals(Book.READ)) c.status=Book.READING;
                 Book.applyStatusEffects(c,java.time.LocalDate.now().toString());
                 long duration=timed&&minutes.getValue()==seconds/60?seconds:minutes.getValue()*60L;
+                if(chapterWheel!=null) { if(chapterWheel.getValue()==0) c.journal.remove("chapter"); else ReadingJournal.put(c,"chapter",b.chapters.get(chapterWheel.getValue()-1).title); }
                 if(timed||duration>0||c.currentPage!=b.currentPage) ReadingJournal.session(c,timed?timerFrom:b.currentPage,c.currentPage,duration,java.time.LocalDate.now());
                 store.replace(c); if(timed) clearTimer(); renderContent(); details(c);
             } catch(Exception e){ error(e); }

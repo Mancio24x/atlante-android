@@ -97,6 +97,30 @@ autore su Open Library, accettando solo titoli corrispondenti. Le copertine già
 non vengono sostituite. **Impostazioni › Backup › Scarica copertine mancanti** ripete la
 ricerca per tutta la biblioteca. Ai servizi vengono inviati solo ISBN, titolo e autore.
 
+## Sync: Hardcover, Calibre e Kindle
+
+La sezione **Sync** condivide stato di lettura, pagina e capitolo con altri servizi.
+Libro per libro vince il lato cambiato dall’ultima sincronizzazione; se sono cambiati
+entrambi vince il telefono; al primo collegamento vince la lettura più avanzata. I libri
+si collegano tramite il collegamento salvato, l’ISBN oppure titolo e autore.
+
+- **Hardcover** (hardcover.app): con una chiave personale creata in *Impostazioni ›
+  Hardcover API* sincronizza in entrambe le direzioni stato (Da leggere, In lettura,
+  In pausa, Letto), pagina e voto con mezze stelle. Hardcover non ha il capitolo. I libri
+  presenti solo su Hardcover diventano schede; i libri iniziati in Atlante vengono aggiunti
+  a Hardcover (anche quelli «Da leggere», se lo scegli). Usa l’API GraphQL ufficiale.
+- **Calibre**: tramite il server di contenuti di Calibre sulla rete di casa sincronizza
+  stato, pagina e capitolo in tre colonne personalizzate (`#stato` testo, `#pagina`
+  numero intero, `#capitolo` testo; i nomi si possono cambiare). Per scrivere serve un
+  utente Calibre con permesso di modifica; autenticazione Basic e Digest. I libri presenti
+  solo in Calibre diventano schede con copertina. **Come preparare Calibre** spiega i passi.
+- **Kindle**: Amazon non condivide stato e pagina con altre app. Si importano evidenziazioni
+  e note dal file `documents/My Clippings.txt` del Kindle (lingua italiana o inglese):
+  finiscono nel taccuino del libro, senza ripetizioni; i libri mancanti diventano schede.
+
+Chiavi e password restano nelle preferenze private dell’app. Nella pagina **Aggiorna
+avanzamento** una rotella sceglie il **capitolo** raggiunto, se il libro ha l’indice.
+
 ## Filtri e ordinamento della biblioteca
 
 **Filtri e ordine**, accanto ai chip degli stati, combina genere e formato.
@@ -273,7 +297,7 @@ i diritti dei rispettivi autori e non fanno parte di questo progetto.
 ## Compagno di lettura
 
 La barra Material 3 in basso porta a cinque sezioni: **Home**, **Biblioteca**,
-**Scopri**, **Statistiche** e **Cerca**; ognuna ricorda posizione e ricerca, e Indietro
+**Scopri**, **Statistiche** e **Sync** (la ricerca è nella barra in alto della Biblioteca); ognuna ricorda posizione e ricerca, e Indietro
 riporta a Home. **Home** mostra i libri in lettura con pagine rimaste e aggiornamento
 rapido, il riepilogo di oggi (pagine, minuti, giorni di fila, obiettivo quotidiano),
 gli obiettivi annuale e mensile con un anello di avanzamento, l’attività recente e

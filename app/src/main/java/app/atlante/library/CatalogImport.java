@@ -303,6 +303,7 @@ final class CatalogImport {
         String v = key(value);
         if (v.matches("read|letto|letti|finished|finito|completed|completato")) return Book.READ;
         if (v.matches("currently reading|reading|in lettura|sto leggendo|in corso|currently-reading")) return Book.READING;
+        if (v.matches("in pausa|pausa|paused|on hold|sospeso")) return Book.PAUSED;
         return Book.TO_READ;
     }
 

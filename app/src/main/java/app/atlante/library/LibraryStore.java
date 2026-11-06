@@ -10,7 +10,7 @@ import java.io.*;
 import java.security.MessageDigest;
 import java.util.*;
 
-final class LibraryStore {
+final class LibraryStore implements SyncStore {
     final ArrayList<Book> books = new ArrayList<>();
     private final Context context;
     private final File root;
@@ -47,11 +47,11 @@ final class LibraryStore {
     File directory(Book b) { return new File(root, b.id); }
     File original(Book b) { return new File(directory(b), "book." + b.format.toLowerCase(Locale.ROOT)); }
     File cover(Book b) { return new File(directory(b), "cover"); }
-    synchronized Book find(String id) {
+    @Override public synchronized Book find(String id) {
         for (Book b : books) if (b.id.equals(id)) return b;
         return null;
     }
-    synchronized ArrayList<Book> snapshot() { return new ArrayList<>(books); }
+    @Override public synchronized ArrayList<Book> snapshot() { return new ArrayList<>(books); }
 
     String name(Uri uri) {
         try (Cursor c = context.getContentResolver().query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
@@ -112,7 +112,7 @@ final class LibraryStore {
         }
     }
 
-    synchronized Book addCatalog(Book candidate) throws Exception {
+    @Override public synchronized Book addCatalog(Book candidate) throws Exception {
         Book existing = find(candidate.id);
         if (existing != null) return existing;
         if (candidate.onlineCover != null) {
@@ -124,7 +124,7 @@ final class LibraryStore {
         return candidate;
     }
 
-    synchronized void replace(Book updated) throws Exception {
+    @Override public synchronized void replace(Book updated) throws Exception {
         Book previous = find(updated.id);
         if (previous == null) throw new IOException("Libro non disponibile");
         int index = books.indexOf(previous);
