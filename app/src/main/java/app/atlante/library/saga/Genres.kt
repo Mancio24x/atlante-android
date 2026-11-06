@@ -20,6 +20,7 @@ object Genres {
         "Fumetti" to listOf("fumett", "comic", "graphic novel", "manga"),
         "Ragazzi" to listOf("ragazz", "young adult", "juvenile", "children", "bambini"),
         "Poesia" to listOf("poesi", "poetry", "poems"),
+        "Avventura" to listOf("avventur", "adventure", "western", "pirat"),
         "Saggistica" to listOf("saggi", "nonfiction", "non-fiction", "storia", "history", "filosofi", "philosophy", "scienz", "science", "biografi", "biography"),
         "Narrativa" to listOf("narrativa", "fiction", "romanz", "novel", "letteratura"),
     )
@@ -27,7 +28,7 @@ object Genres {
     private val SUBJECT = mapOf(
         "Fantascienza" to "science_fiction", "Fantasy" to "fantasy", "Horror" to "horror", "Giallo" to "mystery_and_detective_stories",
         "Thriller" to "thrillers", "Romanzo storico" to "historical_fiction", "Rosa" to "romance", "Classici" to "classic_literature",
-        "Fumetti" to "comics_&_graphic_novels", "Ragazzi" to "young_adult_fiction", "Poesia" to "poetry",
+        "Fumetti" to "comics_&_graphic_novels", "Ragazzi" to "young_adult_fiction", "Poesia" to "poetry", "Avventura" to "adventure",
     )
 
     val main: List<String> get() = MAIN.keys.toList()

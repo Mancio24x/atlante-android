@@ -62,11 +62,12 @@ fun hsvColor(h: Float, s: Float, v: Float) = Color(android.graphics.Color.HSVToC
 fun ThemeEditor(paper0: Color, surface0: Color, accent0: Color, saved: List<String>, onSave: ThemeEditorView.Save, onApply: ThemeEditorView.Apply) {
     val colors = remember { mutableStateListOf(paper0, surface0, accent0) }
     var editing by remember { mutableIntStateOf(2) }
-    var name by remember { mutableStateOf("Il mio tema") }
     val labels = listOf("Sfondo", "Schede", "Accento")
+    // No name to type: a new theme is "Tema 1", "Tema 2"… and the save button sits right under the colours.
+    val name = remember(saved) { generateSequence(1) { it + 1 }.map { "Tema $it" }.first { it !in saved } }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Tocca uno dei tre colori, poi scegli la tonalità trascinando il dito nel riquadro e sulla barra.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (saved.isNotEmpty())
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(saved) { s -> AssistChip(onClick = { onApply.apply(s) }, label = { Text(s) }) } }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             labels.forEachIndexed { i, label ->
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { editing = i }
@@ -78,16 +79,11 @@ fun ThemeEditor(paper0: Color, surface0: Color, accent0: Color, saved: List<Stri
                 }
             }
         }
+        Button(onClick = { onSave.save(name, colors[0].toArgb(), colors[1].toArgb(), colors[2].toArgb()) }, modifier = Modifier.fillMaxWidth()) {
+            Text("Salva e applica come «$name»")
+        }
         ColorPicker(colors[editing], labels[editing]) { colors[editing] = it }
         Preview(colors[0], colors[1], colors[2])
-        OutlinedTextField(name, { name = it.take(30) }, label = { Text("Nome del tema") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        Button(enabled = name.isNotBlank(), onClick = { onSave.save(name.trim(), colors[0].toArgb(), colors[1].toArgb(), colors[2].toArgb()) }, modifier = Modifier.fillMaxWidth()) {
-            Text("Salva e applica il tema")
-        }
-        if (saved.isNotEmpty()) {
-            Text("Temi salvati", style = MaterialTheme.typography.titleSmall)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(saved) { s -> AssistChip(onClick = { onApply.apply(s) }, label = { Text(s) }) } }
-        }
     }
 }
 

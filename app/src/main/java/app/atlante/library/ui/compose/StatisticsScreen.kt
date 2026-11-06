@@ -35,6 +35,14 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+const val OTHER_GENRES = "Altri generi"
+const val NO_GENRE = "Genere non indicato"
+
+fun genreCounts(books: List<Book>): List<Pair<String, Int>> =
+    books.groupingBy { app.atlante.library.saga.Genres.normalize(it.genre) ?: if (it.genre.isBlank()) NO_GENRE else OTHER_GENRES }.eachCount()
+        .entries.sortedWith(compareBy<Map.Entry<String, Int>>({ it.key == OTHER_GENRES || it.key == NO_GENRE }, { it.key == NO_GENRE }, { -it.value }, { it.key }))
+        .map { it.key to it.value }
+
 /** A reading session as shown in the calendar. */
 data class DaySession(val title: String, val pages: Int, val minutes: Long)
 
@@ -46,7 +54,11 @@ class StatsData(books: List<Book>, val yearGoal: Int, val monthGoal: Int, today:
     val monthDone = ReadingJournal.completed(books, today, true)
     val byState = listOf(Book.READING, Book.TO_READ, Book.PAUSED, Book.READ).map { s -> s to books.count { it.status == s } }
     val total = books.size
-    val genres = books.groupingBy { if (it.genre.isEmpty()) "Genere non indicato" else it.genre }.eachCount().entries.sortedByDescending { it.value }
+    /**
+     * One main genre per book ("Epic Fantasy", "fantasy / magia" and "Fantasy" are all Fantasy), most read first;
+     * labels no main genre recognizes go together in "Altri generi", books without a genre last.
+     */
+    val genres: List<Pair<String, Int>> = genreCounts(books)
     val sessions: Map<LocalDate, List<DaySession>>
     /** Previous months against their monthly goal (empty when the monthly goal is off). */
     var monthHistory: List<Pair<java.time.YearMonth, app.atlante.library.model.ReadingGoals.Progress>> = emptyList()
@@ -104,10 +116,35 @@ fun StatisticsScreen(data: StatsData, palette: ThemePalette, motion: Boolean, on
             }
         }
         Headline("Generi nella tua biblioteca")
-        data.genres.forEach { (genre, count) ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Text(genre, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("$count", fontWeight = FontWeight.Bold)
+        if (data.genres.isNotEmpty()) Section("") { GenreBars(data.genres, data.total, shown, motion) }
+    }
+}
+
+/**
+ * Horizontal bars, one per main genre, longest first: one series, so one colour (the theme's primary) and no
+ * legend; the count sits at the end of each bar in text colour. "Altri generi" and "Genere non indicato" are
+ * not genres: they recede in the outline colour. Each row reads as one sentence for TalkBack.
+ */
+@Composable
+fun GenreBars(genres: List<Pair<String, Int>>, total: Int, shown: Boolean, motion: Boolean) {
+    val max = genres.maxOf { it.second }.coerceAtLeast(1)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        genres.forEach { (genre, count) ->
+            val share by animateFloatAsState(if (shown) count.toFloat() / max else 0f, if (motion) tween(700) else tween(0), label = "genre")
+            val percent = if (total > 0) count * 100 / total else 0
+            val muted = genre == OTHER_GENRES || genre == NO_GENRE
+            Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "$genre: $count libri, $percent per cento" },
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(genre, Modifier.width(118.dp), style = MaterialTheme.typography.bodyMedium, maxLines = 2,
+                    color = if (muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    if (share > 0f) Box(Modifier.weight(share.coerceAtLeast(0.001f)).height(16.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                        .background(if (muted) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary))
+                    Text("$count", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface)
+                    if (share < 1f) Spacer(Modifier.weight((1f - share).coerceAtLeast(0.001f)))
+                }
             }
         }
     }

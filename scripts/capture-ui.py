@@ -56,7 +56,7 @@ adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.
 # Seed only the disposable debug app; never touches the release library.
 books=[]
 for i,title in enumerate(['Il giardino delle storie','Oltre il mare','La città delle mappe','Viaggio nella notte','Le pagine ritrovate','Il sentiero di casa']):
-    books.append(dict(id=f'{i+1:064x}',title=title,author=['Elena Rossi','Luca Moretti','Anna Costa'][i%3],format='CATALOGO',status='In lettura' if i==0 else 'Da leggere',currentPage=83 if i==0 else 0,totalPages=240 if i==0 else 0))
+    books.append(dict(id=f'{i+1:064x}',title=title,author=['Elena Rossi','Luca Moretti','Anna Costa'][i%3],genre=['Epic Fantasy','Fantasy','Gialli','Cucina',''][i%5],format='CATALOGO',status='In lettura' if i==0 else 'Da leggere',currentPage=83 if i==0 else 0,totalPages=240 if i==0 else 0))
 seed=out/'sample-library.json';seed.write_text(json.dumps(books))
 adb('shell','am','force-stop',package)
 adb('push',str(seed),'/data/local/tmp/atlante-sample.json')
@@ -146,6 +146,10 @@ shot('15-manual-and-list-restored')
 # Bottom navigation: every destination draws and Home is restored.
 tap('Home',exact=True);shot('16-home')
 tap('Statistiche',exact=True);shot('17-statistics')
+# Genres: one horizontal bar per main genre ("Epic Fantasy" and "Fantasy" together), counts at the end.
+assert visible('Generi nella tua biblioteca',True), 'Genre chart missing'
+time.sleep(.6);shot('17a-statistics-genres')
+assert any(n.get('content-desc','').startswith('Fantasy:') for n in dump().iter('node')), 'Genres not grouped into bars'
 tap('Scopri',exact=True)
 # Scopri: a grid of six covers (most read), then six of a chosen genre; the search opens empty.
 for _ in range(40):
@@ -284,6 +288,6 @@ assert square, 'Colour square missing'
 b=list(map(int,re.findall(r'\d+',square[0].get('bounds',''))))
 adb('shell','input','swipe',str(b[0]+20),str(b[3]-20),str(b[2]-20),str(b[1]+20),'500');time.sleep(.6)
 shot('62-theme-editor')
-tap('Salva e applica il tema',True);time.sleep(2);shot('63-custom-theme-applied')
+tap('Salva e applica come',True);time.sleep(2);shot('63-custom-theme-applied')
 assert json.loads(json.dumps(adb('exec-out','run-as',package,'sh','-c','cat shared_prefs/*.xml').decode(errors='replace'))).count('customPalette')>=1, 'Custom theme not saved'
 print('Theme editor completed.')
