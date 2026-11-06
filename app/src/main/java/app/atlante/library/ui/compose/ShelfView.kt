@@ -110,12 +110,22 @@ fun Bookcase(books: List<Book>, header: String, prefs: SharedPreferences, motion
             item {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                     Text(header, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                        item { FilterChip(!themed, { themed = false; prefs.edit().putBoolean("shelfThemeColors", false).apply() }, label = { Text("Colori vari") }) }
-                        item { FilterChip(themed, { themed = true; prefs.edit().putBoolean("shelfThemeColors", true).apply() }, label = { Text("Colori del tema") }) }
-                        items(ShelfStyle.entries) { st ->
-                            FilterChip(style == st, { style = st; prefs.edit().putString("shelfStyle", st.name).apply() }, label = { Text(st.label) },
-                                leadingIcon = { ShelfSwatch(st) })
+                    // Look of the bookcase: one compact button; the options open over the shelf, apply at once
+                    // (the menu stays open to compare) and a tap outside closes them.
+                    var open by remember { mutableStateOf(false) }
+                    Box(Modifier.padding(top = 8.dp)) {
+                        FilterChip(open, { open = true }, label = { Text("Aspetto · ${style.label}") },
+                            leadingIcon = { ShelfSwatch(style) }, trailingIcon = { Text(if (open) "▴" else "▾") },
+                            modifier = Modifier.semantics { contentDescription = "Aspetto dello scaffale: ${style.label}, ${if (themed) "colori del tema" else "colori vari"}" })
+                        DropdownMenu(open, { open = false }, Modifier.heightIn(max = 380.dp)) {
+                            MenuLabel("Colori dei dorsi")
+                            ShelfOption("Colori vari", !themed, { SpinesSwatch(Spines.VARIED) }) { themed = false; prefs.edit().putBoolean("shelfThemeColors", false).apply() }
+                            ShelfOption("Colori del tema", themed, { SpinesSwatch(themeColors) }) { themed = true; prefs.edit().putBoolean("shelfThemeColors", true).apply() }
+                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                            MenuLabel("Scaffale")
+                            ShelfStyle.entries.forEach { st ->
+                                ShelfOption(st.label, style == st, { ShelfSwatch(st) }) { style = st; prefs.edit().putString("shelfStyle", st.name).apply() }
+                            }
                         }
                     }
                 }
@@ -125,6 +135,26 @@ fun Bookcase(books: List<Book>, header: String, prefs: SharedPreferences, motion
             }
             if (rows.isEmpty()) item { Shelf(emptyList(), colors, motion, host) { Color.Gray } }
         }
+    }
+}
+
+@Composable
+private fun MenuLabel(text: String) {
+    Text(text, Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+}
+
+@Composable
+private fun ShelfOption(label: String, selected: Boolean, swatch: @Composable () -> Unit, onClick: () -> Unit) {
+    DropdownMenuItem(text = { Text(label) }, onClick = onClick, leadingIcon = swatch,
+        trailingIcon = { if (selected) Text("✓", color = MaterialTheme.colorScheme.primary) },
+        modifier = Modifier.semantics { this.selected = selected })
+}
+
+@Composable
+private fun SpinesSwatch(colors: List<Color>) {
+    Canvas(Modifier.size(18.dp)) {
+        val w = size.width / 4
+        for (i in 0 until 4) drawRect(colors[i % colors.size], Offset(i * w, 0f), Size(w * 0.85f, size.height))
     }
 }
 

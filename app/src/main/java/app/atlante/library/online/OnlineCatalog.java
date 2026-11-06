@@ -51,14 +51,36 @@ public final class OnlineCatalog {
 
     public static synchronized File cacheDirectory() { return cacheDirectory; }
 
-    /** Network only: shared per-host rate limit (about one request per second), no cache. */
+    /** Parallel downloads of covers by Open Library cover id (see {@link #interval}). */
+    private static final java.util.concurrent.Semaphore coverSlots = new java.util.concurrent.Semaphore(6);
+
+    /**
+     * Minimum gap between two requests of the same kind. Open Library covers by cover id or OLID are not
+     * rate limited by Open Library: up to 10 per second (6 at a time). Everything else keeps about one per
+     * second, the limit Open Library sets for its API and for covers by ISBN (over it the phone's IP is blocked).
+     */
+    public static long interval(String address) {
+        return coverById(address) ? 100 : 1050;
+    }
+    public static boolean coverById(String address) {
+        return address.startsWith("https://covers.openlibrary.org/b/id/") || address.startsWith("https://covers.openlibrary.org/b/olid/");
+    }
+
+    /** Network only: shared rate limit per host (covers by id have their own, faster one), no cache. */
     public static byte[] download(String address, int limit) throws Exception {
-        String host = new URL(address).getHost(); long wait;
+        boolean cover = coverById(address);
+        String lane = cover ? "covers-by-id" : new URL(address).getHost(); long wait;
         synchronized (nextRequest) {
-            long now = System.currentTimeMillis(); long slot = Math.max(now,nextRequest.containsKey(host) ? nextRequest.get(host) : now);
-            nextRequest.put(host,slot+1050); wait=slot-now;
+            long now = System.currentTimeMillis(); long slot = Math.max(now,nextRequest.containsKey(lane) ? nextRequest.get(lane) : now);
+            nextRequest.put(lane,slot+interval(address)); wait=slot-now;
         }
         if (wait > 0) Thread.sleep(wait);
+        if (!cover) return fetch(address, limit);
+        coverSlots.acquire();
+        try { return fetch(address, limit); } finally { coverSlots.release(); }
+    }
+
+    private static byte[] fetch(String address, int limit) throws Exception {
         HttpURLConnection connection = (HttpURLConnection)new URL(address).openConnection();
         connection.setConnectTimeout(12000); connection.setReadTimeout(15000);
         connection.setRequestProperty("User-Agent", "AtlanteLibraryAndroid (https://github.com/Mancio24x/atlante-android)");
@@ -221,6 +243,11 @@ public final class OnlineCatalog {
         String x = SbnCatalog.normalize(a), y = SbnCatalog.normalize(b);
         if (x.isEmpty() || y.isEmpty()) return false;
         return x.equals(y) || SbnCatalog.normalize(mainTitle(a)).equals(SbnCatalog.normalize(mainTitle(b)));
+    }
+    /** The two forms {@link #sameTitle} compares (whole and main title), or null for an empty title: for indexes. */
+    public static String[] titleKeys(String title) {
+        String whole = SbnCatalog.normalize(title);
+        return whole.isEmpty() ? null : new String[]{whole, SbnCatalog.normalize(mainTitle(title))};
     }
     private static String mainTitle(String title) { return title.split("\\s*[:;]\\s*|\\s+[-–—]\\s+|\\.\\s", 2)[0]; }
 

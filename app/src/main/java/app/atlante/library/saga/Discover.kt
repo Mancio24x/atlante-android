@@ -33,12 +33,19 @@ class Discover(
 
     /** The [page]-th group of six (0 = the first): the same answer for the same genre and page. */
     suspend fun picks(genre: Genre?, page: Int = 0): List<Pick> {
-        val books = library()
-        val seenAuthors = HashSet<String>()
-        val all = candidates(genre).filter { c ->
-            !Suggestions.bundle(c.title) && books.none { b -> OnlineCatalog.sameTitle(b.title, c.title) && BookMatcher.surnames(b.author).any { it in BookMatcher.surnames(c.author) } }
-        }.filter { c -> seenAuthors.add(c.author.lowercase()) }             // one book per author
-        return all.drop(page * 6).take(6)
+        val candidates = candidates(genre)
+        // Off the main thread, and through an index of the library: never one comparison per (candidate, book).
+        return withContext(Dispatchers.Default) {
+            val owned = TitleIndex(library()) { it.title }
+            val seenAuthors = HashSet<String>()
+            candidates.filter { c ->
+                if (Suggestions.bundle(c.title)) return@filter false
+                val same = owned.matches(c.title); if (same.isEmpty()) return@filter true
+                val surnames = BookMatcher.surnames(c.author)
+                same.none { b -> BookMatcher.surnames(b.author).any { it in surnames } }
+            }.filter { c -> seenAuthors.add(c.author.lowercase()) }        // one book per author
+                .drop(page * 6).take(6)
+        }
     }
 
     fun hasMore(count: Int, page: Int) = count == 6 && page < 6
@@ -67,8 +74,11 @@ class Discover(
             val since = if (genre == null) 1990 else genre.since
             since?.let { append(" first_publish_year:[").append(it).append(" TO ").append(year).append("]") }
         }
-        val json = cached("discover:${genre?.subject ?: "popolari"}") {
-            fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode(q, "UTF-8") + "&sort=readinglog&limit=80&fields=key,title,author_name,cover_i,first_publish_year")
+        // lang=it makes Open Library put the best Italian edition first in "editions": its title and cover come
+        // with the same answer, with no further request per book.
+        val json = cached("discover2:${genre?.subject ?: "popolari"}") {
+            fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode(q, "UTF-8") + "&sort=readinglog&limit=80&lang=it"
+                + "&fields=key,title,author_name,cover_i,first_publish_year,editions,editions.title,editions.language,editions.cover_i")
         } ?: return emptyList()
         return parse(json)
     }
@@ -81,6 +91,13 @@ class Discover(
     }
 
     companion object {
+        /** The edition Open Library chose for lang=it, when it really is Italian. */
+        private fun italianEdition(doc: JSONObject): JSONObject? {
+            val e = doc.optJSONObject("editions")?.optJSONArray("docs")?.optJSONObject(0) ?: return null
+            val langs = e.optJSONArray("language") ?: return null
+            return if ((0 until langs.length()).any { langs.optString(it) == "ita" }) e else null
+        }
+
         val GENRES = listOf(
             Genre("Fantasy", "fantasy"), Genre("Fantascienza", "science_fiction"), Genre("Gialli", "mystery"), Genre("Thriller", "thrillers"),
             Genre("Horror", "horror"), Genre("Romanzi storici", "historical_fiction"), Genre("Rosa", "romance"), Genre("Classici", "classic_literature", null),
@@ -93,8 +110,15 @@ class Discover(
             return (0 until docs.length()).mapNotNull { docs.optJSONObject(it) }.mapNotNull { d ->
                 val cover = d.optLong("cover_i").takeIf { it > 0 } ?: return@mapNotNull null
                 val author = d.optJSONArray("author_name")?.optString(0)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                Pick(d.optString("key").substringAfterLast('/'), d.optString("title"), author, d.optInt("first_publish_year").takeIf { it > 0 }?.toString(),
+                val pick = Pick(d.optString("key").substringAfterLast('/'), d.optString("title"), author, d.optInt("first_publish_year").takeIf { it > 0 }?.toString(),
                     OpenLibraryWorks.coverUrl(cover), false)
+                italianEdition(d)?.let { e ->
+                    val title = e.optString("title").substringBefore(" : ").trim()
+                    val italianCover = e.optLong("cover_i").takeIf { it > 0 }
+                    // Without its own cover the Italian edition is completed later by italian().
+                    if (title.isBlank() || italianCover == null) null
+                    else pick.copy(title = title, coverUrl = OpenLibraryWorks.coverUrl(italianCover), italian = true)
+                } ?: pick
             }.filter { it.title.isNotBlank() }
         }
     }

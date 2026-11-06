@@ -28,17 +28,22 @@ class CoverCache(private val directory: File, private val maxBytes: () -> Long) 
         val tmp = File(directory, file.name + ".tmp")
         tmp.writeBytes(bytes)
         if (!tmp.renameTo(file)) tmp.delete()
-        trim()
+        // Running total: the folder (up to thousands of covers) is listed again only when over the limit.
+        val over = synchronized(this) { known = (if (known < 0) bytes() else known + bytes.size); known > maxBytes() }
+        if (over) trim()
         return bytes
     }
+
+    @Volatile private var known = -1L
 
     fun bytes(): Long = directory.listFiles()?.sumOf { it.length() } ?: 0L
 
     /** Oldest-used first until the total fits the limit. Returns the bytes freed. */
-    fun trim(limit: Long = maxBytes()): Long {
+    @Synchronized fun trim(limit: Long = maxBytes()): Long {
         val files = directory.listFiles()?.sortedBy { it.lastModified() } ?: return 0
         var total = files.sumOf { it.length() }; var freed = 0L
         for (f in files) { if (total <= limit) break; val n = f.length(); if (f.delete()) { total -= n; freed += n } }
+        known = total
         return freed
     }
 

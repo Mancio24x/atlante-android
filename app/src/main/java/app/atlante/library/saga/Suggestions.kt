@@ -45,9 +45,9 @@ class Suggestions(
     /** A saga opened from an index (no book of the page): same shelf, without a link. */
     suspend fun series(seriesId: Long): SagaShelf? = saga(BookLink("", seriesId = seriesId))
 
-    suspend fun saga(link: BookLink): SagaShelf? {
-        val seriesId = link.seriesId ?: return null
-        val series = dao.series(seriesId) ?: return null
+    suspend fun saga(link: BookLink): SagaShelf? = withContext(Dispatchers.Default) {
+        val seriesId = link.seriesId ?: return@withContext null
+        val series = dao.series(seriesId) ?: return@withContext null
         val volumes = dao.volumes(seriesId)
         val linked = dao.linksForWorks(volumes.map { it.work.id }).groupBy { it.workId }
         val books = library()
@@ -63,16 +63,16 @@ class Suggestions(
         val subs = dao.subseries(seriesId)
         val lanes = subs.associate { sub -> val ids = dao.volumes(sub.id).map { it.work.id }.toSet(); sub.name to items.indices.filter { items[it].workId in ids } }
             .filterValues { it.isNotEmpty() }
-        return SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, subs.map { it.name }, universe, lanes)
+        SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, subs.map { it.name }, universe, lanes)
     }
 
     /**
      * Owned books by the same author first, then the author's other works from Open Library; works already
      * in [exclude] (the saga carousel, with the original titles of this very book) are left out.
      */
-    suspend fun byAuthor(book: Book, exclude: List<ShelfItem> = emptyList()): List<ShelfItem> {
+    suspend fun byAuthor(book: Book, exclude: List<ShelfItem> = emptyList()): List<ShelfItem> = withContext(Dispatchers.Default) {
         val name = book.author.split(" & ").first().trim()
-        if (name.isBlank() || name == "Autore sconosciuto") return emptyList()
+        if (name.isBlank() || name == "Autore sconosciuto") return@withContext emptyList()
         val surnames = BookMatcher.surnames(name)
         val books = library()
         val owned = books.filter { it.id != book.id && BookMatcher.surnames(it.author).any { s -> s in surnames } }
@@ -82,23 +82,23 @@ class Suggestions(
             .filter { w -> w.authors.firstOrNull()?.let { sameAuthor(it, name) } == true }
             .filterNot { w -> bundle(w.title) || surnames.any { s -> w.title.lowercase().contains("$s's") || w.title.lowercase().contains("$s’s") } }
             .filterNot { w -> BookMatcher.same(Book().apply { title = w.title; author = name }, book) || owned.any { o -> sameTitle(w, o.title) } || listed(w, exclude) }
-        return owned + online.map { it.asItem() }
+        owned + online.map { it.asItem() }
     }
 
     /**
      * Same genre and period (30 years around the book), most published first, at most two per author;
      * excludes owned books, this author and the other carousels. Same input, same list.
      */
-    suspend fun mayInterest(book: Book, exclude: List<ShelfItem> = emptyList()): List<ShelfItem> {
-        val subject = Genres.subjectFor(book.genre) ?: return emptyList()
+    suspend fun mayInterest(book: Book, exclude: List<ShelfItem> = emptyList()): List<ShelfItem> = withContext(Dispatchers.Default) {
+        val subject = Genres.subjectFor(book.genre) ?: return@withContext emptyList()
         val year = Regex("\\d{4}").find(book.year)?.value?.toInt()
         val (from, to) = if (year != null) (year - 30) to (year + 30) else 1980 to 2100
-        val books = library()
+        val owned = TitleIndex(library()) { it.title }
         val surnames = BookMatcher.surnames(book.author)
         val perAuthor = HashMap<String, Int>()
-        return cachedSearch("subject", "$subject:$from-$to", "q=" + URLEncoder.encode("subject:$subject first_publish_year:[$from TO $to]", "UTF-8"))
+        cachedSearch("subject", "$subject:$from-$to", "q=" + URLEncoder.encode("subject:$subject first_publish_year:[$from TO $to]", "UTF-8"))
             .filterNot { w -> w.authors.any { a -> BookMatcher.surnames(a).any { it in surnames } } }
-            .filterNot { w -> bundle(w.title) || books.any { b -> sameTitle(w, b.title) } || listed(w, exclude) }
+            .filterNot { w -> bundle(w.title) || owned.contains(w.title) || listed(w, exclude) }
             .filter { w -> (perAuthor.merge(w.authors.firstOrNull() ?: "", 1, Int::plus) ?: 0) <= 2 }
             .take(20).map { it.asItem() }
     }

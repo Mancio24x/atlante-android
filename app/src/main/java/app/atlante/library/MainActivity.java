@@ -153,12 +153,15 @@ public final class MainActivity extends AppCompatActivity {
                 .setCancelable(false).setPositiveButton("Chiudi", (d, w) -> finish()).show();
             return;
         }
-        destination = state == null ? prefs.getString("destination", "Home") : state.getString("destination", "Home");
+        // The app always opens on Home. Only a restart made by the app itself (a theme change) keeps the page.
+        boolean keepPage = state != null && prefs.getBoolean("keepPageOnce", false);
+        prefs.edit().remove("keepPageOnce").apply();
+        destination = keepPage ? state.getString("destination", "Home") : "Home";
         if (destination.equals("Cerca")) destination = "Biblioteca"; // "Cerca" was replaced by Sync: the library has the search bar
         shelfView = prefs.getBoolean("shelfView", false);
         restoreTimer(); showLibrary();
-        if (state != null && state.getString("detail") != null) { Book b = store.find(state.getString("detail")); if (b != null) details(b); }
-        if (state != null && state.getString("reading") != null) {
+        if (keepPage && state.getString("detail") != null) { Book b = store.find(state.getString("detail")); if (b != null) details(b); }
+        if (keepPage && state.getString("reading") != null) {
             Book b = store.find(state.getString("reading")); if (b != null) openReader(b);
         }
     }
@@ -175,6 +178,9 @@ public final class MainActivity extends AppCompatActivity {
     @Override public void onConfigurationChanged(Configuration config) {
         super.onConfigurationChanged(config);
         if (store == null) return;
+        // Editing pages (timer, progress, review, notes) only relayout: rebuilding them would lose what you were
+        // doing and send the timer back to the book page.
+        if (editingPage) return;
         if (reading != null && pages != null) showReader(); else if (detailId != null && store.find(detailId) != null) details(store.find(detailId)); else showLibrary();
     }
 
@@ -276,7 +282,7 @@ public final class MainActivity extends AppCompatActivity {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         Picker mode=new Picker(p,"Modalità",Arrays.asList("Tema scelto","Chiara","Scura","Automatica"),
             Arrays.asList("Tema scelto","Chiara","Scura","Automatica").get(Arrays.asList("theme","light","dark","auto").indexOf(prefs.getString("appearanceMode","theme"))));
-        p.addView(button("Applica modalità",false,()->{prefs.edit().putString("appearanceMode",new String[]{"theme","light","dark","auto"}[mode.position()]).commit();recreate();}));
+        p.addView(button("Applica modalità",false,()->{prefs.edit().putString("appearanceMode",new String[]{"theme","light","dark","auto"}[mode.position()]).commit();recreateHere();}));
         // Three colours chosen by touch (square + hue bar), stored as before ("#RRGGBB" strings in the preferences).
         ArrayList<String> savedNames=new ArrayList<>();
         try { JSONObject saved=new JSONObject(prefs.getString("savedThemes","{}")); Iterator<String> keys=saved.keys(); while(keys.hasNext()) savedNames.add(keys.next()); } catch(Exception ignored) { }
@@ -284,10 +290,10 @@ public final class MainActivity extends AppCompatActivity {
             try {
                 JSONObject colors=new JSONObject().put("paper",String.format(Locale.ROOT,"#%06X",paper&0xffffff)).put("surface",String.format(Locale.ROOT,"#%06X",surface&0xffffff)).put("accent",String.format(Locale.ROOT,"#%06X",accent&0xffffff));
                 JSONObject saved=new JSONObject(prefs.getString("savedThemes","{}")); saved.put(name,colors);
-                prefs.edit().putString("savedThemes",saved.toString()).putString("customPalette",colors.toString()).putString("theme","custom").commit();recreate();
+                prefs.edit().putString("savedThemes",saved.toString()).putString("customPalette",colors.toString()).putString("theme","custom").commit();recreateHere();
             } catch(Exception e){error(e);}
         },name->{
-            try { String colors=new JSONObject(prefs.getString("savedThemes","{}")).getJSONObject(name).toString(); prefs.edit().putString("customPalette",colors).putString("theme","custom").commit(); recreate(); }
+            try { String colors=new JSONObject(prefs.getString("savedThemes","{}")).getJSONObject(name).toString(); prefs.edit().putString("customPalette",colors).putString("theme","custom").commit(); recreateHere(); }
             catch(Exception e){error(e);}
         });
         p.addView(expander("I miei temi · tre colori",custom,false));
@@ -373,7 +379,7 @@ public final class MainActivity extends AppCompatActivity {
             }
             tile.setContentDescription(option.name + ", " + option.description); tile.setMinimumHeight(dp(64));
             // Material themes apply when the activity is created: save and recreate.
-            tile.setOnClickListener(v -> { getPreferences(MODE_PRIVATE).edit().putString("theme", option.id).commit(); recreate(); });
+            tile.setOnClickListener(v -> { getPreferences(MODE_PRIVATE).edit().putString("theme", option.id).commit(); recreateHere(); });
             panel.addView(tile); gap(panel, 10);
         }
     }
@@ -419,6 +425,7 @@ public final class MainActivity extends AppCompatActivity {
         card.setCardElevation(0); card.setRadius(dp(16)); card.addView(content); return card;
     }
     void base(int color) {
+        editingPage = false;   // every new page starts as a normal page; editorPage() sets it again
         boolean light = (((color >> 16) & 255) * 299 + ((color >> 8) & 255) * 587 + (color & 255) * 114) > 150000;
         int flags = light ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR : 0;
         if (android.os.Build.VERSION.SDK_INT >= 27 && light) flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
@@ -674,7 +681,7 @@ public final class MainActivity extends AppCompatActivity {
 
     static String order(Book b) { return b.number > 0 ? " · n. " + number(b.number) : ""; }
     public static String number(double number) { return number == (long)number ? Long.toString((long)number) : Double.toString(number); }
-    private void forgetCover(String id) { covers.forget(id); }
+    private void forgetCover(String id) { covers.forget(id); app.atlante.library.ui.compose.CoverImages.forgetBook(id); }
     private Bitmap cover(Book b) { return covers.large(b.id, store.cover(b)); }
     static Bitmap decode(String file, byte[] bytes, int max) { return Covers.decode(file, bytes, max); }
 
@@ -1474,7 +1481,7 @@ public final class MainActivity extends AppCompatActivity {
             final Exception result = failure; final int count = added, withoutFile = missing;
             runOnUiThread(() -> {
                 loading.dismiss(); busy = false; if (isFinishing() || isDestroyed()) return;
-                covers.clear(); showLibrary();
+                covers.clear(); app.atlante.library.ui.compose.CoverImages.clear(); showLibrary();
                 if (result != null) { error(result); return; }
                 int withoutCover = 0; for (Book b : fresh.values()) if (store.find(b.id) != null && !store.cover(b).isFile()) withoutCover++;
                 if (withoutCover > 0) fetchMissingCovers(new ArrayList<>(fresh.values()), false);
@@ -2121,7 +2128,20 @@ public final class MainActivity extends AppCompatActivity {
         else if (!destination.equals("Home")) navigate("Home");
         updateBack();
     }
-    @Override protected void onStop() { if (reading != null) rememberPage(); persistTimer(); super.onStop(); }
+    @Override protected void onStop() { if (reading != null) rememberPage(); persistTimer(); stoppedAt = android.os.SystemClock.elapsedRealtime(); super.onStop(); }
+
+    /** Back after more than 10 minutes away: Home again, unless you are reading or in the middle of an edit. */
+    @Override protected void onRestart() {
+        super.onRestart();
+        if (store == null || reading != null || editingPage || stoppedAt == 0) return;
+        if (android.os.SystemClock.elapsedRealtime() - stoppedAt > 10 * 60 * 1000L && !destination.equals("Home")) {
+            destination = "Home"; detailId = null; closeDrawer(); showLibrary();
+        }
+    }
+    private long stoppedAt;
+
+    /** Restart for a theme change, staying on the current page. */
+    private void recreateHere() { getPreferences(MODE_PRIVATE).edit().putBoolean("keepPageOnce", true).commit(); recreate(); }
     @Override protected void onDestroy() {
         uiHandler.removeCallbacksAndMessages(null); worker.shutdown(); catalogWorker.shutdown(); coverWorker.shutdown(); covers.shutdown(); super.onDestroy();
     }

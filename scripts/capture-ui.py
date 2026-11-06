@@ -261,9 +261,14 @@ for node in dump().iter('node'):
 time.sleep(.6);tap('Scaffale',exact=True);time.sleep(1.2);shot('60-bookcase')
 spines=[n for n in dump().iter('node') if n.get('content-desc','').startswith('Red Rising, di Pierce Brown')]
 assert spines, 'Spine of Red Rising not found on the bookcase'
-tap('Legno naturale',exact=True);time.sleep(.4)
-tap('Noce scuro',exact=True);time.sleep(.6);shot('60a-bookcase-walnut')
-tap('Colori del tema',exact=True);time.sleep(.6);shot('60b-bookcase-theme-colors')
+# Look of the bookcase: one compact button opens the options over the shelf; they apply at once, a tap outside closes them.
+tap('Aspetto');time.sleep(.5);shot('60a-bookcase-look-menu')
+tap('Noce scuro',exact=True);time.sleep(.6);shot('60b-bookcase-walnut')
+tap('Colori del tema',exact=True);time.sleep(.6)
+screen=list(map(int,re.findall(r'\d+',dump().find('node').get('bounds','0,0,1080,1920'))))
+adb('shell','input','tap',str(screen[2]//2),str(screen[3]*92//100));time.sleep(.6)
+assert not any(n.get('text','')=='Minimal' for n in dump().iter('node')), 'A tap outside did not close the bookcase options'
+shot('60c-bookcase-theme-colors')
 tap('Red Rising, di Pierce Brown');time.sleep(1.5);shot('61-bookcase-open')
 assert any(n.get('text','').startswith('Avvia il timer') for n in dump().iter('node')), 'Tapping a spine did not open the book'
 print('Bookcase completed.')

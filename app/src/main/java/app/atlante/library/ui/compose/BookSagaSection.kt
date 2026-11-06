@@ -1,10 +1,8 @@
 package app.atlante.library.ui.compose
 
 import android.view.View
-import android.util.LruCache
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,14 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,11 +29,8 @@ import app.atlante.library.saga.*
 import app.atlante.library.saga.db.AtlanteDatabase
 import app.atlante.library.saga.db.BookLink
 import app.atlante.library.saga.db.SeriesSummary
-import app.atlante.library.ui.Covers
 import app.atlante.library.ui.ThemePalette
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /** What the book page offers to the saga section (implemented by MainActivity). */
 interface SagaHost {
@@ -232,33 +222,19 @@ private fun ShelfCard(item: ShelfItem, host: SagaHost) {
     }
 }
 
-private object CoverMemory : LruCache<String, ImageBitmap>(48)
-
 @Composable
 private fun Cover(item: ShelfItem, host: SagaHost, modifier: Modifier) {
-    val key = item.ownedBookId ?: item.coverUrl ?: item.coverWork ?: item.title
-    var image by remember(key) { mutableStateOf(CoverMemory.get(key)) }
-    LaunchedEffect(key) {
-        if (image == null) image = withContext(Dispatchers.IO) {
-            runCatching {
-                val bitmap = when {
-                    item.ownedBookId != null -> host.coverFile(item.ownedBookId)?.let { Covers.decode(it, null, 320) }
-                    else -> {
-                        val url = item.coverUrl ?: item.coverWork?.let { w -> SuggestionCovers.forWork(w) }
-                        url?.let { u -> SuggestionCovers.bytes(u)?.let { b -> Covers.decode(null, b, 320) } }
-                    }
-                }
-                bitmap?.asImageBitmap()?.also { CoverMemory.put(key, it) }
-            }.getOrNull()
-        }
-    }
-    Surface(modifier, shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+    // Stable keys: a library book by its id (its own saved cover), the others by cover URL (Open Library cover id)
+    // or, until the URL is known, by their Open Library work.
+    val key = item.ownedBookId?.let { "own:$it" } ?: item.coverUrl ?: item.coverWork?.let { "work:$it" }
+    BookCover(item.ownedBookId ?: (item.title + item.ordinal), key, item.title, modifier, textPadding = 8.dp,
         border = if (item.ownedBookId == null) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null) {
-        val img = image
-        if (img != null) Image(img, null, Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
-        else Box(Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.Center) {
-            Text(item.title, fontFamily = FontFamily.Serif, style = MaterialTheme.typography.bodySmall, maxLines = 5, overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        when {
+            item.ownedBookId != null -> host.coverFile(item.ownedBookId)?.let { CoverImages.decode(null, it, 320) }
+            else -> {
+                val url = item.coverUrl ?: item.coverWork?.let { w -> SuggestionCovers.forWork(w) }
+                url?.let { u -> SuggestionCovers.bytes(u)?.let { CoverImages.decode(it, null, 320) } }
+            }
         }
     }
 }

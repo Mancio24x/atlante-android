@@ -53,4 +53,30 @@ class SettingsTimerTest {
         assertTrue(ReadingJournal.totals(listOf(saved),null)[1]>=30)
         controller.pause().stop().destroy()
     }
+    /** Rotating the phone (handled in place by the activity) keeps the timer page and the paused session. */
+    @Test fun rotationKeepsTimerScreen() {
+        val controller=Robolectric.buildActivity(MainActivity::class.java).setup();val a=controller.get()
+        val b=Book().apply{id="9".repeat(64);title="Rotazione";format="CATALOGO"}
+        val field=MainActivity::class.java.getDeclaredField("store").apply{isAccessible=true}
+        (field.get(a) as LibraryStore).addCatalog(b)
+        call(a,"startTimer",b)
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(15))
+        labels(a.window.decorView).first{it.text.toString()=="Pausa"}.performClick()
+        val seconds=call(a,"timerSeconds") as Long
+        val landscape=android.content.res.Configuration(a.resources.configuration).apply{orientation=android.content.res.Configuration.ORIENTATION_LANDSCAPE}
+        controller.configurationChange(landscape)
+        assertTrue("still on the timer page", labels(a.window.decorView).any{it.text.toString()=="Riprendi"})
+        assertEquals(seconds,call(a,"timerSeconds"))
+        controller.pause().stop().destroy()
+    }
+    /** The app always opens on Home, whatever page was open last time. */
+    @Test fun alwaysOpensOnHome() {
+        var controller=Robolectric.buildActivity(MainActivity::class.java).setup();var a=controller.get()
+        val dest=MainActivity::class.java.getDeclaredField("destination").apply{isAccessible=true}
+        call(a,"settings"); a.getPreferences(android.content.Context.MODE_PRIVATE).edit().putString("destination","Biblioteca").commit()
+        controller.pause().stop().destroy()
+        controller=Robolectric.buildActivity(MainActivity::class.java).setup();a=controller.get()
+        assertEquals("Home",dest.get(a))
+        controller.pause().stop().destroy()
+    }
 }
