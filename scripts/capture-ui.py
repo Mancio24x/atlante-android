@@ -17,9 +17,25 @@ def dump():
         except (subprocess.CalledProcessError,ET.ParseError,RuntimeError) as e:
             last=e;time.sleep(.4)
     raise RuntimeError('No fresh Android UI tree: '+str(last))
+def dismiss_system_dialog(tree):
+    # Slow CI emulators sometimes show "<app> isn't responding" for the launcher over our app.
+    texts=[n.get('text','') for n in tree.iter('node')]
+    if any("isn't responding" in t for t in texts):
+        for node in tree.iter('node'):
+            if node.get('text','')=='Wait':
+                bounds=list(map(int,re.findall(r'\d+',node.get('bounds',''))))
+                adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2));time.sleep(.6);return True
+    return False
+def wait_for_app_files():
+    # The private files directory exists only once the app has really started.
+    for _ in range(60):
+        try: adb('shell','run-as',package,'ls','files',stderr=subprocess.STDOUT);return
+        except subprocess.CalledProcessError: time.sleep(.5)
+    raise RuntimeError('App data directory not ready')
 def tap(label, scroll=False, editable=False):
     for attempt in range(7 if scroll else 3):
         tree=dump()
+        if dismiss_system_dialog(tree): tree=dump()
         for node in tree.iter('node'):
             if editable and not node.get('class','').endswith('EditText'): continue
             values=[node.get('text',''),node.get('content-desc','')]
@@ -31,9 +47,9 @@ def tap(label, scroll=False, editable=False):
         time.sleep(.3)
     raise RuntimeError('UI control missing: '+label)
 def shot(name):
-    time.sleep(.4); (out/(name+'.png')).write_bytes(adb('exec-out','screencap','-p'))
+    time.sleep(.4); dismiss_system_dialog(dump()); (out/(name+'.png')).write_bytes(adb('exec-out','screencap','-p'))
     (out/(name+'.xml')).write_bytes(ET.tostring(dump()))
-adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(2)
+adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(2);wait_for_app_files()
 # Seed only the disposable debug app; never touches the release library.
 books=[]
 for i,title in enumerate(['Il giardino delle storie','Oltre il mare','La città delle mappe','Viaggio nella notte','Le pagine ritrovate','Il sentiero di casa']):

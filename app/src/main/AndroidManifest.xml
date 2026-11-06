@@ -6,7 +6,8 @@
         android:label="Atlante Library"
         android:icon="@drawable/ic_atlante"
         android:theme="@style/AtlanteTheme"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -26,7 +26,7 @@ leggera di risultati. Risposte e miniature vengono riutilizzate in una cache loc
 limitata: 15 minuti per la ricerca, 24 ore per schede e immagini. Le copertine
 si caricano senza bloccare l’apertura dei metadati. La velocità del primo accesso
 resta legata alla connessione e alla disponibilità di Open Library.
-La griglia si allunga da sola durante lo scorrimento e decodifica le copertine in background, alla dimensione della scheda; la ricerca filtra
+La griglia usa RecyclerView: tiene in memoria solo le schede visibili e decodifica le copertine in background, alla dimensione della scheda; la ricerca filtra
 comunque l’intero catalogo. I controlli sul contrasto coprono tutte le palette.
 
 Il workflow manuale **Android UI preview** esegue sull’emulatore Android 35 una
@@ -182,7 +182,7 @@ senza scelta del processore. Le future release saranno rilevate da Obtainium.
 ## Compilazione locale per chi sviluppa
 
 Servono JDK 17, Gradle 8.9, piattaforma Android 35 e Build Tools 35.0.0.
-Il progetto usa Android Gradle Plugin 8.7.3 e le sole API della piattaforma.
+Il progetto usa Android Gradle Plugin 8.7.3, i widget della piattaforma e due librerie AndroidX: `activity` (risultati dei selettori, gesto Indietro predittivo) e `recyclerview` (griglia della biblioteca).
 Non è incluso un finto wrapper Gradle: il workflow installa Gradle esplicitamente.
 
 ```sh

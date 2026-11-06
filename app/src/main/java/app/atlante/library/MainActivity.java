@@ -14,29 +14,41 @@ import android.widget.*;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
+import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
-/** Android edition. Uses only platform APIs, private storage and the system document picker. */
-public final class MainActivity extends Activity {
+/** Android edition: platform widgets plus AndroidX Activity and RecyclerView, private storage and the system document picker. */
+public final class MainActivity extends ComponentActivity {
     int INK, PAPER, WHITE, SAGE, COPPER, GOLD, MUTED, LINE, ON_ACCENT;
     private ThemePalette palette = ThemePalette.ALL[0];
     private final android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable filterTask;
-    private int visibleBooks = 60;
     private final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
     private final ExecutorService coverWorker = Executors.newSingleThreadExecutor();
-    /** Grid thumbnails are decoded off the UI thread, separately from network cover downloads. */
-    private final ExecutorService thumbWorker = Executors.newFixedThreadPool(2);
-    private volatile int thumbGeneration;
-    private ScrollView libraryScroll;
-    private LinearLayout gridHost;
-    private List<Book> shownBooks;
+    private final Covers covers = new Covers();
+    private FrameLayout body;
+    private RecyclerView grid;
+    private BookAdapter adapter;
+    private String gridKey;
     private static final int IMPORT = 101, EXPORT = 102, COVER = 103, BACKUP = 104, RESTORE = 105;
     private boolean backupFiles = true;
     private final Runnable savePosition = () -> { if (this.store != null) save(); };
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final LruCache<String, Bitmap> covers = new LruCache<String, Bitmap>((int) Math.min(64 * 1024, Runtime.getRuntime().maxMemory() / 1024 / 8)) {
-        @Override protected int sizeOf(String key, Bitmap value) { return value.getByteCount() / 1024; }
+    private final ActivityResultLauncher<Intent> importLauncher = results(IMPORT), exportLauncher = results(EXPORT),
+        coverLauncher = results(COVER), backupLauncher = results(BACKUP), restoreLauncher = results(RESTORE);
+    /** Enabled only when Back has something to close inside the app, so the system can animate leaving it. */
+    private final OnBackPressedCallback back = new OnBackPressedCallback(false) {
+        @Override public void handleOnBackPressed() { goBack(); }
     };
+
+    private ActivityResultLauncher<Intent> results(int request) {
+        return registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+            result -> handleResult(request, result.getResultCode(), result.getData()));
+    }
     private LibraryStore store;
     private LinearLayout root, content;
     private FrameLayout screen, drawer;
@@ -54,6 +66,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        getOnBackPressedDispatcher().addCallback(this, back);
         if (state != null) {
             tab = state.getString("tab", tab); query = state.getString("query", "");
             mapAuthor = state.getString("author", ""); exportId = state.getString("export"); coverBookId = state.getString("coverBook");
@@ -110,7 +123,7 @@ public final class MainActivity extends Activity {
         menu.addView(text("LA TUA BIBLIOTECA",11,SAGE,false)); gap(menu,18);
         for (String name : new String[]{"Tutti i libri","Desideri","In lettura","Letti","Mappa","Autori","Saghe"}) {
             Button item = button((tab.equals(name) ? "•  " : "") + name,tab.equals(name),() -> {
-                closeDrawer(); tab = name; visibleBooks = 60; showLibrary();
+                closeDrawer(); tab = name; showLibrary();
             }); item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL); menu.addView(item); gap(menu,8);
         }
         gap(menu,12); rule(menu); gap(menu,16);
@@ -120,10 +133,11 @@ public final class MainActivity extends Activity {
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         screen.addView(overlay,new FrameLayout.LayoutParams(-1,-1)); close.requestFocus();
         scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(220).start();
+        updateBack();
     }
     private void closeDrawer() {
         if (drawer == null) return;
-        FrameLayout closing = drawer; drawer = null;
+        FrameLayout closing = drawer; drawer = null; updateBack();
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
         closing.animate().alpha(0).setDuration(140).withEndAction(() -> {
             if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing);
@@ -280,7 +294,7 @@ public final class MainActivity extends Activity {
         search.setBackground(background(WHITE, LINE)); search.setText(query); header.addView(search);
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int c, int f) { }
-            public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString(); visibleBooks = 60;
+            public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString(); updateBack();
                 if (filterTask != null) uiHandler.removeCallbacks(filterTask);
                 filterTask = () -> { if (reading == null) renderContent(); }; uiHandler.postDelayed(filterTask, 180); }
             public void afterTextChanged(Editable e) { }
@@ -295,15 +309,10 @@ public final class MainActivity extends Activity {
         }), new LinearLayout.LayoutParams(dp(100), dp(48)));
         header.addView(actions); gap(header, 8);
         rule(root);
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); libraryScroll = scroll;
-        // Continuous scrolling: append the next books shortly before the end of the list.
-        scroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
-            if (content != null && y + v.getHeight() >= content.getHeight() - dp(900)) appendBooks();
-        });
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        content = column(); content.setPadding(dp(14), dp(16), dp(14), dp(28)); scroll.addView(content);
+        body = new FrameLayout(this); grid = null; adapter = null; content = null;
+        root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
         notice = text("", 12, MUTED, false); notice.setPadding(dp(20), dp(10), dp(20), dp(10));
-        rule(root); root.addView(notice); renderContent();
+        rule(root); root.addView(notice); renderContent(); updateBack();
     }
 
     private ArrayList<Book> filtered() {
@@ -353,14 +362,18 @@ public final class MainActivity extends Activity {
     private void applyLibraryFilters() {
         getPreferences(MODE_PRIVATE).edit().putString("filterStatus", filterStatus).putString("filterGenre", filterGenre)
             .putString("filterFormat", filterFormat).putString("sortOrder", sortOrder).apply();
-        visibleBooks = 60; showLibrary();
+        showLibrary();
     }
 
     private void renderContent() {
-        if (content == null) return;
-        content.removeAllViews(); thumbGeneration++; gridHost = null; shownBooks = null;
+        if (body == null) return;
         ArrayList<Book> list = filtered();
         notice.setText(busy ? "Importazione in corso…" : list.size() + " di " + store.snapshot().size() + " libri · Sul dispositivo · Lettura offline");
+        if (!list.isEmpty() && !tab.equals("Mappa") && !tab.equals("Autori") && !tab.equals("Saghe")) { showGrid(list); return; }
+        // Empty states, map and indexes are short pages: a plain scrolling column.
+        body.removeAllViews(); grid = null; adapter = null;
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); body.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
+        content = column(); content.setPadding(dp(14), dp(16), dp(14), dp(28)); scroll.addView(content);
         if (list.isEmpty()) {
             gap(content, 32);
             content.addView(text(store.snapshot().isEmpty() ? "Ogni libro è un punto di partenza." : "Nessun libro trovato.", 30, INK, true));
@@ -373,116 +386,86 @@ public final class MainActivity extends Activity {
         }
         if (tab.equals("Mappa")) { showMap(list); return; }
         if (tab.equals("Autori") || tab.equals("Saghe")) { showIndex(list, tab.equals("Autori")); return; }
-        content.addView(text(tab.equals("Tutti i libri") ? "I tuoi libri" : tab, 28, INK, true)); gap(content, 5);
-        content.addView(text(list.size() + " titoli · Libri importati e schede dal catalogo online", 13, MUTED, false));
-        gap(content, 16);
-        gridHost = column(); content.addView(gridHost); shownBooks = list;
-        int shown = Math.min(Math.max(PAGE_SIZE, visibleBooks), list.size()); visibleBooks = shown;
-        grid(gridHost, list.subList(0, shown));
-        // Short lists may not fill the screen and never scroll: fill it once laid out.
-        fillScreen();
     }
 
-    private static final int PAGE_SIZE = 60; // divisible by every column count, so batches fill whole rows
-
-    private void fillScreen() {
-        LinearLayout target = content;
-        target.post(() -> {
-            if (target != content || libraryScroll == null || target.getHeight() > libraryScroll.getHeight() + dp(900)) return;
-            int before = visibleBooks; appendBooks(); if (visibleBooks > before) fillScreen();
-        });
-    }
-
-    private void appendBooks() {
-        if (gridHost == null || shownBooks == null || visibleBooks >= shownBooks.size()) return;
-        int end = Math.min(visibleBooks + PAGE_SIZE, shownBooks.size());
-        grid(gridHost, shownBooks.subList(visibleBooks, end)); visibleBooks = end;
-    }
-
-    private void grid(LinearLayout parent, List<Book> books) {
+    private int columns() {
         int width = getResources().getConfiguration().screenWidthDp;
-        int columns = listView ? 1 : width >= 1100 ? 6 : width >= 760 ? 4 : width >= 550 ? 3 : 2;
-        int coverHeight = listView ? 150 : Math.min(310, Math.max(170, (width - 40 - columns * 12) / columns * 14 / 10));
-        LinearLayout line = null;
-        for (int i = 0; i < books.size(); i++) {
-            if (i % columns == 0) { line = row(); line.setGravity(Gravity.TOP); parent.addView(line); }
-            Book b = books.get(i);
-            LinearLayout card = column(); card.setPadding(dp(10), dp(10), dp(10), dp(14)); card.setBackground(background(WHITE, LINE));
-            LinearLayout.LayoutParams cardSize = new LinearLayout.LayoutParams(0, -2, 1);
-            cardSize.setMargins(dp(5), 0, dp(5), dp(12)); line.addView(card, cardSize);
-            FrameLayout art = new FrameLayout(this); art.setBackground(background(PAPER, Color.TRANSPARENT)); art.setClipToOutline(true);
-            art.setPadding(dp(7), dp(7), dp(7), dp(7));
-            card.addView(art, new LinearLayout.LayoutParams(-1, dp(coverHeight)));
-            TextView fallback = text(b.author + "\n\n" + b.title, 18, SAGE, true);
-            fallback.setBackground(background(PAPER, LINE)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
-            art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
-            ImageView image = new ImageView(this); image.setContentDescription("Copertina di " + b.title);
-            image.setScaleType(ImageView.ScaleType.FIT_CENTER); art.addView(image, new FrameLayout.LayoutParams(-1, -1));
-            loadThumbnail(b, image, fallback, dp(coverHeight));
-            TextView format = text(b.format.equals("CATALOGO") ? "DESIDERIO" : b.format, 10, INK, false); format.setTypeface(Typeface.DEFAULT_BOLD);
-            format.setPadding(dp(5), dp(3), dp(5), dp(3)); format.setBackground(background(WHITE, Color.TRANSPARENT));
-            art.addView(format, new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START));
-            gap(card, 10); TextView bookTitle = text(b.title, 18, INK, true); bookTitle.setMaxLines(2); bookTitle.setEllipsize(TextUtils.TruncateAt.END); card.addView(bookTitle); gap(card, 4);
-            TextView author = text(b.author, 12, MUTED, false); author.setMaxLines(2); card.addView(author);
-            if (!b.series.isEmpty()) { gap(card, 5); card.addView(text("↳ " + b.series + order(b), 12, SAGE, false)); }
-            if (!b.status.equals("Da leggere")) { gap(card, 5); card.addView(text(b.status, 11, COPPER, false)); }
-            gap(card, 6); card.addView(text(progressLabel(b), 11, SAGE, false));
-            if (b.totalPages > 0) {
-                ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-                bar.setMax(b.totalPages); bar.setProgress(b.currentPage); bar.setProgressTintList(android.content.res.ColorStateList.valueOf(SAGE));
-                bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE)); card.addView(bar, new LinearLayout.LayoutParams(-1, dp(8)));
-            }
-            card.setOnClickListener(v -> details(b)); art.setOnClickListener(v -> details(b));
+        return listView ? 1 : width >= 1100 ? 6 : width >= 760 ? 4 : width >= 550 ? 3 : 2;
+    }
+    private int coverHeight() {
+        int width = getResources().getConfiguration().screenWidthDp, columns = columns();
+        return listView ? 150 : Math.min(310, Math.max(170, (width - 40 - columns * 12) / columns * 14 / 10));
+    }
+
+    /** Book grid: a RecyclerView keeps only the visible cards in memory, however large the library. */
+    private void showGrid(List<Book> list) {
+        int count = list.size();
+        if (grid == null) {
+            body.removeAllViews(); content = null;
+            grid = new RecyclerView(this); grid.setClipToPadding(false);
+            grid.setPadding(dp(9), dp(16), dp(9), dp(28));
+            adapter = new BookAdapter(new BookAdapter.Cards() {
+                @Override public View header() { return gridHeader(); }
+                @Override public View card(Book book) { return bookCard(book); }
+            });
+            GridLayoutManager manager = new GridLayoutManager(this, columns());
+            manager.setSpanSizeLookup(adapter.spans(manager));
+            grid.setLayoutManager(manager); grid.setAdapter(adapter);
+            body.addView(grid, new FrameLayout.LayoutParams(-1, -1));
         }
-        int remainder = books.size() % columns;
-        if (remainder != 0) for (int i = remainder; i < columns; i++) line.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        shownCount = count;
+        // A new tab, search or filter starts from the top; edits to a book keep the scroll position.
+        String key = tab + "\n" + query + "\n" + filterStatus + "\n" + filterGenre + "\n" + filterFormat + "\n" + sortOrder;
+        boolean changed = !key.equals(gridKey); gridKey = key;
+        adapter.submit(list);
+        if (changed) grid.scrollToPosition(0);
+    }
+    private int shownCount;
+
+    private View gridHeader() {
+        LinearLayout header = column(); header.setPadding(dp(5), 0, dp(5), dp(16));
+        header.addView(text(tab.equals("Tutti i libri") ? "I tuoi libri" : tab, 28, INK, true)); gap(header, 5);
+        header.addView(text(shownCount + " titoli · Libri importati e schede dal catalogo online", 13, MUTED, false));
+        return header;
+    }
+
+    private View bookCard(Book b) {
+        int coverHeight = coverHeight();
+        FrameLayout cell = new FrameLayout(this);
+        LinearLayout card = column(); card.setPadding(dp(10), dp(10), dp(10), dp(14)); card.setBackground(background(WHITE, LINE));
+        FrameLayout.LayoutParams cardSize = new FrameLayout.LayoutParams(-1, -2);
+        cardSize.setMargins(dp(5), 0, dp(5), dp(12)); cell.addView(card, cardSize);
+        FrameLayout art = new FrameLayout(this); art.setBackground(background(PAPER, Color.TRANSPARENT)); art.setClipToOutline(true);
+        art.setPadding(dp(7), dp(7), dp(7), dp(7));
+        card.addView(art, new LinearLayout.LayoutParams(-1, dp(coverHeight)));
+        TextView fallback = text(b.author + "\n\n" + b.title, 18, SAGE, true);
+        fallback.setBackground(background(PAPER, LINE)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
+        art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
+        ImageView image = new ImageView(this); image.setContentDescription("Copertina di " + b.title);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER); art.addView(image, new FrameLayout.LayoutParams(-1, -1));
+        covers.thumbnail(b.id, store.cover(b), dp(coverHeight), image, fallback);
+        TextView format = text(b.format.equals("CATALOGO") ? "DESIDERIO" : b.format, 10, INK, false); format.setTypeface(Typeface.DEFAULT_BOLD);
+        format.setPadding(dp(5), dp(3), dp(5), dp(3)); format.setBackground(background(WHITE, Color.TRANSPARENT));
+        art.addView(format, new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START));
+        gap(card, 10); TextView bookTitle = text(b.title, 18, INK, true); bookTitle.setMaxLines(2); bookTitle.setEllipsize(TextUtils.TruncateAt.END); card.addView(bookTitle); gap(card, 4);
+        TextView author = text(b.author, 12, MUTED, false); author.setMaxLines(2); card.addView(author);
+        if (!b.series.isEmpty()) { gap(card, 5); card.addView(text("↳ " + b.series + order(b), 12, SAGE, false)); }
+        if (!b.status.equals("Da leggere")) { gap(card, 5); card.addView(text(b.status, 11, COPPER, false)); }
+        gap(card, 6); card.addView(text(progressLabel(b), 11, SAGE, false));
+        if (b.totalPages > 0) {
+            ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+            bar.setMax(b.totalPages); bar.setProgress(b.currentPage); bar.setProgressTintList(android.content.res.ColorStateList.valueOf(SAGE));
+            bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE)); card.addView(bar, new LinearLayout.LayoutParams(-1, dp(8)));
+        }
+        card.setOnClickListener(v -> details(b)); art.setOnClickListener(v -> details(b));
+        return cell;
     }
 
     static String order(Book b) { return b.number > 0 ? " · n. " + number(b.number) : ""; }
     static String number(double number) { return number == (long)number ? Long.toString((long)number) : Double.toString(number); }
-    /** Shows a cached thumbnail at once, otherwise decodes it in the background at card size. */
-    private void loadThumbnail(Book b, ImageView image, TextView fallback, int size) {
-        String key = "t:" + b.id;
-        Bitmap cached = covers.get(key);
-        if (cached != null) { image.setImageBitmap(cached); fallback.setVisibility(View.INVISIBLE); return; }
-        fallback.setVisibility(View.INVISIBLE); image.setTag(key);
-        File file = store.cover(b); int generation = thumbGeneration;
-        thumbWorker.execute(() -> {
-            if (generation != thumbGeneration) return; // the grid was rebuilt meanwhile
-            Bitmap bitmap = null;
-            try { if (file.isFile()) bitmap = decodeThumbnail(file.getPath(), size); } catch (Exception | OutOfMemoryError ignored) { }
-            if (bitmap != null) covers.put(key, bitmap);
-            final Bitmap result = bitmap;
-            uiHandler.post(() -> {
-                if (!key.equals(image.getTag())) return;
-                if (result != null) image.setImageBitmap(result); else fallback.setVisibility(View.VISIBLE);
-            });
-        });
-    }
-    static Bitmap decodeThumbnail(String file, int max) {
-        BitmapFactory.Options options = new BitmapFactory.Options(); options.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(file, options);
-        if (options.outWidth <= 0 || options.outHeight <= 0) return null;
-        options.inSampleSize = 1;
-        while (options.outWidth / (options.inSampleSize * 2) >= max || options.outHeight / (options.inSampleSize * 2) >= max) options.inSampleSize *= 2;
-        options.inJustDecodeBounds = false; options.inPreferredConfig = Bitmap.Config.RGB_565;
-        return BitmapFactory.decodeFile(file, options);
-    }
-    private void forgetCover(String id) { covers.remove(id); covers.remove("t:" + id); }
-    private Bitmap cover(Book b) {
-        Bitmap cached = covers.get(b.id); if (cached != null) return cached;
-        File file = store.cover(b); if (!file.exists()) return null;
-        Bitmap bitmap = decode(file.getPath(), null, 512);
-        if (bitmap != null) covers.put(b.id, bitmap); return bitmap;
-    }
-    static Bitmap decode(String file, byte[] bytes, int max) {
-        BitmapFactory.Options options = new BitmapFactory.Options(); options.inJustDecodeBounds = true;
-        if (file != null) BitmapFactory.decodeFile(file, options); else BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
-        options.inSampleSize = 1;
-        while (options.outWidth / options.inSampleSize > max || options.outHeight / options.inSampleSize > max) options.inSampleSize *= 2;
-        options.inJustDecodeBounds = false;
-        return file != null ? BitmapFactory.decodeFile(file, options) : BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
-    }
+    private void forgetCover(String id) { covers.forget(id); }
+    private Bitmap cover(Book b) { return covers.large(b.id, store.cover(b)); }
+    static Bitmap decode(String file, byte[] bytes, int max) { return Covers.decode(file, bytes, max); }
 
     private void showIndex(List<Book> list, boolean authors) {
         content.addView(text(authors ? "Ogni autore, un mondo." : "Una storia dopo l’altra.", 28, INK, true)); gap(content, 20);
@@ -581,14 +564,14 @@ public final class MainActivity extends Activity {
         panel.addView(button("Modifica scheda", false, () -> { dialog.dismiss(); edit(b); })); gap(panel, 8);
         panel.addView(button("Scegli copertina dalla galleria", false, () -> {
             coverBookId = b.id; dialog.dismiss();
-            startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"), COVER);
+            coverLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"));
         })); gap(panel, 8);
         if (!b.format.equals("CATALOGO")) panel.addView(button("Esporta il file originale", false, () -> {
             exportId = b.id;
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType(b.format.equals("EPUB") ? "application/epub+zip" : b.format.equals("TXT") ? "text/plain" : "application/vnd.comicbook+zip")
                 .putExtra(Intent.EXTRA_TITLE, b.title.replaceAll("[\\/:*?\"<>|]", "_") + "." + b.format.toLowerCase(Locale.ROOT));
-            startActivityForResult(intent, EXPORT);
+            exportLauncher.launch(intent);
         })); gap(panel, 8);
         panel.addView(button("Rimuovi dalla libreria", false, () -> dialogBuilder().setTitle("Rimuovere il libro?")
             .setMessage("La copia in Atlante e il punto di lettura verranno rimossi. Il file da cui hai importato il libro resta al suo posto.")
@@ -822,14 +805,14 @@ public final class MainActivity extends Activity {
             String date = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(new Date());
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType("application/zip").putExtra(Intent.EXTRA_TITLE, "atlante-backup-" + date + ".zip");
-            startActivityForResult(intent, BACKUP);
+            backupLauncher.launch(intent);
         }).setNegativeButton("Annulla", null).show();
     }
 
     private void chooseBackup() {
         if (busy) return;
-        startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
-            .putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"}), RESTORE);
+        restoreLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+            .putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"}));
     }
 
     private void writeBackup(Uri dest) {
@@ -897,7 +880,7 @@ public final class MainActivity extends Activity {
             final Exception result = failure; final int count = added, withoutFile = missing;
             runOnUiThread(() -> {
                 loading.dismiss(); busy = false; if (isFinishing() || isDestroyed()) return;
-                covers.evictAll(); showLibrary();
+                covers.clear(); showLibrary();
                 if (result != null) { error(result); return; }
                 dialogBuilder().setTitle("Ripristino completato").setMessage(count + " libri aggiunti alla biblioteca."
                     + (withoutFile > 0 ? "\n\n" + withoutFile + " libri sono senza file: per leggerli reimportali da ☰ › Importa file. Note e avanzamento restano collegati." : ""))
@@ -910,11 +893,10 @@ public final class MainActivity extends Activity {
         if (busy) return;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
             .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        startActivityForResult(intent, IMPORT);
+        importLauncher.launch(intent);
     }
 
-    @Override protected void onActivityResult(int request, int result, Intent data) {
-        super.onActivityResult(request, result, data);
+    private void handleResult(int request, int result, Intent data) {
         if (result != RESULT_OK || data == null || store == null) return;
         if (request == COVER && data.getData() != null) {
             Book target = store.find(coverBookId);
@@ -1017,7 +999,7 @@ public final class MainActivity extends Activity {
     }
     private void showReader() {
         int paper = readerDark ? 0xff101014 : PAPER, ink = readerDark ? 0xffF1EDF5 : INK;
-        base(paper);
+        base(paper); updateBack();
         LinearLayout header = column(); header.setPadding(dp(16), dp(12), dp(16), dp(12)); root.addView(header);
         LinearLayout bar = row(); header.addView(bar);
         bar.addView(button("‹ Biblioteca", false, () -> { rememberPage(); showLibrary(); }));
@@ -1077,14 +1059,17 @@ public final class MainActivity extends Activity {
         getPreferences(MODE_PRIVATE).edit().putFloat("fontSize", fontSize).apply(); showReader();
     }
 
-    @Override public void onBackPressed() {
-        if (drawer != null) { closeDrawer(); return; }
-        if (reading != null) { rememberPage(); showLibrary(); }
+    private boolean canGoBack() { return drawer != null || reading != null || !query.isEmpty() || !tab.equals("Tutti i libri"); }
+    private void updateBack() { back.setEnabled(store != null && canGoBack()); }
+    private void goBack() {
+        if (drawer != null) closeDrawer();
+        else if (reading != null) { rememberPage(); showLibrary(); }
         else if (!query.isEmpty()) { query = ""; showLibrary(); }
-        else super.onBackPressed();
+        else if (!tab.equals("Tutti i libri")) { tab = "Tutti i libri"; showLibrary(); }
+        updateBack();
     }
     @Override protected void onStop() { if (reading != null) rememberPage(); super.onStop(); }
     @Override protected void onDestroy() {
-        uiHandler.removeCallbacksAndMessages(null); worker.shutdown(); catalogWorker.shutdown(); coverWorker.shutdown(); thumbWorker.shutdownNow(); super.onDestroy();
+        uiHandler.removeCallbacksAndMessages(null); worker.shutdown(); catalogWorker.shutdown(); coverWorker.shutdown(); covers.shutdown(); super.onDestroy();
     }
 }
