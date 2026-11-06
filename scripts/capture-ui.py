@@ -65,6 +65,8 @@ tap('Impostazioni');shot('03-settings');tap('◐ Temi');shot('04-theme-picker');
 for theme,name in [('Lavanda','06-lavender'),('Blu polvere','07-blue'),('AMOLED nero','08-amoled')]:
     tap('Impostazioni');tap('◐ Temi');tap(theme,True);shot(name)
 tap('Apri menu laterale');tap('Mappa');shot('09-map-amoled')
+# The map is full screen with an author search on top.
+tap('Anna Costa',editable=True);time.sleep(.6);shot('09a-map-authors');tap('Luca Moretti');shot('09b-map-author')
 tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 # The persisted theme must survive a process restart.
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)

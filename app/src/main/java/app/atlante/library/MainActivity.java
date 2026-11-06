@@ -281,7 +281,16 @@ public final class MainActivity extends ComponentActivity {
         brand.setLetterSpacing(.12f); masthead.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
         Button settings = button("", false, this::settings); settings.setContentDescription("Impostazioni");
         android.graphics.drawable.Drawable gear = getResources().getDrawable(R.drawable.ic_settings, getTheme()); gear.setTint(INK);
-        settings.setCompoundDrawablesWithIntrinsicBounds(gear,null,null,null); masthead.addView(settings, new LinearLayout.LayoutParams(dp(52), dp(48))); gap(header, 12);
+        settings.setCompoundDrawablesWithIntrinsicBounds(gear,null,null,null); masthead.addView(settings, new LinearLayout.LayoutParams(dp(52), dp(48)));
+        if (tab.equals("Mappa")) {
+            // The map uses the whole screen: only the author search stays above it.
+            header.setPadding(dp(16), dp(10), dp(16), dp(12)); gap(header, 10); mapHeader(header);
+            body = new FrameLayout(this); grid = null; adapter = null; content = null;
+            root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
+            notice = text("", 12, MUTED, false); renderContent(); updateBack();
+            return;
+        }
+        gap(header, 12);
         LinearLayout titleRow = row();
         TextView title = text("La tua biblioteca", 29, INK, true);
         titleRow.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
@@ -316,7 +325,7 @@ public final class MainActivity extends ComponentActivity {
     }
 
     private ArrayList<Book> filtered() {
-        return LibraryQuery.select(store.snapshot(), query, tab, filterStatus, filterGenre, filterFormat, sortOrder);
+        return LibraryQuery.select(store.snapshot(), tab.equals("Mappa") ? "" : query, tab, filterStatus, filterGenre, filterFormat, sortOrder);
     }
 
     private boolean hasFilters() { return !filterStatus.isEmpty() || !filterGenre.isEmpty() || !filterFormat.isEmpty(); }
@@ -489,40 +498,59 @@ public final class MainActivity extends ComponentActivity {
         }
     }
 
-    private void showMap(ArrayList<Book> list) {
-        TextView label = text("CONNESSIONI DI LETTURA", 11, SAGE, false); label.setLetterSpacing(.18f); content.addView(label);
-        gap(content, 8); content.addView(text("Ogni autore è un punto di partenza.", 28, INK, true));
-        gap(content, 8); content.addView(text("Scegli un autore e segui le frecce. Tocca un libro per aprire la sua scheda.", 14, MUTED, false)); gap(content, 18);
+    /** Authors shown on the map, honouring the library filters (but not the text search). */
+    private ArrayList<String> mapAuthors() {
         TreeSet<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-        for (Book b : list) names.add(b.author);
-        ArrayList<String> authors = new ArrayList<>(names);
-        if (!authors.contains(mapAuthor)) mapAuthor = authors.get(0);
-        Spinner picker = new Spinner(this);
-        picker.setBackground(background(WHITE, LINE)); picker.setMinimumHeight(dp(52));
-        picker.setContentDescription("Autore della mappa");
-        picker.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, authors) {
-            private View item(int position) {
-                TextView value = text(getItem(position), 16, INK, false); value.setPadding(dp(16),dp(12),dp(16),dp(12));
-                value.setBackgroundColor(WHITE); value.setMinHeight(dp(48)); return value;
+        for (Book b : filtered()) names.add(b.author);
+        return new ArrayList<>(names);
+    }
+
+    private void mapHeader(LinearLayout header) {
+        ArrayList<String> authors = mapAuthors();
+        if (!authors.isEmpty() && !authors.contains(mapAuthor)) mapAuthor = authors.get(0);
+        LinearLayout titleRow = row(); header.addView(titleRow);
+        titleRow.addView(text("Mappa delle letture", 24, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
+        if (hasFilters()) titleRow.addView(text("filtri attivi", 12, COPPER, false));
+        gap(header, 10);
+        AutoCompleteTextView field = new AutoCompleteTextView(this);
+        field.setSingleLine(true); field.setTextSize(16); field.setTextColor(INK); field.setHintTextColor(MUTED);
+        field.setHint(authors.size() + (authors.size() == 1 ? " autore" : " autori") + " · cerca per nome…");
+        field.setContentDescription("Cerca l’autore della mappa"); field.setPadding(dp(14), dp(10), dp(14), dp(10));
+        field.setBackground(background(WHITE, LINE)); field.setThreshold(1);
+        field.setDropDownBackgroundDrawable(background(WHITE, LINE)); field.setDropDownVerticalOffset(dp(6));
+        field.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_dropdown_item_1line, authors) {
+            @Override public View getView(int position, View view, ViewGroup parent) {
+                TextView value = text(getItem(position), 16, INK, false); value.setPadding(dp(16), dp(12), dp(16), dp(12));
+                value.setMinHeight(dp(48)); return value;
             }
-            @Override public View getView(int position, View view, ViewGroup parent) { return item(position); }
-            @Override public View getDropDownView(int position, View view, ViewGroup parent) { return item(position); }
         });
-        picker.setSelection(authors.indexOf(mapAuthor)); content.addView(picker); gap(content, 12);
-        LinearLayout graphHost = column(); content.addView(graphHost);
-        Runnable draw = () -> {
-            graphHost.removeAllViews(); ArrayList<Book> selected = new ArrayList<>();
-            for (Book b : list) if (b.author.equals(mapAuthor) && selected.size() < 250) selected.add(b);
-            HorizontalScrollView horizontal = new HorizontalScrollView(this);
-            horizontal.addView(new ReadingMap(this, mapAuthor, selected, this::details));
-            graphHost.addView(horizontal);
-        };
-        draw.run();
-        picker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            public void onItemSelected(AdapterView<?> p, View v, int index, long id) { mapAuthor = authors.get(index); draw.run(); }
-            public void onNothingSelected(AdapterView<?> p) { }
+        field.setText(mapAuthor, false); field.setSelectAllOnFocus(true);
+        // Tapping the field lists every author; typing narrows the list.
+        field.setOnClickListener(v -> { if (!authors.isEmpty()) field.showDropDown(); });
+        field.setOnItemClickListener((parent, view, position, id) -> {
+            mapAuthor = parent.getItemAtPosition(position).toString();
+            field.clearFocus(); hideKeyboard(field); renderContent();
         });
-        gap(content, 12); content.addView(text("Autore → Saga → Libro · I numeri indicano l’ordine di lettura. Scorri in orizzontale. Fino a 250 opere per mappa; tutti i libri restano nella biblioteca.", 12, MUTED, false));
+        header.addView(field, new LinearLayout.LayoutParams(-1, dp(52)));
+    }
+
+    private void hideKeyboard(View view) {
+        android.view.inputmethod.InputMethodManager keyboard = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (keyboard != null) keyboard.hideSoftInputFromWindow(view.getWindowToken(), 0);
+    }
+
+    private void showMap(ArrayList<Book> list) {
+        content.setPadding(0, 0, 0, dp(24));
+        ArrayList<Book> selected = new ArrayList<>();
+        for (Book b : list) if (b.author.equals(mapAuthor) && selected.size() < 250) selected.add(b);
+        if (selected.isEmpty()) {
+            content.setPadding(dp(20), dp(24), dp(20), dp(24));
+            content.addView(text("Scegli un autore dalla ricerca in alto.", 18, MUTED, false)); return;
+        }
+        content.addView(new ReadingMap(this, mapAuthor, selected, this::details), new LinearLayout.LayoutParams(-1, -2));
+        TextView hint = text("Autore → saga → libri nell’ordine di lettura. Tocca un libro per aprire la scheda."
+            + (selected.size() == 250 ? " Sono mostrate le prime 250 opere." : ""), 12, MUTED, false);
+        hint.setPadding(dp(20), dp(4), dp(20), 0); content.addView(hint);
     }
 
     private void details(Book b) {
@@ -1059,12 +1087,13 @@ public final class MainActivity extends ComponentActivity {
         getPreferences(MODE_PRIVATE).edit().putFloat("fontSize", fontSize).apply(); showReader();
     }
 
-    private boolean canGoBack() { return drawer != null || reading != null || !query.isEmpty() || !tab.equals("Tutti i libri"); }
+    private boolean searching() { return !query.isEmpty() && !tab.equals("Mappa"); }
+    private boolean canGoBack() { return drawer != null || reading != null || searching() || !tab.equals("Tutti i libri"); }
     private void updateBack() { back.setEnabled(store != null && canGoBack()); }
     private void goBack() {
         if (drawer != null) closeDrawer();
         else if (reading != null) { rememberPage(); showLibrary(); }
-        else if (!query.isEmpty()) { query = ""; showLibrary(); }
+        else if (searching()) { query = ""; showLibrary(); }
         else if (!tab.equals("Tutti i libri")) { tab = "Tutti i libri"; showLibrary(); }
         updateBack();
     }
