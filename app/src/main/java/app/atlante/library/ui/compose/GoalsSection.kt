@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -118,10 +119,14 @@ private fun GoalRow(
         }
     }
     if (editing) {
-        var text by remember { mutableStateOf(value.toString()) }
+        // The current number is selected and focused: typing replaces it.
+        var input by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(value.toString(), androidx.compose.ui.text.TextRange(0, value.toString().length))) }
+        val text = input.text
+        val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+        LaunchedEffect(Unit) { focus.requestFocus() }
         val number = text.toIntOrNull()
         AlertDialog(onDismissRequest = { editing = false }, title = { Text(label) },
-            text = { OutlinedTextField(text, { text = it.filter(Char::isDigit).take(4) }, label = { Text(unit) }, singleLine = true,
+            text = { OutlinedTextField(input, { v -> input = v.copy(text = v.text.filter(Char::isDigit).take(4)) }, Modifier.focusRequester(focus), label = { Text(unit) }, singleLine = true,
                 isError = number == null || number !in range, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 supportingText = { Text("Da ${range.first} a ${range.last}") }) },
             confirmButton = { TextButton(enabled = number != null && number in range, onClick = { onValue(number!!); editing = false }) { Text("Salva") } },

@@ -64,9 +64,10 @@ adb('shell','run-as',package,'cp','/data/local/tmp/atlante-sample.json','files/l
 adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
 tap('Biblioteca',exact=True);shot('01-library')
 tap('Apri menu laterale');shot('02-drawer');tap('Chiudi menu laterale')
-tap('Impostazioni');shot('03-settings');shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
+# The preset themes are in a section that opens and closes ("Temi predefiniti").
+tap('Impostazioni');shot('03-settings');tap('Temi predefiniti',True);shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
 for theme,name in [('Lavanda','06-lavender'),('Blu polvere','07-blue'),('AMOLED nero','08-amoled')]:
-    tap('Impostazioni');tap(theme,True);shot(name)
+    tap('Impostazioni');tap('Temi predefiniti',True);tap(theme,True);shot(name)
 tap('Apri menu laterale');tap('Mappa');shot('09-map-amoled')
 # The map is full screen with an author search on top.
 tap('Anna Costa');time.sleep(.6);shot('09a-map-authors')
@@ -78,7 +79,7 @@ assert any('Luca Moretti' in n.get('text','') for n in dump().iter('node')), 'Ma
 tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 # The persisted theme must survive a process restart.
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
-tap('Impostazioni')
+tap('Impostazioni');tap('Temi predefiniti',True)
 state=dump()
 def visible(fragment, scroll=False):
     for _ in range(8 if scroll else 1):
@@ -217,7 +218,7 @@ tap('Filtri e ordine');shot('52b-filters');tap('Annulla',exact=True)
 print('Saga carousels completed.')
 
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.
-back();tap('Impostazioni');tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
+back();tap('Impostazioni');tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
 assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
 assert any(b['title']=='Red Rising' for b in catalog()), 'Cache cleanup touched the library'
 print('Cache settings completed.')
@@ -225,7 +226,11 @@ print('Cache settings completed.')
 # Ripara saghe: runs on the whole sample library and reports; the library itself is unchanged except empty saga fields.
 before=len(catalog())
 tap('Home',exact=True);tap('Impostazioni')   # back to the top of the settings
-tap('Ripara saghe',True,exact=True)
+tap('Ripara saghe',True,exact=True)   # opens the section; its button has the same name
+time.sleep(.6);adb('shell','input','swipe','540','1250','540','750','300');time.sleep(.6)
+buttons=[n for n in dump().iter('node') if n.get('text','')=='Ripara saghe']
+b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
+adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
 for _ in range(120):
     if any(n.get('text','').startswith('Fatto:') for n in dump().iter('node')): break
     time.sleep(2)

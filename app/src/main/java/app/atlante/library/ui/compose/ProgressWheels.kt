@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -105,10 +106,14 @@ fun ProgressWheels(state: ProgressWheelState, prefs: SharedPreferences) {
             "total" -> Triple("Totale pagine (0 se non lo sai)", ProgressMath.UNKNOWN_MAX_PAGES, state.total)
             else -> Triple("Pagine lette", state.maxRead, state.read)
         }
-        var text by remember(field) { mutableStateOf(current.toString()) }
+        // The current number is selected and focused: typing replaces it.
+        var field_ by remember(field) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(current.toString(), androidx.compose.ui.text.TextRange(0, current.toString().length))) }
+        val text = field_.text
+        val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+        LaunchedEffect(field) { focus.requestFocus() }
         val n = text.toIntOrNull()
         AlertDialog(onDismissRequest = { typing = null }, title = { Text(label) },
-            text = { OutlinedTextField(text, { text = it.filter(Char::isDigit).take(5) }, singleLine = true, isError = n == null || n > max,
+            text = { OutlinedTextField(field_, { v -> field_ = v.copy(text = v.text.filter(Char::isDigit).take(5)) }, Modifier.focusRequester(focus), singleLine = true, isError = n == null || n > max,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), supportingText = { Text("Da 0 a $max") }) },
             confirmButton = { TextButton(enabled = n != null && n <= max, onClick = {
                 when (field) { "page" -> state.choosePage(n!!); "percent" -> state.choosePercent(n!!); "total" -> state.chooseTotal(n!!); else -> state.read = n!! }
