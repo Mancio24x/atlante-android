@@ -77,7 +77,13 @@ poco dopo l’ultima pagina girata e all’uscita dal lettore.
 **Completa i dati online** (pagina del libro o menu ⋮) interroga insieme più cataloghi:
 catalogo **SBN** (ICCU), **Open Library** (edizione e opera), **Internet Archive** e, se
 inserisci la tua chiave in *Sync › Fonti dei dati bibliografici*, **Google Books** (chiave
-gratuita) e **ISBNdb** (servizio a pagamento, facoltativo). Hardcover è usato solo da Sync.
+gratuita) e **ISBNdb** (servizio a pagamento, facoltativo). Con la chiave personale di Hardcover (Impostazioni › Hardcover) il motore delle saghe usa
+prima Hardcover: saga, numero del volume, sotto-serie e universo (Cosmere, Grishaverse,
+Dune Universe…) con i titoli italiani, in due o tre richieste per libro; senza chiave, o
+quando Hardcover non conosce il libro, Wikidata e Open Library. Il riconoscimento gira in
+background su tutta la libreria (a gruppi, solo con rete e batteria sufficiente). Ogni
+persona usa la propria chiave, che resta sul telefono. Test dal vivo:
+`HARDCOVER_TOKEN=… gradle :app:testDebugUnitTest --tests '*HardcoverLiveTest' -i`.
 
 Cerca prima per ISBN; senza ISBN cerca per titolo e autore e, se trova edizioni diverse,
 chiede quale possiedi invece di sceglierne una. I dati dell’**edizione** (titolo, editore,

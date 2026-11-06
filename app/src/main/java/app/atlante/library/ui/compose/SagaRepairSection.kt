@@ -38,7 +38,7 @@ fun SagaRepairSection(repair: SagaRepair, host: SagaHost) {
     val running = job?.isActive == true
 
     Column(Modifier.fillMaxWidth()) {
-        Text("Ricontrolla le saghe con Wikidata e Open Library: ricostruisce gli elenchi, completa la saga dei libri che non ce l’hanno e toglie i collegamenti ai libri rimossi. Le tue scelte non vengono toccate.",
+        Text("Ricontrolla le saghe con Hardcover (se hai inserito la chiave), Wikidata e Open Library: ricostruisce gli elenchi, completa la saga dei libri che non ce l’hanno e toglie i collegamenti ai libri rimossi. Le tue scelte non vengono toccate.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
             Switch(everything, { everything = it }, enabled = !running)
@@ -64,7 +64,7 @@ fun SagaRepairSection(repair: SagaRepair, host: SagaHost) {
                     Text("Fatto: ${r.checked} libri controllati", style = MaterialTheme.typography.titleSmall)
                     listOf("con saga sicura" to r.linked, "da confermare (apri il libro)" to r.toConfirm, "senza saga nota" to r.noSaga,
                         "non identificati" to r.unidentified, "saga aggiunta alla scheda" to r.filled, "scelte tue lasciate com’erano" to r.keptByUser,
-                        "collegamenti a libri rimossi eliminati" to r.removed, "errori di rete" to r.failed)
+                        "collegamenti a libri rimossi eliminati" to r.removed, "saghe doppie o senza libri tolte" to r.pruned, "errori di rete" to r.failed)
                         .filter { it.second > 0 }.forEach { (label, n) -> Text("$n $label", style = MaterialTheme.typography.bodyMedium) }
                 }
             }

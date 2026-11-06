@@ -89,7 +89,7 @@ fun BookSagaSection(book: Book, repo: SagaRepository, suggestions: Suggestions, 
         when {
             loading -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 12.dp)) {
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(12.dp))
-                Text("Cerco la saga su Wikidata e Open Library…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (app.atlante.library.saga.Hardcover.enabled) "Cerco la saga su Hardcover…" else "Cerco la saga su Wikidata e Open Library…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             l?.status == "none" -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Senza saga, per tua scelta", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

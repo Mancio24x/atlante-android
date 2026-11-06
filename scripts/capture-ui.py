@@ -97,6 +97,8 @@ def catalog(): return json.loads(adb('exec-out','run-as',package,'cat','files/li
 def back(): adb('shell','input','keyevent','4');time.sleep(.5)
 def status(title): return next(b for b in catalog() if b['title']==title)['status']
 # Reading states: chips filter the library; the full-screen book page changes state with one tap.
+# After the restart the app opens on Home: go to the library first.
+tap('Biblioteca',exact=True);time.sleep(.6)
 tap('In lettura',exact=True);shot('12a-chip-reading')
 tap('Il giardino delle storie');shot('12b-book-page')
 tap('Letto',exact=True);time.sleep(.8)

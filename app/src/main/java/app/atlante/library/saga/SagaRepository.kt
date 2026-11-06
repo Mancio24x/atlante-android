@@ -44,7 +44,7 @@ class SagaRepository(
             for ((saga, id) in sagaIds) {
                 // The work must be in its saga even when the source lists the saga without it.
                 if (dao.volumes(id).none { it.work.id == workId })
-                    dao.putEntry(SeriesEntry(id, workId, saga.ordinal, saga.ordinal.sortKey(), "volume", "wikidata"))
+                    dao.putEntry(SeriesEntry(id, workId, saga.ordinal, saga.ordinal.sortKey(), "volume", sourceOf(saga.seriesQid)))
                 seriesId = seriesId ?: id
             }
         }
@@ -77,7 +77,8 @@ class SagaRepository(
         val parentId = link.parentQid?.let { upsertSeries(it, link.parentLabel ?: it, null) }
         val universeId = link.universeQid?.let { upsertUniverse(it, link.universeLabel ?: it) }
         val id = upsertSeries(link.seriesQid, link.seriesLabel, parentId, universeId)
-        val members = withContext(Dispatchers.IO) { sources.members(link.seriesQid) }
+        // No answer (offline, Hardcover key removed): the volumes already known stay, the saga is retried later.
+        val members = withContext(Dispatchers.IO) { sources.members(link.seriesQid) } ?: return id
         val manualWorks = dao.volumes(id).filter { it.source == "manual" }.map { it.work.id }.toSet()
         val entries = ArrayList<SeriesEntry>()
         for (m in members) {
@@ -88,7 +89,7 @@ class SagaRepository(
                 continue
             }
             val workId = upsertWork(m.qid, m.labelEn ?: m.label, m.labelIt, m.openLibraryId, m.year, m.authors)
-            if (workId !in manualWorks) entries += SeriesEntry(id, workId, m.ordinal, m.sortKey, "volume", "wikidata")
+            if (workId !in manualWorks) entries += SeriesEntry(id, workId, m.ordinal, m.sortKey, "volume", sourceOf(link.seriesQid))
         }
         dao.replaceAutomaticEntries(id, entries)
         val series = dao.series(id)!!
@@ -136,6 +137,8 @@ class SagaRepository(
     }
 
     private suspend fun upsertUniverse(qid: String, name: String): Long = dao.universeByWikidata(qid)?.id ?: dao.insertUniverse(UniverseEntity(name = name, wikidataId = qid))
+
+    private fun sourceOf(qid: String) = if (qid.startsWith(Hardcover.SERIES)) "hardcover" else "wikidata"
 
     private fun String?.sortKey() = this?.replace(',', '.')?.toDoubleOrNull() ?: Double.MAX_VALUE
 

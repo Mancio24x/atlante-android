@@ -143,7 +143,9 @@ public final class MainActivity extends AppCompatActivity {
         OnlineCatalog.configure(new File(getCacheDir(), "catalog"));
         // Temporary data: expired suggestions and covers over the limit go away; sagas refresh in the background.
         app.atlante.library.saga.CacheManager.cleanupAsync(this);
-        try { app.atlante.library.saga.SagaRefreshWorker.schedule(this); } catch (RuntimeException ignored) { /* WorkManager unavailable: sagas refresh when opened. */ }
+        app.atlante.library.saga.Hardcover.configure(this);
+        try { app.atlante.library.saga.SagaRefreshWorker.schedule(this); app.atlante.library.saga.SagaScanWorker.start(this); }
+        catch (RuntimeException ignored) { /* WorkManager unavailable: sagas are recognized when a book is opened. */ }
         fontSize = Math.max(8, Math.min(80, prefs.getFloat("fontSize", 20)));
         readerDark = prefs.getBoolean("dark", false); manga = prefs.getBoolean("manga", false);
         try { store = new LibraryStore(this); }
@@ -242,6 +244,9 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(sectionLabel("OBIETTIVI DI LETTURA")); gap(panel,8);
         panel.addView(app.atlante.library.ui.compose.GoalsView.create(this, palette, getPreferences(MODE_PRIVATE), store.snapshot())); gap(panel,20);
 
+        panel.addView(sectionLabel("HARDCOVER · SAGHE, NUMERI E UNIVERSI")); gap(panel,8);
+        hardcoverSection(panel); gap(panel,20);
+
         // Libreria: the only import entry, covers, sagas and temporary data.
         panel.addView(sectionLabel("LIBRERIA")); gap(panel,8);
         MaterialButton importBooks = (MaterialButton) button("Importa eBook", true, this::chooseBooks); importBooks.setIconResource(R.drawable.ic_add); importBooks.setEnabled(!busy);
@@ -274,8 +279,70 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(button("Salva lingua",false,()->{ prefs.edit().putString("bookLanguage",OnlineCatalog.LANGUAGES[language.position()][0]).putBoolean("onlyLanguage",only.isChecked()).apply(); Toast.makeText(this,"Lingua di ricerca salvata",Toast.LENGTH_SHORT).show(); }));
         panel.addView(text("Lingua dell’interfaccia: italiano.",12,MUTED,false));
         gap(panel,20); panel.addView(sectionLabel("ATLANTE LIBRARY")); gap(panel,8);
-        panel.addView(text("Le ricerche online (SBN, Open Library, Wikidata, Apple Books) inviano solo titolo, autore o ISBN. Libri e note personali restano sul dispositivo.",12,MUTED,false));
+        panel.addView(text("Le ricerche online (SBN, Open Library, Wikidata, Apple Books e Hardcover se hai inserito la chiave) inviano solo titolo, autore o ISBN. Libri e note personali restano sul dispositivo.",12,MUTED,false));
         panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
+    }
+
+    /**
+     * Each person's own Hardcover key (free, made in their Hardcover account): it stays on this phone and is used
+     * both by Sync and by the saga engine, which with it recognizes saga, volume number, sub-series and universe.
+     */
+    private void hardcoverSection(LinearLayout p) {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        boolean on=!prefs.getString("hardcoverToken","").isEmpty();
+        String user=prefs.getString("hardcoverUser","");
+        p.addView(text(on?"Chiave inserita"+(user.isEmpty()?"":" · collegato come @"+user):"Nessuna chiave inserita",15,on?INK:MUTED,false));
+        p.addView(text("Con la tua chiave personale di Hardcover Atlante riconosce saga, numero del volume, sotto-serie e universo (per esempio il Cosmere) di tutti i libri, anche con il titolo italiano, più in fretta e con più precisione. Senza chiave usa Wikidata e Open Library. Ognuno usa la propria chiave: è gratuita e resta solo su questo telefono.",12,MUTED,false)); gap(p,8);
+        MaterialSwitch use=new MaterialSwitch(this); use.setText("Usa Hardcover per riconoscere le saghe"); use.setTextSize(15); use.setMinHeight(dp(48));
+        use.setChecked(prefs.getBoolean("hardcoverSagas",true)); use.setEnabled(on); p.addView(use);
+        use.setOnCheckedChangeListener((v,checked)->{
+            prefs.edit().putBoolean("hardcoverSagas",checked).apply();
+            app.atlante.library.saga.Hardcover.configure(this);
+            if(checked) try { app.atlante.library.saga.SagaScanWorker.recheck(this); } catch(RuntimeException ignored) { }
+        });
+        p.addView(button(on?"Cambia o rimuovi la chiave":"Inserisci la tua chiave",!on,this::hardcoverKey),new LinearLayout.LayoutParams(-1,-2));
+        p.addView(button("Crea la chiave su Hardcover ↗",R.style.Atlante_Button_Text,()->openLink("https://hardcover.app/account/api")),new LinearLayout.LayoutParams(-1,-2));
+    }
+
+    /** Asks for the key, checks it with Hardcover before saving, then starts recognizing the library with it. */
+    private void hardcoverKey() {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        LinearLayout panel=column(); panel.setPadding(dp(24),dp(8),dp(24),dp(4));
+        panel.addView(text("Su hardcover.app accedi, apri Impostazioni › Hardcover API, copia la chiave e incollala qui. La stessa chiave serve anche per Sync.",14,MUTED,false)); gap(panel,8);
+        EditText token=field(panel,"Chiave personale di Hardcover",prefs.getString("hardcoverToken",""));
+        token.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD); token.setSingleLine(true);
+        com.google.android.material.dialog.MaterialAlertDialogBuilder dialog=dialogBuilder().setTitle("Chiave Hardcover").setView(scrolled(panel)).setNegativeButton("Annulla",null)
+            .setPositiveButton("Verifica e salva",(d,w)->checkHardcoverKey(token.getText().toString().trim()));
+        if(!prefs.getString("hardcoverToken","").isEmpty()) dialog.setNeutralButton("Rimuovi",(d,w)->{
+            prefs.edit().remove("hardcoverToken").remove("hardcoverUser").remove("hardcoverLast").apply();
+            app.atlante.library.saga.Hardcover.configure(this); showLibrary();
+        });
+        dialog.show();
+    }
+
+    private void checkHardcoverKey(String key) {
+        if(key.isEmpty()) return;
+        AlertDialog waiting=loading("Hardcover","Verifico la chiave…");
+        worker.execute(()->{
+            try {
+                String user=app.atlante.library.saga.Hardcover.username(key);
+                runOnUiThread(()->{ waiting.dismiss(); if(isFinishing()||isDestroyed()) return;
+                    saveHardcoverKey(key,user);
+                    Toast.makeText(this,"Chiave valida: collegato come @"+user+". Riconosco le saghe della libreria in background.",Toast.LENGTH_LONG).show();
+                    showLibrary(); });
+            } catch(Exception e) { runOnUiThread(()->{ waiting.dismiss(); error(e); }); }
+        });
+    }
+
+    /** Saves a key and, when it is new, checks again with Hardcover the books without a sure saga. */
+    private void saveHardcoverKey(String key, String user) {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        boolean changed=!key.equals(prefs.getString("hardcoverToken",""));
+        android.content.SharedPreferences.Editor e=prefs.edit().putString("hardcoverToken",key);
+        if(user!=null) e.putString("hardcoverUser",user);
+        e.apply();
+        app.atlante.library.saga.Hardcover.configure(this);
+        if(changed&&!key.isEmpty()) try { app.atlante.library.saga.SagaScanWorker.recheck(this); } catch(RuntimeException ignored) { }
     }
 
     private void customThemes(LinearLayout p) {
@@ -1605,7 +1672,7 @@ public final class MainActivity extends AppCompatActivity {
         kin.addView(button("Importa My Clippings.txt",false,()->clippingsLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"))),new LinearLayout.LayoutParams(-1,-2));
 
         LinearLayout src=surface(p,"FONTI DEI DATI BIBLIOGRAFICI");
-        src.addView(text("Sempre attive: catalogo SBN, Open Library, Internet Archive. Facoltativa con la tua chiave: ISBNdb (a pagamento). Hardcover resta solo per Sync.",14,MUTED,false)); gap(src,8);
+        src.addView(text("Sempre attive: catalogo SBN, Open Library, Internet Archive. Facoltativa con la tua chiave: ISBNdb (a pagamento). Con la tua chiave Hardcover (in Impostazioni) anche saghe, numeri e universi.",14,MUTED,false)); gap(src,8);
         src.addView(text("ISBNdb: "+(prefs.getString("isbndbKey","").isEmpty()?"non configurato":"chiave inserita"),13,INK,false));
         src.addView(button("Chiavi delle fonti",R.style.Atlante_Button_Text,this::sourceKeys),new LinearLayout.LayoutParams(-1,-2));
         LinearLayout files=surface(p,"FILE E ALTRE APP");
@@ -1692,8 +1759,8 @@ public final class MainActivity extends AppCompatActivity {
         MaterialSwitch create=new MaterialSwitch(this); create.setText("Crea in Atlante i libri presenti solo su Hardcover"); create.setChecked(prefs.getBoolean("hardcoverCreate",true)); panel.addView(create);
         MaterialSwitch toRead=new MaterialSwitch(this); toRead.setText("Invia anche i libri «Da leggere» non ancora su Hardcover"); toRead.setChecked(prefs.getBoolean("hardcoverToRead",false)); panel.addView(toRead);
         dialogBuilder().setTitle("Hardcover").setView(scrolled(panel)).setNegativeButton("Annulla",null)
-            .setNeutralButton("Scollega",(d,w)->{prefs.edit().remove("hardcoverToken").remove("hardcoverUser").remove("hardcoverLast").apply(); showLibrary();})
-            .setPositiveButton("Salva",(d,w)->{prefs.edit().putString("hardcoverToken",token.getText().toString().trim()).putBoolean("hardcoverCreate",create.isChecked()).putBoolean("hardcoverToRead",toRead.isChecked()).apply(); showLibrary();}).show();
+            .setNeutralButton("Scollega",(d,w)->{prefs.edit().remove("hardcoverToken").remove("hardcoverUser").remove("hardcoverLast").apply(); app.atlante.library.saga.Hardcover.configure(this); showLibrary();})
+            .setPositiveButton("Salva",(d,w)->{prefs.edit().putBoolean("hardcoverCreate",create.isChecked()).putBoolean("hardcoverToRead",toRead.isChecked()).apply(); saveHardcoverKey(token.getText().toString().trim(),null); showLibrary();}).show();
     }
 
     private void calibreSettings() {

@@ -13,7 +13,7 @@ import kotlin.coroutines.coroutineContext
 class SagaRepair(private val dao: SagaDao, private val repo: SagaRepository) {
     data class Report(
         var checked: Int = 0, var linked: Int = 0, var toConfirm: Int = 0, var noSaga: Int = 0, var unidentified: Int = 0,
-        var keptByUser: Int = 0, var filled: Int = 0, var removed: Int = 0, var failed: Int = 0,
+        var keptByUser: Int = 0, var filled: Int = 0, var removed: Int = 0, var failed: Int = 0, var pruned: Int = 0,
     )
 
     suspend fun run(books: List<Book>, everything: Boolean, fill: (Book, String, String?) -> Boolean, progress: (Int, Int, Book) -> Unit): Report {
@@ -47,6 +47,7 @@ class SagaRepair(private val dao: SagaDao, private val repo: SagaRepository) {
                 if (name != null && fill(b, name, ordinal)) report.filled++
             }
         }
+        report.pruned = dao.pruneSeries(); dao.pruneUniverses()
         dao.deleteExpired(System.currentTimeMillis())
         return report
     }

@@ -33,8 +33,7 @@ public final class HardcoverSync {
     public static Report sync(SyncStore store, Settings s, Progress progress) throws Exception {
         String token = s.token.trim();
         if (token.isEmpty()) throw new IOException("Incolla prima la chiave personale di Hardcover.");
-        String auth = token.regionMatches(true, 0, "Bearer ", 0, 7) ? token : "Bearer " + token;
-        return sync(store, s, progress, (query, variables) -> graphql(auth, query, variables));
+        return sync(store, s, progress, (query, variables) -> request(token, query, variables));
     }
 
     /** The API is injected so that the merge can be tested without a network. */
@@ -201,7 +200,14 @@ public final class HardcoverSync {
         return CatalogImport.fromFields(f);
     }
 
-    private static JSONObject graphql(String auth, String query, JSONObject variables) throws Exception {
+    /**
+     * One GraphQL call with the user's personal key (with or without "Bearer "). Shared by Sync and the saga
+     * engine, so that together they stay under Hardcover's limit of 60 requests a minute.
+     */
+    public static JSONObject request(String token, String query, JSONObject variables) throws Exception {
+        String t = token == null ? "" : token.trim();
+        if (t.isEmpty()) throw new IOException("Manca la chiave personale di Hardcover.");
+        String auth = t.regionMatches(true, 0, "Bearer ", 0, 7) ? t : "Bearer " + t;
         synchronized (HardcoverSync.class) {   // Hardcover allows 60 requests a minute.
             long wait = nextRequest - System.currentTimeMillis();
             if (wait > 0) Thread.sleep(wait);

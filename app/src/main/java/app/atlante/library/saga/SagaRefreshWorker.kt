@@ -6,11 +6,12 @@ import app.atlante.library.saga.db.AtlanteDatabase
 import java.util.concurrent.TimeUnit
 
 /**
- * Background refresh of the sagas from Wikidata, every "Aggiorna le saghe ogni" days, only with a network and
+ * Background refresh of the sagas from their source (Wikidata or Hardcover), every "Aggiorna le saghe ogni" days, only with a network and
  * enough battery. Manual sagas are skipped; at most [BATCH] sagas per run to stay gentle with the public services.
  */
 class SagaRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        Hardcover.configure(applicationContext)
         val settings = CacheSettings(applicationContext)
         val dao = AtlanteDatabase.get(applicationContext).saga()
         val repo = SagaRepository(dao).apply { refreshDays = settings.sagaRefreshDays }

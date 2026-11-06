@@ -78,6 +78,22 @@ interface SagaDao {
     @Query("DELETE FROM cache_entries") suspend fun clearCache(): Int
     @Query("SELECT COALESCE(SUM(LENGTH(json)), 0) FROM cache_entries") suspend fun cacheBytes(): Long
 
+    /**
+     * Sagas found automatically that no library book reaches any more (e.g. the Wikidata "Mistborn" after the
+     * book moved to Hardcover's "The Mistborn Saga"): removed with their sub-series, so lists show no doubles.
+     * A saga stays while one of its books, one of its sub-series' books or its parent saga is in the library.
+     */
+    @Query("""DELETE FROM series WHERE manual = 0
+              AND id NOT IN (SELECT seriesId FROM book_links WHERE seriesId IS NOT NULL)
+              AND id NOT IN (SELECT e.seriesId FROM series_entries e JOIN book_links l ON l.workId = e.workId)
+              AND id NOT IN (SELECT s.parentId FROM series s WHERE s.parentId IS NOT NULL AND (
+                  s.id IN (SELECT seriesId FROM book_links WHERE seriesId IS NOT NULL)
+                  OR s.id IN (SELECT e.seriesId FROM series_entries e JOIN book_links l ON l.workId = e.workId)))
+              AND (parentId IS NULL OR parentId NOT IN (SELECT seriesId FROM book_links WHERE seriesId IS NOT NULL
+                  UNION SELECT e.seriesId FROM series_entries e JOIN book_links l ON l.workId = e.workId))""")
+    suspend fun pruneSeries(): Int
+    @Query("DELETE FROM universes WHERE id NOT IN (SELECT universeId FROM series WHERE universeId IS NOT NULL)") suspend fun pruneUniverses(): Int
+
     @Transaction suspend fun replaceAutomaticEntries(seriesId: Long, entries: List<SeriesEntry>) {
         clearAutomaticEntries(seriesId); entries.forEach { putEntry(it) }
     }

@@ -20,7 +20,9 @@ data class SagaMatch(val workQid: String?, val links: WdWorkLinks?, val score: I
 }
 
 /**
- * Decides whether a book is a Wikidata work, never on title similarity alone. Evidence, strongest first:
+ * Decides which work a book is, never on title similarity alone. With the user's Hardcover key, Hardcover comes
+ * first (ISBN 95, title + author 88, title only 70): one search and one request give saga, number, sub-series and
+ * universe. Without it, or when Hardcover does not know the book, Wikidata. Wikidata evidence, strongest first:
  * Open Library ID of the work (100), ISBN → Open Library work (95), Open Library search by title and author
  * with the work's edition titles (85), Wikidata label search with the author in the description (75).
  * Evidence with the same origin is not counted twice; two independent origins agreeing add a bonus.
@@ -57,7 +59,7 @@ object SagaRecognizer {
 
     /** "Mistborn: L'Ultimo Impero" matches "L'ultimo impero": titles prefixed with the saga name. */
     fun labelMatches(book: Book, label: String): Boolean {
-        val candidates = listOf(label, label.substringAfter(": ", label), label.substringAfter(" - ", label))
+        val candidates = listOf(label, label.substringAfter(": ", label), label.substringAfter(" - ", label), label.substringAfter(". ", label))
         val probe = Book().apply { title = book.title; author = "Autore sconosciuto" }
         return candidates.any { c -> BookMatcher.whole(c).any { it in BookMatcher.whole(book.title) } || BookMatcher.same(probe, Book().apply { title = c; author = "Autore sconosciuto" }) }
     }
@@ -73,8 +75,10 @@ object SagaRecognizer {
         fun linksForOpenLibrary(work: String): WdWorkLinks?
         fun linksForItem(qid: String): WdWorkLinks?
         fun searchWikidata(text: String, language: String): List<Pair<String, String>>
-        /** Every work and sub-series of a saga (used by SagaRepository when rebuilding). */
-        fun members(seriesQid: String): List<WdMember> = emptyList()
+        /** Every work and sub-series of a saga (used by SagaRepository when rebuilding); null when the source could not answer. */
+        fun members(seriesQid: String): List<WdMember>? = emptyList()
+        /** The book on Hardcover with its classified series; null when Hardcover is off or does not know it. */
+        fun hardcover(book: Book): HcFound? = null
     }
 
     object Live : Sources {
@@ -82,12 +86,32 @@ object SagaRecognizer {
         override fun searchOpenLibrary(title: String, author: String) = runCatching { OpenLibraryWorks.search(title, author) }.getOrDefault(emptyList())
         override fun linksForOpenLibrary(work: String) = runCatching { Wikidata.linksForOpenLibrary(work) }.getOrNull()
         override fun linksForItem(qid: String) = runCatching { Wikidata.linksForItem(qid) }.getOrNull()
-        override fun members(seriesQid: String) = runCatching { Wikidata.members(seriesQid) }.getOrDefault(emptyList())
+        override fun members(seriesQid: String): List<WdMember>? = when {
+            seriesQid.startsWith(Hardcover.SERIES) -> if (Hardcover.enabled) runCatching { Hardcover.members(seriesQid) }.getOrNull() else null
+            else -> runCatching { Wikidata.members(seriesQid) }.getOrNull()
+        }
+        override fun hardcover(book: Book) = if (Hardcover.enabled) runCatching { Hardcover.identify(book) }.getOrNull() else null
         override fun searchWikidata(text: String, language: String) = runCatching { Wikidata.fullText(text) }.getOrDefault(emptyList())
     }
 
-    /** Full pipeline for one book. Stops as soon as identifier-based evidence is found (fewer requests). */
+    /** Full pipeline for one book: Hardcover first, then Wikidata; stops as soon as one source is sure. */
     fun identify(book: Book, sources: Sources = Live): SagaMatch {
+        val hc = sources.hardcover(book)
+        if (hc != null) {
+            val sagas = hc.links.series.filterNot { it.isUniverse }
+            val why = listOf("${hc.via} (${hc.score})")
+            // A sure Hardcover answer is final, with or without a saga: no Wikidata requests (much faster).
+            if (sagas.isNotEmpty() || hc.score >= reliable)
+                return SagaMatch(hc.links.workQid, hc.links, hc.score, status(hc.score, sagas.isNotEmpty()), why + (if (sagas.isEmpty()) listOf("Hardcover non indica una saga") else emptyList()))
+        }
+        val wikidata = identifyOnWikidata(book, sources)
+        // Hardcover knew the book (without saga) and Wikidata did not even find it: keep what Hardcover said.
+        if (hc != null && wikidata.status == SagaMatch.Status.INSUFFICIENT)
+            return SagaMatch(hc.links.workQid, hc.links, hc.score, status(hc.score, false), listOf("${hc.via} (${hc.score})", "Hardcover non indica una saga"))
+        return wikidata
+    }
+
+    private fun identifyOnWikidata(book: Book, sources: Sources): SagaMatch {
         val evidence = mutableListOf<Evidence>(); val links = HashMap<String, WdWorkLinks>()
         fun fromOl(work: String, via: String, score: Int) {
             val l = sources.linksForOpenLibrary(work) ?: return
