@@ -66,7 +66,12 @@ for theme,name in [('Lavanda','06-lavender'),('Blu polvere','07-blue'),('AMOLED 
     tap('Impostazioni');tap('◐ Temi');tap(theme,True);shot(name)
 tap('Apri menu laterale');tap('Mappa');shot('09-map-amoled')
 # The map is full screen with an author search on top.
-tap('Anna Costa');time.sleep(.6);shot('09a-map-authors');tap('Luca Moretti');shot('09b-map-author')
+tap('Anna Costa');time.sleep(.6);shot('09a-map-authors')
+# The suggestion list is a separate popup window that uiautomator cannot see: choose with the keyboard.
+adb('shell','input','text','Luca');time.sleep(.8)
+adb('shell','input','keyevent','KEYCODE_DPAD_DOWN');adb('shell','input','keyevent','KEYCODE_ENTER');time.sleep(.6)
+shot('09b-map-author')
+assert any('Luca Moretti' in n.get('text','') for n in dump().iter('node')), 'Map author not selected'
 tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 # The persisted theme must survive a process restart.
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)

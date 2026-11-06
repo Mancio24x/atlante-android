@@ -589,7 +589,7 @@ public final class MainActivity extends AppCompatActivity {
         float round = dp(28); box.setBoxCornerRadii(round, round, round, round);
         MaterialAutoCompleteTextView field = new MaterialAutoCompleteTextView(box.getContext());
         field.setSingleLine(true); field.setThreshold(1); field.setContentDescription("Cerca l’autore della mappa");
-        field.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, authors));
+        field.setAdapter(new ArrayAdapter<>(this, com.google.android.material.R.layout.m3_auto_complete_simple_item, authors));
         field.setText(mapAuthor, false); field.setSelectAllOnFocus(true);
         // Tapping the field lists every author; typing narrows the list.
         field.setOnClickListener(v -> { if (!authors.isEmpty()) field.showDropDown(); });
