@@ -103,6 +103,7 @@ Le saghe vengono ricostruite da **Wikidata** (serie P179, numero P1545, autore P
 - **Se l'opera è nota ma la saga no**, il libro risulta *Saga non identificata* e non viene considerato autoconclusivo.
 - **Le voci della saga stessa e le singole edizioni** (per esempio un ebook o un audiolibro) non vengono scambiate per l'opera.
 - **Gli universi** (Cosmere) non sono saghe; le sotto-serie (Wax and Wayne dentro Mistborn, la trilogia dentro Red Rising Saga) restano annidate.
+- **Ricostruzione della saga** (`SagaRepository`): ogni saga viene salvata con tutti i volumi, anche quelli che non possiedi, in ordine, con titolo originale e italiano e le sotto-serie annidate. Le serie di audiolibri o di edizioni sono escluse. Se mancano numeri o ci sono buchi nella numerazione, la saga è segnata *Elenco potenzialmente incompleto*. Le saghe vengono riaggiornate ogni 7 giorni (configurabile). Le saghe create a mano e i volumi aggiunti a mano non vengono mai toccati, e un collegamento confermato o scelto dall'utente resta com'è.
 - **Il grafo bibliografico** è salvato in un database Room separato (`atlante-bibliography.db`, migrazioni versionate e non distruttive). La libreria personale resta in `library.json` ed è collegata per id del libro. Le correzioni manuali non vengono mai sovrascritte.
 
 I test (`SagaRecognizerTest`, `SagaDatabaseTest`) usano risposte reali di Wikidata salvate in `app/src/test/resources/wikidata`.

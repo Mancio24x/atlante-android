@@ -24,6 +24,7 @@ interface SagaDao {
     @Update suspend fun updateWork(w: WorkEntity)
 
     @Query("SELECT * FROM authors WHERE wikidataId = :qid LIMIT 1") suspend fun authorByWikidata(qid: String): AuthorEntity?
+    @Query("SELECT * FROM authors WHERE name = :name COLLATE NOCASE LIMIT 1") suspend fun authorByName(name: String): AuthorEntity?
     @Insert suspend fun insertAuthor(a: AuthorEntity): Long
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun linkAuthor(x: WorkAuthor)
     @Query("SELECT a.* FROM authors a JOIN work_authors wa ON wa.authorId = a.id WHERE wa.workId = :workId") suspend fun authorsOf(workId: Long): List<AuthorEntity>

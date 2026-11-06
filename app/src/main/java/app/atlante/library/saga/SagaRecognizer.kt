@@ -73,13 +73,16 @@ object SagaRecognizer {
         fun linksForOpenLibrary(work: String): WdWorkLinks?
         fun linksForItem(qid: String): WdWorkLinks?
         fun searchWikidata(text: String, language: String): List<Pair<String, String>>
+        /** Every work and sub-series of a saga (used by SagaRepository when rebuilding). */
+        fun members(seriesQid: String): List<WdMember> = emptyList()
     }
 
     object Live : Sources {
-        override fun workForIsbn(isbn: String) = OpenLibraryWorks.workForIsbn(isbn)
+        override fun workForIsbn(isbn: String) = runCatching { OpenLibraryWorks.workForIsbn(isbn) }.getOrNull()
         override fun searchOpenLibrary(title: String, author: String) = runCatching { OpenLibraryWorks.search(title, author) }.getOrDefault(emptyList())
         override fun linksForOpenLibrary(work: String) = runCatching { Wikidata.linksForOpenLibrary(work) }.getOrNull()
         override fun linksForItem(qid: String) = runCatching { Wikidata.linksForItem(qid) }.getOrNull()
+        override fun members(seriesQid: String) = runCatching { Wikidata.members(seriesQid) }.getOrDefault(emptyList())
         override fun searchWikidata(text: String, language: String) = runCatching { Wikidata.fullText(text) }.getOrDefault(emptyList())
     }
 

@@ -118,7 +118,8 @@ data class UserOverride(val entityType: String, val entityId: String, val field:
 
 /**
  * Link between a book of the personal library (Book.id) and the graph. Status: "auto" (reliable match),
- * "to_confirm" (uncertain), "confirmed" or "manual" (set by the user), "unidentified" (no saga found).
+ * "to_confirm" (uncertain), "confirmed" or "manual" (set by the user), "no_saga" (work known, saga not:
+ * "Saga non identificata"), "unidentified" (work not identified), "none" (the user chose no saga).
  */
 @Entity(tableName = "book_links", indices = [Index("workId"), Index("seriesId")])
 data class BookLink(
