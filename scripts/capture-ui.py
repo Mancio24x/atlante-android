@@ -6,8 +6,17 @@ out=Path('ui-captures');out.mkdir(exist_ok=True)
 package='app.atlante.library.debug'
 def adb(*args,**kw): return subprocess.check_output(['adb',*args],**kw)
 def dump():
-    adb('shell','uiautomator','dump','/sdcard/atlante-ui.xml')
-    return ET.fromstring(adb('exec-out','cat','/sdcard/atlante-ui.xml'))
+    # uiautomator can return success while reporting a null root and leaving an old file.
+    # Never reuse that stale tree to tap coordinates in a different dialog.
+    last=None
+    for _ in range(6):
+        try:
+            output=adb('shell','uiautomator','dump','/sdcard/atlante-ui.xml',stderr=subprocess.STDOUT)
+            if b'dumped' not in output.lower(): raise RuntimeError(output.decode(errors='replace'))
+            return ET.fromstring(adb('exec-out','cat','/sdcard/atlante-ui.xml'))
+        except (subprocess.CalledProcessError,ET.ParseError,RuntimeError) as e:
+            last=e;time.sleep(.4)
+    raise RuntimeError('No fresh Android UI tree: '+str(last))
 def tap(label, scroll=False, editable=False):
     for attempt in range(7 if scroll else 3):
         tree=dump()
@@ -54,8 +63,17 @@ count=len(catalog())
 tap('＋ Aggiungi libro');tap('Annulla')
 assert len(catalog()) == count, 'Canceled manual entry was saved'
 tap('＋ Aggiungi libro');tap('Titolo',editable=True)
-adb('shell','input','text','AtlanteManualeProva');tap('Salva')
-records=catalog();assert len(records)==count+1, 'Manual book not saved'
+adb('shell','input','text','AtlanteManualeProva')
+shot('13a-manual-form-filled');tap('Salva')
+for _ in range(20):
+    records=catalog()
+    if len(records)==count+1: break
+    time.sleep(.25)
+if len(records)!=count+1:
+    shot('failure-manual-save')
+    (out/'failure-catalog.json').write_text(json.dumps(records))
+    (out/'failure-logcat.txt').write_bytes(adb('logcat','-d','-t','150'))
+    raise AssertionError('Manual book not saved')
 manual=next(b for b in records if b['title']=='AtlanteManualeProva')
 assert manual.get('isbn','')=='', 'Manual book unexpectedly requires ISBN'
 shot('13-manual-book');tap('Chiudi');tap('Elenco');shot('14-list-view')
