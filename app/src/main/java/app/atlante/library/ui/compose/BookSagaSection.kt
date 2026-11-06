@@ -287,16 +287,24 @@ private fun FullScreen(title: String, onClose: () -> Unit, content: @Composable 
 }
 
 @Composable
-private fun FullSaga(s: SagaShelf, book: Book, host: SagaHost, onClose: () -> Unit) {
+internal fun FullSaga(s: SagaShelf, book: Book, host: SagaHost, onClose: () -> Unit) {
+    var tab by remember { mutableIntStateOf(0) }
+    val open: (ShelfItem) -> Unit = { v -> if (v.ownedBookId != null) { onClose(); host.openBook(v.ownedBookId) } else host.searchOnline(v.query) }
     FullScreen(s.series!!.name, onClose) {
-        LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item {
-                Text("${s.owned} di ${s.total} in biblioteca · ${s.items.count { it.read }} letti", style = MaterialTheme.typography.bodyMedium)
-                s.universe?.let { Text("Fa parte dell’universo $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                if (s.subseries.isNotEmpty()) Text("Sotto-serie: " + s.subseries.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (s.series.possiblyIncomplete) Text("Elenco potenzialmente incompleto: la fonte non numera tutti i volumi o mancano dei numeri.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
-            }
+        Column(Modifier.padding(horizontal = 20.dp)) {
+            Text("${s.owned} di ${s.total} in biblioteca · ${s.items.count { it.read }} letti", style = MaterialTheme.typography.bodyMedium)
+            s.universe?.let { Text("Fa parte dell’universo $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            if (s.subseries.isNotEmpty()) Text("Sotto-serie: " + s.subseries.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (s.series.possiblyIncomplete) Text("Elenco potenzialmente incompleto: la fonte non numera tutti i volumi o mancano dei numeri.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+        }
+        TabRow(tab, Modifier.padding(top = 8.dp)) {
+            Tab(tab == 0, { tab = 0 }, text = { Text("Mappa") })
+            Tab(tab == 1, { tab = 1 }, text = { Text("Elenco") })
+        }
+        Spacer(Modifier.height(8.dp))
+        if (tab == 0) SagaMap(s, book.id, open)
+        else LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(s.items) { v -> VolumeRow(v, v.ownedBookId == book.id, host) }
         }
     }

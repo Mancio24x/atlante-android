@@ -19,11 +19,14 @@ data class ShelfItem(
     val query: String,
     /** Other titles of the same work (original, Italian, without the saga prefix): used to avoid duplicates. */
     val alsoKnownAs: List<String> = emptyList(),
+    val workId: Long? = null,
 )
 
 data class SagaShelf(
     val link: BookLink, val series: SeriesEntity?, val items: List<ShelfItem>, val total: Int, val owned: Int,
     val subseries: List<String>, val universe: String?,
+    /** Sub-series name → indexes of [items] that belong to it (Red Rising Trilogy → 0, 1, 2). */
+    val lanes: Map<String, List<Int>> = emptyMap(),
 )
 
 /**
@@ -39,6 +42,9 @@ class Suggestions(
 ) {
     var suggestionDays = 30
 
+    /** A saga opened from an index (no book of the page): same shelf, without a link. */
+    suspend fun series(seriesId: Long): SagaShelf? = saga(BookLink("", seriesId = seriesId))
+
     suspend fun saga(link: BookLink): SagaShelf? {
         val seriesId = link.seriesId ?: return null
         val series = dao.series(seriesId) ?: return null
@@ -51,10 +57,13 @@ class Suggestions(
                 ?: books.firstOrNull { b -> titlesOf(v.work).any { t -> BookMatcher.same(Book().apply { title = t; author = authors.ifBlank { b.author } }, b) } }
             val title = owned?.title ?: v.work.italianTitle ?: v.work.originalTitle
             ShelfItem(title, owned?.author ?: authors, v.work.firstPublished, v.ordinal, owned?.id, owned?.status == Book.READ,
-                null, v.work.openLibraryId, "$title ${authors.substringBefore(" & ")}".trim(), titlesOf(v.work))
+                null, v.work.openLibraryId, "$title ${authors.substringBefore(" & ")}".trim(), titlesOf(v.work), v.work.id)
         }
         val universe = series.universeId?.let { dao.universe(it)?.name }
-        return SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, dao.subseries(seriesId).map { it.name }, universe)
+        val subs = dao.subseries(seriesId)
+        val lanes = subs.associate { sub -> val ids = dao.volumes(sub.id).map { it.work.id }.toSet(); sub.name to items.indices.filter { items[it].workId in ids } }
+            .filterValues { it.isNotEmpty() }
+        return SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, subs.map { it.name }, universe, lanes)
     }
 
     /**

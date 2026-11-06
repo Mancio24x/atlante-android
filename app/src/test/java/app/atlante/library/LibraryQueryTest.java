@@ -26,4 +26,19 @@ public class LibraryQueryTest {
         Book c = book("Autonomo", "Da leggere", "TXT");
         assertEquals(Arrays.asList(b,a,c), LibraryQuery.select(Arrays.asList(c,a,b), "", "Tutti i libri", "", "", "Saga"));
     }
+
+    @Test public void normalizedGenreAndSagaFilters() {
+        Book a = book("L'ultimo impero", "Letto", "EPUB"); a.genre = "Epic Fantasy"; a.series = "Mistborn";
+        Book b = book("Eragon", "Da leggere", "EPUB"); b.genre = "Fantasy per ragazzi"; b.series = "Ciclo dell'Eredità";
+        Book c = book("Il nome della rosa", "Letto", "CATALOGO"); c.genre = "Giallo storico";
+        Book d = book("Senza genere", "Letto", "TXT"); d.genre = "Varie";
+        java.util.List<Book> all = Arrays.asList(a, b, c, d);
+        assertEquals(Arrays.asList(b, a), LibraryQuery.select(all, "", "Tutti i libri", "Fantasy", "", "Titolo", ""));
+        assertEquals(Arrays.asList(c), LibraryQuery.select(all, "", "Tutti i libri", "Giallo", "", "Titolo", ""));
+        assertEquals(Arrays.asList(d), LibraryQuery.select(all, "", "Tutti i libri", LibraryQuery.OTHER_GENRE, "", "Titolo", ""));
+        assertEquals(Arrays.asList(a), LibraryQuery.select(all, "", "Tutti i libri", "Epic Fantasy", "", "Titolo", ""));   // a raw label still works
+        assertEquals(Arrays.asList(b, a), LibraryQuery.select(all, "", "Tutti i libri", "", "", "Titolo", LibraryQuery.IN_SAGA));
+        assertEquals(Arrays.asList(c, d), LibraryQuery.select(all, "", "Tutti i libri", "", "", "Titolo", LibraryQuery.SINGLE));
+        assertEquals(Arrays.asList(a), LibraryQuery.select(all, "", "Tutti i libri", "", "", "Titolo", "mistborn"));
+    }
 }

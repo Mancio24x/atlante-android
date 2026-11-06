@@ -187,13 +187,19 @@ for _ in range(45):
     adb('shell','input','swipe','540','1250','540','750','300');time.sleep(1.5)
 shot('50-book-saga')
 assert found, 'Saga section did not appear'
-tap('Visualizza saga completa',True);time.sleep(1);shot('51-full-saga')
+tap('Visualizza saga completa',True);time.sleep(1.5);shot('51-saga-map')
+assert any('Mappa della saga' in n.get('content-desc','') for n in dump().iter('node')), 'Saga map missing'
+tap('Ordine di pubblicazione',exact=True);time.sleep(.6);shot('51a-saga-map-publication')
+tap('Elenco',exact=True);time.sleep(.6);shot('51b-full-saga-list')
 assert any('Golden Son' in n.get('text','') for n in dump().iter('node')), 'Full saga does not list Golden Son'
 tap('Chiudi',exact=True)
 for _ in range(20):
     if any(n.get('text','').startswith('Altri libri di Pierce') for n in dump().iter('node')): break
     adb('shell','input','swipe','540','1250','540','750','300');time.sleep(1.5)
 shot('52-book-author-carousel')
+back();tap('Apri menu laterale');tap('Universi',exact=True);time.sleep(1);shot('52a-universes')
+assert any(n.get('text','')=='Universi narrativi' for n in dump().iter('node')), 'Universes view missing'
+tap('Biblioteca',exact=True);tap('Filtri e ordine');shot('52b-filters');tap('Annulla',exact=True)
 print('Saga carousels completed.')
 
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.

@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import app.atlante.library.model.Book
 import app.atlante.library.saga.*
 import app.atlante.library.saga.db.*
+import app.atlante.library.ui.compose.SagaOrder
+import app.atlante.library.ui.compose.ordered
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -62,6 +64,21 @@ class SuggestionsTest {
         assertTrue(items.none { it.title == "The Final Empire" })     // the book itself is not suggested
         assertTrue(items.drop(1).all { it.ownedBookId == null })
         assertTrue(items.any { it.title == "The Way of Kings" })
+    }
+
+    @Test fun subSeriesLanesAndReadingOrders() = runBlocking {
+        val saga = dao.insertSeries(SeriesEntity(name = "Red Rising Saga", wikidataId = "Q79053462"))
+        val trilogy = dao.insertSeries(SeriesEntity(name = "Red Rising Trilogy", wikidataId = "Q137598364", parentId = saga))
+        val titles = listOf("Red Rising" to "2014", "Golden Son" to "2015", "Morning Star" to "2016", "Iron Gold" to "2018")
+        val ids = titles.mapIndexed { i, (t, y) -> dao.insertWork(WorkEntity(originalTitle = t, firstPublished = y, wikidataId = "Q$i")) }
+        dao.replaceAutomaticEntries(saga, ids.mapIndexed { i, w -> SeriesEntry(saga, w, "${i + 1}", i + 1.0) })
+        dao.replaceAutomaticEntries(trilogy, ids.take(3).mapIndexed { i, w -> SeriesEntry(trilogy, w, "${i + 1}", i + 1.0) })
+        val shelf = suggestions.saga(BookLink("b9", ids[0], saga, 95, "auto"))!!
+        assertEquals(mapOf("Red Rising Trilogy" to listOf(0, 1, 2)), shelf.lanes)
+        val items = listOf(ShelfItem("Prequel", "", "2020", "0", null, false, null, null, ""), ShelfItem("Primo", "", "2010", "1", null, false, null, null, ""),
+            ShelfItem("Senza anno", "", null, "2", null, false, null, null, ""))
+        assertEquals(listOf(0, 1, 2), ordered(items, SagaOrder.SAGA))
+        assertEquals(listOf(1, 0, 2), ordered(items, SagaOrder.PUBLICATION))
     }
 
     @Test fun authorsAreComparedByFullName() {

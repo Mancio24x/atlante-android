@@ -115,7 +115,7 @@ public final class MainActivity extends AppCompatActivity {
         uiHandler.postDelayed(this, 1000);
     }};
     private String tab = "Tutti i libri", query = "", mapAuthor = "", exportId;
-    private String filterGenre = "", filterFormat = "", sortOrder = "Titolo";
+    private String filterGenre = "", filterFormat = "", filterSaga = "", sortOrder = "Titolo";
     /** Library tabs shown as chips; each one but the first is a reading state. */
     private static final String[] STATUS_TABS = {"Tutti i libri", "Da leggere", "In lettura", "In pausa", "Letti", "Preferiti"};
     private String coverBookId;
@@ -138,7 +138,7 @@ public final class MainActivity extends AppCompatActivity {
             backupFiles = state.getBoolean("backupFiles", true);
         }
         filterGenre = prefs.getString("filterGenre", "");
-        filterFormat = prefs.getString("filterFormat", ""); sortOrder = prefs.getString("sortOrder", "Titolo");
+        filterFormat = prefs.getString("filterFormat", ""); filterSaga = prefs.getString("filterSaga", ""); sortOrder = prefs.getString("sortOrder", "Titolo");
         listView = prefs.getBoolean("listView", false);
         OnlineCatalog.configure(new File(getCacheDir(), "catalog"));
         // Temporary data: expired suggestions and covers over the limit go away; sagas refresh in the background.
@@ -194,7 +194,7 @@ public final class MainActivity extends AppCompatActivity {
         top.addView(text("Atlante", 24, INK, true), new LinearLayout.LayoutParams(0, -2, 1)); gap(menu, 12);
         menu.addView(sectionLabel("  BIBLIOTECA")); gap(menu, 4);
         boolean libraryTab = Arrays.asList(STATUS_TABS).contains(tab);
-        for (String name : new String[]{"Tutti i libri", "Mappa", "Autori", "Saghe"}) {
+        for (String name : new String[]{"Tutti i libri", "Mappa", "Autori", "Saghe", "Universi"}) {
             boolean selected = name.equals("Tutti i libri") ? libraryTab : tab.equals(name);
             menu.addView(drawerItem(name, selected, () -> { closeDrawer(); destination = "Biblioteca"; tab = name; showLibrary(); }));
         }
@@ -416,7 +416,7 @@ public final class MainActivity extends AppCompatActivity {
         root.addView(header);
         LinearLayout masthead = row(); header.addView(masthead);
         masthead.addView(iconButton(R.drawable.ic_menu, "Apri menu laterale", this::openDrawer));
-        TextView brand = text(destination.equals("Cerca") ? "Cerca" : map ? "Mappa delle letture" : tab.equals("Autori") ? "Autori" : tab.equals("Saghe") ? "Saghe" : "Atlante", 22, INK, true);
+        TextView brand = text(destination.equals("Cerca") ? "Cerca" : map ? "Mappa delle letture" : tab.equals("Autori") ? "Autori" : tab.equals("Saghe") ? "Saghe" : tab.equals("Universi") ? "Universi" : "Atlante", 22, INK, true);
         brand.setPadding(dp(8), 0, 0, 0); brand.setMaxLines(1); brand.setEllipsize(TextUtils.TruncateAt.END);
         masthead.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
         if (!map) masthead.addView(iconButton(listView ? R.drawable.ic_grid : R.drawable.ic_list, listView ? "Griglia" : "Elenco", () -> {
@@ -478,33 +478,44 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private ArrayList<Book> filtered() {
-        return LibraryQuery.select(store.snapshot(), destination.equals("Biblioteca") && tab.equals("Mappa") ? "" : query, destination.equals("Cerca") ? "Tutti i libri" : tab, filterGenre, filterFormat, sortOrder);
+        return LibraryQuery.select(store.snapshot(), destination.equals("Biblioteca") && tab.equals("Mappa") ? "" : query, destination.equals("Cerca") ? "Tutti i libri" : tab, filterGenre, filterFormat, sortOrder, filterSaga);
     }
 
-    private boolean hasFilters() { return !filterGenre.isEmpty() || !filterFormat.isEmpty(); }
+    private boolean hasFilters() { return !filterGenre.isEmpty() || !filterFormat.isEmpty() || !filterSaga.isEmpty(); }
 
     private void libraryFilters() {
         LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(4));
-        TreeSet<String> genres = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-        for (Book book : store.snapshot()) if (!book.genre.isEmpty()) genres.add(book.genre);
-        if (!filterGenre.isEmpty()) genres.add(filterGenre);
-        ArrayList<String> genreOptions = new ArrayList<>(); genreOptions.add("Tutti i generi"); genreOptions.addAll(genres);
+        // Normalized genres: "Epic Fantasy" and "Fantasy epico" are both Fantasy.
+        LinkedHashSet<String> genres = new LinkedHashSet<>(); boolean other = false;
+        TreeSet<String> sagas = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (Book book : store.snapshot()) {
+            String main = app.atlante.library.saga.Genres.normalize(book.genre);
+            if (main != null) genres.add(main); else if (!book.genre.isEmpty()) other = true;
+            if (!book.series.isEmpty()) sagas.add(book.series);
+        }
+        ArrayList<String> genreOptions = new ArrayList<>(); genreOptions.add("Tutti i generi");
+        for (String g : app.atlante.library.saga.Genres.INSTANCE.getMain()) if (genres.contains(g)) genreOptions.add(g);
+        if (other) genreOptions.add(LibraryQuery.OTHER_GENRE);
+        if (!filterGenre.isEmpty() && !genreOptions.contains(filterGenre)) genreOptions.add(filterGenre);
         Picker genre = new Picker(panel, "Genere", genreOptions, filterGenre);
+        ArrayList<String> sagaOptions = new ArrayList<>(Arrays.asList("Tutte le saghe", LibraryQuery.IN_SAGA, LibraryQuery.SINGLE)); sagaOptions.addAll(sagas);
+        Picker saga = new Picker(panel, "Saga", sagaOptions, filterSaga);
         Picker format = new Picker(panel, "Formato", Arrays.asList("Tutti i formati", "EPUB", "TXT", "CBZ", "CATALOGO"), filterFormat);
         Picker order = new Picker(panel, "Ordina per", Arrays.asList("Titolo", "Autore", "Saga"), sortOrder);
         dialogBuilder().setTitle("Filtri e ordine").setView(panel)
             .setNegativeButton("Annulla", null)
-            .setNeutralButton("Azzera", (d, w) -> { filterGenre = ""; filterFormat = ""; applyLibraryFilters(); })
+            .setNeutralButton("Azzera", (d, w) -> { filterGenre = ""; filterFormat = ""; filterSaga = ""; applyLibraryFilters(); })
             .setPositiveButton("Applica", (d, w) -> {
                 filterGenre = genre.position() == 0 ? "" : genre.value();
                 filterFormat = format.position() == 0 ? "" : format.value();
+                filterSaga = saga.position() == 0 ? "" : saga.value();
                 sortOrder = order.value(); applyLibraryFilters();
             }).show();
     }
 
     private void applyLibraryFilters() {
         getPreferences(MODE_PRIVATE).edit().putString("filterGenre", filterGenre)
-            .putString("filterFormat", filterFormat).putString("sortOrder", sortOrder).apply();
+            .putString("filterFormat", filterFormat).putString("filterSaga", filterSaga).putString("sortOrder", sortOrder).apply();
         showLibrary();
     }
 
@@ -512,7 +523,7 @@ public final class MainActivity extends AppCompatActivity {
         if (body == null || (!destination.equals("Biblioteca") && !destination.equals("Cerca")) || detailId != null) return;
         ArrayList<Book> list = filtered();
         notice.setText(busy ? "Importazione in corso…" : list.size() + " di " + store.snapshot().size() + " libri · Sul dispositivo · Lettura offline");
-        if (!list.isEmpty() && (destination.equals("Cerca") || (!tab.equals("Mappa") && !tab.equals("Autori") && !tab.equals("Saghe")))) { showGrid(list); return; }
+        if (!list.isEmpty() && (destination.equals("Cerca") || (!tab.equals("Mappa") && !tab.equals("Autori") && !tab.equals("Saghe") && !tab.equals("Universi")))) { showGrid(list); return; }
         // Empty states, map and indexes are short pages: a plain scrolling column.
         body.removeAllViews(); grid = null; adapter = null;
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); body.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
@@ -523,12 +534,13 @@ public final class MainActivity extends AppCompatActivity {
             gap(content, 16);
             content.addView(text(store.snapshot().isEmpty() ? "Apri il menu ☰ per cercare nuovi titoli online o importare EPUB, TXT e CBZ. Tutte le tue letture, anche su carta, trovano posto qui." : "Prova un altro titolo, autore o nome di saga.", 16, MUTED, false));
             gap(content, 24);
-            if (hasFilters()) content.addView(button("Azzera filtri", false, () -> { filterGenre = ""; filterFormat = ""; applyLibraryFilters(); }));
+            if (hasFilters()) content.addView(button("Azzera filtri", false, () -> { filterGenre = ""; filterFormat = ""; filterSaga = ""; applyLibraryFilters(); }));
             if (store.snapshot().isEmpty()) content.addView(button("Cerca il tuo primo libro", true, this::onlineSearch));
             return;
         }
         if (destination.equals("Biblioteca") && tab.equals("Mappa")) { showMap(list); return; }
         if (destination.equals("Biblioteca") && (tab.equals("Autori") || tab.equals("Saghe"))) { showIndex(list, tab.equals("Autori")); return; }
+        if (destination.equals("Biblioteca") && tab.equals("Universi")) { content.addView(app.atlante.library.ui.compose.UniverseIndexView.create(this, palette, query, sagaHost)); return; }
     }
 
     private int columns() {
@@ -558,7 +570,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         shownCount = count;
         // A new tab, search or filter starts from the top; edits to a book keep the scroll position.
-        String key = tab + "\n" + query + "\n" + filterGenre + "\n" + filterFormat + "\n" + sortOrder;
+        String key = tab + "\n" + query + "\n" + filterGenre + "\n" + filterFormat + "\n" + filterSaga + "\n" + sortOrder;
         boolean changed = !key.equals(gridKey); gridKey = key;
         adapter.submit(list);
         if (changed) grid.scrollToPosition(0);
@@ -693,7 +705,6 @@ public final class MainActivity extends AppCompatActivity {
         hint.setPadding(dp(20), dp(4), dp(20), 0); content.addView(hint);
     }
 
-    /** Book window: a Material bottom sheet with reading state, plot, chapters and the book's details. */
     /** Saga section of the book page: opens owned books, searches the others, writes a saga the user picked. */
     private final app.atlante.library.ui.compose.SagaHost sagaHost = new app.atlante.library.ui.compose.SagaHost() {
         @Override public void openBook(String id) { Book x = store.find(id); if (x != null) details(x); }
@@ -710,6 +721,7 @@ public final class MainActivity extends AppCompatActivity {
         @Override public java.util.List<Book> library() { return store.snapshot(); }
     };
 
+    /** Book window: a Material bottom sheet with reading state, plot, chapters and the book's details. */
     private void details(Book b) {
         if (detailId == null) {
             if (grid != null && grid.getLayoutManager() != null) libraryPositions.put(destination,grid.getLayoutManager().onSaveInstanceState());
@@ -1225,7 +1237,7 @@ public final class MainActivity extends AppCompatActivity {
                 if (creating) store.addCatalog(b);
                 else { app.atlante.library.online.MetadataEngine.markManual(original, b); store.replace(b); }
             } catch (Exception e) { error(e); return; }
-            if (creating) { destination = "Biblioteca"; tab = "Tutti i libri"; query = ""; filterGenre = ""; filterFormat = ""; showLibrary(); }
+            if (creating) { destination = "Biblioteca"; tab = "Tutti i libri"; query = ""; filterGenre = ""; filterFormat = ""; filterSaga = ""; showLibrary(); }
             dialog.dismiss(); renderContent(); details(b);
         })); dialog.show();
     }

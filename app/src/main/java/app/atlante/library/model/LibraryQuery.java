@@ -12,7 +12,23 @@ import java.util.Locale;
 public final class LibraryQuery {
     /** Tabs: "Tutti i libri", one per reading state ("Da leggere", "In lettura", "Letti"), or a view such as "Mappa". */
     public static ArrayList<Book> select(List<Book> books, String query, String tab,
-            String genre, String format, String order) {
+            String genre, String format, String order) { return select(books, query, tab, genre, format, order, ""); }
+
+    /** Saga filter: "" all, {@link #IN_SAGA} books of a saga, {@link #SINGLE} books without saga, or a saga name. */
+    public static final String IN_SAGA = "Solo libri di una saga", SINGLE = "Libri singoli";
+
+    /** Genre filter on the normalized genre ("Epic Fantasy" counts as Fantasy); a raw label still matches itself. */
+    public static boolean genreMatches(Book b, String genre) {
+        if (genre.isEmpty()) return true;
+        if (genre.equalsIgnoreCase(b.genre)) return true;
+        String main = app.atlante.library.saga.Genres.normalize(b.genre);
+        if (genre.equals(OTHER_GENRE)) return main == null;
+        return genre.equals(main);
+    }
+    public static final String OTHER_GENRE = "Altri generi";
+
+    public static ArrayList<Book> select(List<Book> books, String query, String tab,
+            String genre, String format, String order, String saga) {
         ArrayList<Book> result = new ArrayList<>();
         String needle = query.toLowerCase(Locale.ROOT).trim();
         for (Book b : books) {
@@ -24,7 +40,10 @@ public final class LibraryQuery {
             if (tab.equals(Book.PAUSED) && !b.status.equals(Book.PAUSED)) continue;
             if (tab.startsWith("Scaffale: ") && !ReadingJournal.inCollection(b, tab.substring(10))) continue;
             if (tab.equals("Letti") && !b.status.equals(Book.READ)) continue;
-            if (!genre.isEmpty() && !genre.equalsIgnoreCase(b.genre)) continue;
+            if (!genreMatches(b, genre)) continue;
+            if (saga.equals(IN_SAGA) && b.series.isEmpty()) continue;
+            if (saga.equals(SINGLE) && !b.series.isEmpty()) continue;
+            if (!saga.isEmpty() && !saga.equals(IN_SAGA) && !saga.equals(SINGLE) && !saga.equalsIgnoreCase(b.series)) continue;
             if (!format.isEmpty() && !format.equals(b.format)) continue;
             result.add(b);
         }

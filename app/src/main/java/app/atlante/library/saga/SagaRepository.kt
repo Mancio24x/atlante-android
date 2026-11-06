@@ -33,6 +33,11 @@ class SagaRepository(
             match.universes.forEach { upsertUniverse(it.seriesQid, it.seriesLabel) }
             // Sagas first: their member list carries the original and Italian titles of the work.
             for (saga in match.sagas) sagaIds += saga to rebuild(saga, force)
+            // A universe found on the work (Cosmere on The Final Empire) belongs to its sagas too.
+            match.universes.firstOrNull()?.let { u ->
+                val universeId = upsertUniverse(u.seriesQid, u.seriesLabel)
+                for ((_, id) in sagaIds) dao.series(id)?.takeIf { it.universeId == null && !it.manual }?.let { dao.updateSeries(it.copy(universeId = universeId)) }
+            }
         }
         val workId = match.workQid?.let { qid -> dao.workByWikidata(qid)?.id ?: upsertWork(qid, match.links?.label?.takeIf { it.isNotBlank() } ?: book.title, null, null, null, emptyList()) }
         if (workId != null) {
