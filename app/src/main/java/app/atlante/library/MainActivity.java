@@ -24,7 +24,9 @@ public final class MainActivity extends Activity {
     private int visibleBooks = 60;
     private final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
     private final ExecutorService coverWorker = Executors.newSingleThreadExecutor();
-    private static final int IMPORT = 101, EXPORT = 102, COVER = 103;
+    private static final int IMPORT = 101, EXPORT = 102, COVER = 103, BACKUP = 104, RESTORE = 105;
+    private boolean backupFiles = true;
+    private final Runnable savePosition = () -> { if (this.store != null) save(); };
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final LruCache<String, Bitmap> covers = new LruCache<String, Bitmap>(8192) {
         @Override protected int sizeOf(String key, Bitmap value) { return value.getByteCount() / 1024; }
@@ -49,6 +51,7 @@ public final class MainActivity extends Activity {
         if (state != null) {
             tab = state.getString("tab", tab); query = state.getString("query", "");
             mapAuthor = state.getString("author", ""); exportId = state.getString("export"); coverBookId = state.getString("coverBook");
+            backupFiles = state.getBoolean("backupFiles", true);
         }
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         applyPalette(ThemePalette.find(prefs.getString("theme", "atlante")));
@@ -73,7 +76,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
-        state.putString("coverBook", coverBookId);
+        state.putString("coverBook", coverBookId); state.putBoolean("backupFiles", backupFiles);
         state.putString("tab", tab); state.putString("query", query);
         state.putString("author", mapAuthor); state.putString("export", exportId);
         if (reading != null) state.putString("reading", reading.id);
@@ -142,6 +145,10 @@ public final class MainActivity extends Activity {
         });
         gap(panel,20); panel.addView(text("RICERCA ONLINE",11,SAGE,false)); gap(panel,8);
         panel.addView(text("Open Library · Le ricerche recenti e le schede vengono riutilizzate dalla cache. I libri e le note personali restano sul dispositivo.",14,MUTED,false));
+        gap(panel,20); panel.addView(text("BACKUP",11,SAGE,false)); gap(panel,8);
+        panel.addView(text("Salva catalogo, note, avanzamento e copertine in un file ZIP da conservare fuori dall’app. Disinstallando Atlante i dati interni vengono cancellati.",14,MUTED,false)); gap(panel,8);
+        panel.addView(button("Esporta backup",false,() -> { dialog.dismiss(); exportBackup(); })); gap(panel,8);
+        Button restore = button("Ripristina da backup",false,() -> { dialog.dismiss(); chooseBackup(); }); restore.setEnabled(!busy); panel.addView(restore);
         gap(panel,20); panel.addView(text("ATLANTE LIBRARY",11,SAGE,false)); gap(panel,8);
         panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
         dialog.show();
@@ -752,6 +759,98 @@ public final class MainActivity extends Activity {
         })); dialog.show();
     }
 
+    private void exportBackup() {
+        if (busy) return;
+        String[] options = {"Con i file dei libri (EPUB, TXT, CBZ)", "Solo catalogo, note e copertine (più leggero)"};
+        dialogBuilder().setTitle("Esporta backup").setItems(options, (d, which) -> {
+            backupFiles = which == 0;
+            String date = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(new Date());
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("application/zip").putExtra(Intent.EXTRA_TITLE, "atlante-backup-" + date + ".zip");
+            startActivityForResult(intent, BACKUP);
+        }).setNegativeButton("Annulla", null).show();
+    }
+
+    private void chooseBackup() {
+        if (busy) return;
+        startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+            .putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"}), RESTORE);
+    }
+
+    private void writeBackup(Uri dest) {
+        final org.json.JSONArray catalog = new org.json.JSONArray();
+        try { for (Book b : store.snapshot()) catalog.put(b.json()); } catch (Exception e) { error(e); return; }
+        final boolean files = backupFiles;
+        busy = true;
+        AlertDialog loading = loading("Backup", "Salvataggio di " + catalog.length() + " libri…");
+        worker.execute(() -> {
+            Exception failure = null;
+            try (OutputStream out = getContentResolver().openOutputStream(dest, "wt")) {
+                if (out == null) throw new IOException("Destinazione non disponibile");
+                BackupArchive.write(out, catalog, new File(getFilesDir(), "books"), files, System.currentTimeMillis());
+            } catch (Exception e) { failure = e; }
+            final Exception result = failure;
+            runOnUiThread(() -> {
+                loading.dismiss(); busy = false; if (isFinishing() || isDestroyed()) return;
+                if (result != null) { error(result); return; }
+                dialogBuilder().setTitle("Backup salvato")
+                    .setMessage(catalog.length() + " libri salvati" + (files ? ", con i file." : ", senza i file dei libri: per leggerli dopo un ripristino dovrai reimportarli.")
+                        + "\n\nConserva il file fuori dal telefono, per esempio in un servizio cloud o sul computer.")
+                    .setPositiveButton("OK", null).show();
+            });
+        });
+    }
+
+    private void readBackup(Uri source) {
+        busy = true;
+        AlertDialog loading = loading("Ripristino", "Lettura del backup…");
+        worker.execute(() -> {
+            try (InputStream in = getContentResolver().openInputStream(source)) {
+                if (in == null) throw new IOException("File non disponibile");
+                BackupArchive.Contents contents = BackupArchive.readManifest(in);
+                runOnUiThread(() -> { loading.dismiss(); busy = false; if (!isFinishing() && !isDestroyed()) confirmRestore(source, contents); });
+            } catch (Exception e) { runOnUiThread(() -> { loading.dismiss(); busy = false; if (!isFinishing() && !isDestroyed()) error(e); }); }
+        });
+    }
+
+    private void confirmRestore(Uri source, BackupArchive.Contents contents) {
+        LinkedHashMap<String, Book> fresh = new LinkedHashMap<>();
+        for (Book b : contents.books) if (store.find(b.id) == null) fresh.put(b.id, b);
+        int kept = contents.books.size() - fresh.size();
+        String date = contents.createdAt > 0 ? java.text.DateFormat.getDateTimeInstance().format(new Date(contents.createdAt)) : "data sconosciuta";
+        String summary = "Backup del " + date + "\n" + contents.books.size() + " libri nel backup\n" + fresh.size() + " da aggiungere\n"
+            + kept + " già presenti: restano come sono sul telefono";
+        if (fresh.isEmpty()) { dialogBuilder().setTitle("Niente da ripristinare").setMessage(summary).setPositiveButton("OK", null).show(); return; }
+        dialogBuilder().setTitle("Ripristinare il backup?").setMessage(summary + "\n\nNessun libro già presente verrà modificato o rimosso.")
+            .setNegativeButton("Annulla", null).setPositiveButton("Ripristina", (d, w) -> applyRestore(source, fresh)).show();
+    }
+
+    private void applyRestore(Uri source, LinkedHashMap<String, Book> fresh) {
+        busy = true;
+        AlertDialog loading = loading("Ripristino", "Copia di " + fresh.size() + " libri…");
+        worker.execute(() -> {
+            File staging = store.staging();
+            Exception failure = null; int added = 0, missing = 0;
+            try (InputStream in = getContentResolver().openInputStream(source)) {
+                if (in == null) throw new IOException("File non disponibile");
+                LibraryStore.clear(staging);
+                Set<String> withFiles = BackupArchive.extract(in, fresh, staging);
+                for (Book b : fresh.values()) if (!b.format.equals("CATALOGO") && !withFiles.contains(b.id)) missing++;
+                added = store.restore(new ArrayList<>(fresh.values()), staging);
+            } catch (Exception e) { failure = e; }
+            finally { LibraryStore.clear(staging); }
+            final Exception result = failure; final int count = added, withoutFile = missing;
+            runOnUiThread(() -> {
+                loading.dismiss(); busy = false; if (isFinishing() || isDestroyed()) return;
+                covers.evictAll(); showLibrary();
+                if (result != null) { error(result); return; }
+                dialogBuilder().setTitle("Ripristino completato").setMessage(count + " libri aggiunti alla biblioteca."
+                    + (withoutFile > 0 ? "\n\n" + withoutFile + " libri sono senza file: per leggerli reimportali da ☰ › Importa file. Note e avanzamento restano collegati." : ""))
+                    .setPositiveButton("OK", null).show();
+            });
+        });
+    }
+
     private void chooseBooks() {
         if (busy) return;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
@@ -780,6 +879,8 @@ public final class MainActivity extends Activity {
             });
             return;
         }
+        if (request == BACKUP && data.getData() != null) { writeBackup(data.getData()); return; }
+        if (request == RESTORE && data.getData() != null) { if (!busy) readBackup(data.getData()); return; }
         if (request == IMPORT) {
             ArrayList<Uri> uris = new ArrayList<>();
             if (data.getClipData() != null) {
@@ -791,17 +892,18 @@ public final class MainActivity extends Activity {
             }
             busy = true; showLibrary();
             worker.execute(() -> {
-                int duplicate = 0; ArrayList<String> errors = new ArrayList<>();
+                int duplicate = 0, reattached = 0; ArrayList<String> errors = new ArrayList<>();
                 LinkedHashMap<String, Book> candidates = new LinkedHashMap<>();
                 for (Uri uri : uris) {
-                    try { Book candidate = store.importBook(uri); if (candidate == null || candidates.containsKey(candidate.id)) duplicate++; else candidates.put(candidate.id, candidate); }
+                    try { Book candidate = store.importBook(uri); if (candidate != null && candidate.reattached) { candidate.reattached = false; reattached++; } else if (candidate == null || candidates.containsKey(candidate.id)) duplicate++; else candidates.put(candidate.id, candidate); }
                     catch (Exception e) { errors.add(message(e)); }
                     finally {
                         try { getContentResolver().releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
                         catch (SecurityException ignored) { }
                     }
                 }
-                final String report = candidates.size() + " schede da confermare" + (duplicate > 0 ? " · " + duplicate + " già presenti" : "");
+                final String report = candidates.size() + " schede da confermare" + (duplicate > 0 ? " · " + duplicate + " già presenti" : "")
+                    + (reattached > 0 ? " · " + reattached + " file ricollegati a schede esistenti" : "");
                 runOnUiThread(() -> {
                     busy = false; if (isFinishing() || isDestroyed()) return;
                     showLibrary();
@@ -830,6 +932,7 @@ public final class MainActivity extends Activity {
         worker.execute(() -> {
             try {
                 List<String> result;
+                if (!store.original(b).isFile()) throw new IOException("Il file di questo libro non è sul telefono: reimportalo da ☰ › Importa file. Note e avanzamento restano collegati.");
                 if (b.format.equals("CBZ")) {
                     try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(store.original(b))) { result = EbookParser.comicPages(zip); }
                     if (result.isEmpty()) throw new IOException("Nessuna pagina nel CBZ");
@@ -845,13 +948,17 @@ public final class MainActivity extends Activity {
     }
 
     private void rememberPage() {
+        uiHandler.removeCallbacks(savePosition);
         if (reading == null) return;
         reading.page = page; save();
     }
     private void turn(int direction) {
         int next = page + direction;
         if (next < 0 || next >= pages.size()) return;
-        page = next; rememberPage(); showReader();
+        page = next; reading.page = page;
+        // Write the catalog once the reader pauses, not on every page.
+        uiHandler.removeCallbacks(savePosition); uiHandler.postDelayed(savePosition, 1500);
+        showReader();
     }
     private void showReader() {
         int paper = readerDark ? 0xff101014 : PAPER, ink = readerDark ? 0xffF1EDF5 : INK;

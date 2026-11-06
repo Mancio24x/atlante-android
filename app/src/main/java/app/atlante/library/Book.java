@@ -13,6 +13,8 @@ final class Book {
     long addedAt;
     long coverId;
     transient byte[] onlineCover;
+    /** Set by an import that restored the missing file of a book already in the catalog. */
+    transient boolean reattached;
     int currentPage, totalPages;
     double number;
     int page;

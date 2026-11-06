@@ -55,6 +55,19 @@ L’APK viene generato nella cartella `dist/`. La chiave di firma e le propriet�
 locali restano escluse da Git. Il workflow **Android APK** su GitHub resta
 disponibile per pubblicare le release.
 
+## Backup e ripristino
+
+Da **⚙ Impostazioni → Backup**, **Esporta backup** salva un file ZIP con catalogo,
+note, avanzamento, valutazioni e copertine, scelto con il selettore Android (anche
+su un servizio cloud). Puoi includere i file EPUB/TXT/CBZ oppure creare un backup
+leggero senza file. **Ripristina da backup** mostra un riepilogo e, dopo conferma,
+aggiunge solo i libri non presenti: le schede già sul telefono non vengono toccate.
+I file ripristinati devono corrispondere alla loro impronta SHA-256; voci sconosciute
+o percorsi non sicuri nello ZIP vengono ignorati. Un libro ripristinato senza file
+conserva note e avanzamento: reimportando lo stesso file da **☰ › Importa file**
+viene ricollegato alla sua scheda. Durante la lettura, la posizione viene salvata
+poco dopo l’ultima pagina girata e all’uscita dal lettore.
+
 ## Filtri e ordinamento della biblioteca
 
 **Filtri e ordine**, sotto la ricerca, combina stato di lettura, genere e formato.

@@ -84,7 +84,17 @@ final class LibraryStore {
             for (byte b : digest.digest()) hex.append(String.format(Locale.ROOT, "%02x", b & 255));
             String id = hex.toString();
             synchronized (this) {
-                if (find(id) != null) return null;
+                Book existing = find(id);
+                if (existing != null) {
+                    // A book restored from a backup without files gets its file back here.
+                    if (existing.format.equals(ext) && !original(existing).exists()) {
+                        if (!directory(existing).isDirectory() && !directory(existing).mkdirs()) throw new IOException("Impossibile salvare il libro");
+                        if (!temporary.renameTo(original(existing))) throw new IOException("Impossibile copiare il libro");
+                        existing.reattached = true;
+                        return existing;
+                    }
+                    return null;
+                }
             }
             Book book = new Book(); book.id = id; book.format = ext;
             book.title = name.substring(0, dot);
@@ -128,6 +138,33 @@ final class LibraryStore {
         AtomicFile image = new AtomicFile(cover(book)); FileOutputStream out = null;
         try { out=image.startWrite(); out.write(bytes); image.finishWrite(out); }
         catch(Exception e) { if(out != null) image.failWrite(out); throw e; }
+    }
+
+    /** Private directory on the same volume as the library, so restored files can be moved in place. */
+    File staging() { return new File(context.getFilesDir(), "restore"); }
+
+    static void clear(File directory) { deleteTree(directory); }
+
+    /** Adds restored books that are not in the catalog yet; existing books are never overwritten. */
+    synchronized int restore(List<Book> incoming, File staging) throws Exception {
+        ArrayList<Book> added = new ArrayList<>();
+        try {
+            for (Book book : incoming) {
+                if (find(book.id) != null) continue;
+                File source = new File(staging, book.id), target = directory(book);
+                if (source.isDirectory()) {
+                    if (target.exists()) deleteTree(target);
+                    if (!source.renameTo(target)) throw new IOException("Impossibile ripristinare " + book.title);
+                }
+                books.add(book); added.add(book);
+            }
+            save();
+        } catch (Exception e) {
+            books.removeAll(added);
+            for (Book book : added) deleteTree(directory(book));
+            throw e;
+        }
+        return added.size();
     }
 
     synchronized void discardCandidate(Book candidate) {
