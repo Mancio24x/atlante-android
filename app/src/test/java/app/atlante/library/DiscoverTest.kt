@@ -76,4 +76,14 @@ class DiscoverTest {
         assertTrue(comics.toString(), "Wuthering Heights" !in comics && "The Hobbit" !in comics)
         assertTrue(fantasy.toString(), "The Hobbit" in fantasy && "Wuthering Heights" !in fantasy)
     }
+
+    /** Hardcover (Nov 2026): Horror is the books whose readers voted it among their three main genres. */
+    @Test fun hardcoverHorrorFollowsReadersVotes() {
+        val json = javaClass.classLoader!!.getResource("hardcover/discover-horror.json")!!.readText()
+        val picks = Discover.parseHardcover(json, Discover.GENRES.first { it.label == "Horror" })
+        val titles = picks.map { it.title }
+        assertTrue(titles.toString(), titles.any { it.startsWith("Dracula") } && "Frankenstein" in titles && "It" in titles)
+        assertTrue(titles.toString(), titles.none { it == "1984" || it.startsWith("Lolita") || it.startsWith("Il signore delle mosche") })
+        assertTrue(picks.all { it.italian && it.coverUrl!!.startsWith("http") && it.workKey.startsWith("hc:") })
+    }
 }

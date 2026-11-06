@@ -31,7 +31,11 @@ public final class HardcoverSync {
         public String user = ""; public int remote, linked, pushed, pulled, created, added, onlyHere, recognized;
         public final List<String> notes = new ArrayList<>();
     }
-    public interface Progress { void update(String message); }
+    public interface Progress {
+        void update(String message);
+        /** How far the sync is (books compared out of all), for the notification's progress bar. */
+        default void count(int done, int total) { }
+    }
     public interface Api { JSONObject call(String query, JSONObject variables) throws Exception; }
 
     public static Report sync(SyncStore store, Settings s, Progress progress) throws Exception {
@@ -81,10 +85,29 @@ public final class HardcoverSync {
         String today = LocalDate.now().toString();
         Set<Integer> matched = new HashSet<>();
         List<Book> all = store.snapshot(); int done = 0; long now = System.currentTimeMillis();
+        // The ISBNs of the books that may need looking up, asked 50 at a time instead of one request per book.
+        Map<String, Integer> byIsbn = new HashMap<>(); List<String> wanted = new ArrayList<>();
+        for (Book b : all) {
+            if (b.status.equals(Book.TO_READ) && !s.sendToRead) continue;
+            JSONObject l = SyncCore.link(b, SERVICE);
+            if (l != null && (l.optInt("id") > 0 || now - l.optLong("missing") < MISSING_RETRY)) continue;
+            wanted.addAll(BookMatcher.isbns(b.isbn));
+        }
+        for (int i = 0; i < wanted.size(); i += 50) {
+            if (s.cancelled) break;
+            progress.update("Ricerca degli ISBN su Hardcover · " + Math.min(i + 50, wanted.size()) + " di " + wanted.size());
+            JSONArray found = api.call("query($i:[String!]){ editions(where:{isbn_13:{_in:$i}}) { isbn_13 book_id book { canonical_id } } }",
+                new JSONObject().put("i", new JSONArray(wanted.subList(i, Math.min(i + 50, wanted.size()))))).optJSONArray("editions");
+            for (int j = 0; found != null && j < found.length(); j++) {
+                JSONObject e = found.optJSONObject(j); if (e == null) continue;
+                JSONObject bk = e.optJSONObject("book"); int id = bk != null && !bk.isNull("canonical_id") ? bk.optInt("canonical_id") : e.optInt("book_id");
+                if (id > 0) byIsbn.putIfAbsent(e.optString("isbn_13"), id);
+            }
+        }
         for (Book local : all) {
             if (s.cancelled) { report.notes.add("Sincronizzazione interrotta: i libri già controllati sono salvati."); return report; }
             done++;
-            if (done % 25 == 0) progress.update("Confronto con Hardcover · " + done + " di " + all.size());
+            if (done % 25 == 0) { progress.update("Confronto con Hardcover · " + done + " di " + all.size()); progress.count(done, all.size()); }
             JSONObject ub = match(local, remote, matched);
             SyncCore.Snapshot here = SyncCore.Snapshot.of(local);
             Book copy = Book.from(local.json());
@@ -95,7 +118,9 @@ public final class HardcoverSync {
                 JSONObject old = SyncCore.link(local, SERVICE);
                 if (old != null && old.optInt("id") == 0 && now - old.optLong("missing") < MISSING_RETRY) { report.onlyHere++; continue; }
                 progress.update("Ricerca su Hardcover (" + done + " di " + all.size() + "): " + local.title);
-                Integer bookId = findBook(api, local);
+                Integer bookId = null;
+                for (String i : BookMatcher.isbns(local.isbn)) if (byIsbn.containsKey(i)) { bookId = byIsbn.get(i); break; }
+                if (bookId == null) bookId = findBook(api, local, false);
                 if (bookId == null) {
                     report.onlyHere++; report.notes.add("Non trovato su Hardcover: " + local.title);
                     SyncCore.remember(copy, SERVICE, new JSONObject().put("missing", now), here); keep(store, pending, local, copy);
@@ -165,8 +190,11 @@ public final class HardcoverSync {
     }
 
     /** Hardcover book id: by ISBN among editions, otherwise the first search result with the same title and an author in common. */
-    public static Integer findBook(Api api, Book b) throws Exception {
-        if (b.isbn.matches("97[89][0-9]{10}|[0-9]{9}[0-9Xx]")) {
+    public static Integer findBook(Api api, Book b) throws Exception { return findBook(api, b, true); }
+
+    /** [byIsbn] false: the ISBN was already looked up in the batch, only the title search is left. */
+    public static Integer findBook(Api api, Book b, boolean byIsbn) throws Exception {
+        if (byIsbn && b.isbn.matches("97[89][0-9]{10}|[0-9]{9}[0-9Xx]")) {
             String field = b.isbn.length() == 13 ? "isbn_13" : "isbn_10";
             JSONArray editions = api.call("query($i:String!){ editions(where:{" + field + ":{_eq:$i}}, limit:1) { id book_id } }", new JSONObject().put("i", b.isbn)).optJSONArray("editions");
             if (editions != null && editions.optJSONObject(0) != null) return editions.getJSONObject(0).getInt("book_id");

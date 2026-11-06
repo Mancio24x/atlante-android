@@ -181,6 +181,31 @@ object Hardcover {
         return out.distinctBy { it.first }
     }
 
+    // ---- Scopri: books by genre as Hardcover's readers vote them ------------------------------------------
+
+    /**
+     * The most read books with an Italian edition, of one of [genres] when given (Hardcover genre tags, e.g.
+     * "Horror"), as the raw JSON answer (cached by Discover). Filtered later with [topGenres].
+     */
+    fun discoverJson(genres: List<String>?): String {
+        val genre = if (genres == null) "" else "taggings:{tag:{tag:{_in:\$g}, tag_category:{slug:{_eq:\"genre\"}}}}, "
+        val query = "query(" + (if (genres == null) "" else "\$g:[String!]") + "){ books(where:{" + genre +
+            "}, order_by:{users_count:desc_nulls_last}, limit:150) { id title release_year cached_tags image { url }" +
+            " contributions(limit:1) { author { name } } editions(where:{language_id:{_eq:$ITALIAN}}, limit:1) { title image { url } } } }"
+        val vars = JSONObject(); if (genres != null) vars.put("g", JSONArray(genres))
+        return api.call(query.replace("query()", "query"), vars).toString()
+    }
+
+    /** Hardcover's id of Italian (filtering editions by language code times out on big lists; by id it takes 2 s). */
+    private const val ITALIAN = 76
+
+    /** The genres most voted by readers (at most [n]): a book tagged "Horror" by a few is not a horror book. */
+    fun topGenres(book: JSONObject, n: Int = 3): List<String> {
+        val tags = (book.opt("cached_tags") as? JSONObject ?: (book.opt("cached_tags") as? String)?.let { runCatching { JSONObject(it) }.getOrNull() })
+            ?.optJSONArray("Genre") ?: return emptyList()
+        return (0 until tags.length()).mapNotNull { tags.optJSONObject(it) }.sortedByDescending { it.optInt("count") }.take(n).map { it.optString("tag").lowercase() }
+    }
+
     // ---- book, series and volumes ------------------------------------------------------------------
 
     private const val MEMBERS = """book_series(where:{compilation:{_eq:false}, book:{canonical_id:{_is_null:true}, is_partial_book:{_neq:true}}}, order_by:{position:asc_nulls_last}, limit:150) {

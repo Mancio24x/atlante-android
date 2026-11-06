@@ -27,7 +27,7 @@ class Discover(
      * among a work's subjects (see [fits]); [query] replaces the plain subject search when one subject is too narrow.
      */
     data class Genre(val label: String, val subject: String, val since: Int? = 1980, val words: List<String> = emptyList(), val query: String? = null,
-                     val minShare: Double = 0.0)
+                     val minShare: Double = 0.0, val hardcover: List<String> = emptyList(), val hardcoverTop: Int = 3)
 
     data class Pick(val workKey: String, val title: String, val author: String, val year: String?, val coverUrl: String?, val italian: Boolean,
                     val subjects: List<String> = emptyList()) {
@@ -57,6 +57,7 @@ class Discover(
 
     /** Italian edition of a work (title and cover), or the work as it is. */
     suspend fun italian(p: Pick): Pick {
+        if (p.workKey.startsWith("hc:")) return p        // Hardcover picks already carry the Italian edition
         val json = cached("ita:${p.workKey}") { fetch("https://openlibrary.org/works/${p.workKey}/editions.json?limit=100") } ?: return p
         val entries = runCatching { JSONObject(json).optJSONArray("entries") }.getOrNull() ?: return p
         val italian = (0 until entries.length()).mapNotNull { entries.optJSONObject(it) }.filter { e ->
@@ -72,6 +73,16 @@ class Discover(
     }
 
     private suspend fun candidates(genre: Genre?): List<Pick> {
+        // With Hardcover connected: genres voted by its readers, much more reliable than Open Library's subjects.
+        if (Hardcover.enabled && (genre == null || genre.hardcover.isNotEmpty())) {
+            val json = cached("hc-discover:${genre?.label ?: "popolari"}") { Hardcover.discoverJson(genre?.hardcover) }
+            val picks = json?.let { runCatching { parseHardcover(it, genre) }.getOrNull() }.orEmpty()
+            if (picks.size >= 6) return picks
+        }
+        return openLibraryCandidates(genre)
+    }
+
+    private suspend fun openLibraryCandidates(genre: Genre?): List<Pick> {
         val year = Year.now().value
         val q = buildString {
             append("language:ita")
@@ -105,20 +116,20 @@ class Discover(
         }
 
         val GENRES = listOf(
-            Genre("Fantasy", "fantasy", words = listOf("fantasy", "magic", "wizard", "dragon")),
-            Genre("Fantascienza", "science_fiction", words = listOf("science_fiction", "sci-fi", "dystopi", "space_opera", "cyberpunk")),
-            Genre("Gialli", "mystery", words = listOf("mystery", "detective", "crime", "murder", "giall", "polizies")),
-            Genre("Thriller", "thrillers", words = listOf("thriller", "suspense", "spy")),
-            Genre("Horror", "horror", words = listOf("horror", "ghost", "vampire", "zombie", "supernatural", "gothic")),
-            Genre("Romanzi storici", "historical_fiction", words = listOf("historical_fiction", "history_fiction", "romanzo_storico")),
-            Genre("Rosa", "romance", words = listOf("romance", "love_stor", "romantic")),
-            Genre("Classici", "classic_literature", null),
-            Genre("Ragazzi", "young_adult_fiction", words = listOf("young_adult", "juvenile", "children", "teen"), minShare = 0.1),
+            Genre("Fantasy", "fantasy", words = listOf("fantasy", "magic", "wizard", "dragon"), hardcover = listOf("Fantasy")),
+            Genre("Fantascienza", "science_fiction", words = listOf("science_fiction", "sci-fi", "dystopi", "space_opera", "cyberpunk"), hardcover = listOf("Science Fiction")),
+            Genre("Gialli", "mystery", words = listOf("mystery", "detective", "crime", "murder", "giall", "polizies"), hardcover = listOf("Mystery", "Crime")),
+            Genre("Thriller", "thrillers", words = listOf("thriller", "suspense", "spy"), hardcover = listOf("Thriller")),
+            Genre("Horror", "horror", words = listOf("horror", "ghost", "vampire", "zombie", "supernatural", "gothic"), hardcover = listOf("Horror")),
+            Genre("Romanzi storici", "historical_fiction", words = listOf("historical_fiction", "history_fiction", "romanzo_storico"), hardcover = listOf("Historical Fiction", "Historical")),
+            Genre("Rosa", "romance", words = listOf("romance", "love_stor", "romantic"), hardcover = listOf("Romance")),
+            Genre("Classici", "classic_literature", null, hardcover = listOf("Classics")),
+            Genre("Ragazzi", "young_adult_fiction", words = listOf("young_adult", "juvenile", "children", "teen"), minShare = 0.1, hardcover = listOf("Young Adult")),
             // A classic with a comic adaptation among its editions carries comic subjects too: comics need many of them.
             Genre("Fumetti", "comics_&_graphic_novels", null, listOf("comic", "graphic_novel", "manga", "fumett"),
-                "(subject:comics OR subject:manga OR subject:graphic_novels OR subject:fumetti)", minShare = 0.15),
-            Genre("Storia", "history", null, listOf("history", "storia", "historical_events")),
-            Genre("Filosofia", "philosophy", null, listOf("philosophy", "filosofia", "ethics")),
+                "(subject:comics OR subject:manga OR subject:graphic_novels OR subject:fumetti)", minShare = 0.15, hardcover = listOf("Comics", "Graphic Novels", "Manga"), hardcoverTop = 1),
+            Genre("Storia", "history", null, listOf("history", "storia", "historical_events"), hardcover = listOf("History")),
+            Genre("Filosofia", "philosophy", null, listOf("philosophy", "filosofia", "ethics"), hardcover = listOf("Philosophy")),
         )
 
         /** Subjects about a book rather than of the book: adaptations, study guides, criticism. */
@@ -139,6 +150,21 @@ class Discover(
             if (mine < 2 || mine < genre.minShare * own.size) return false
             val other = GENRES.filter { it !== genre && it.words.isNotEmpty() && it.subject != "young_adult_fiction" && NEAR[genre.subject] != it.subject }.maxOfOrNull { score(it) } ?: 0
             return if (genre.minShare > 0) mine >= other else mine >= other * 0.75 || mine >= 0.25 * own.size
+        }
+
+        /** Hardcover answer → picks: Italian title and cover, the genre among the book's three most voted. */
+        fun parseHardcover(json: String, genre: Genre?): List<Pick> {
+            val books = JSONObject(json).optJSONArray("books") ?: return emptyList()
+            val wanted = genre?.hardcover?.map { it.lowercase() }
+            return (0 until books.length()).mapNotNull { books.optJSONObject(it) }.mapNotNull { b ->
+                if (wanted != null && Hardcover.topGenres(b, genre.hardcoverTop).none { it in wanted }) return@mapNotNull null
+                val it = b.optJSONArray("editions")?.optJSONObject(0) ?: return@mapNotNull null
+                val cover = it.optJSONObject("image")?.optString("url")?.takeIf { u -> u.startsWith("http") }
+                    ?: b.optJSONObject("image")?.optString("url")?.takeIf { u -> u.startsWith("http") } ?: return@mapNotNull null
+                val author = b.optJSONArray("contributions")?.optJSONObject(0)?.optJSONObject("author")?.optString("name")?.takeIf { a -> a.isNotBlank() } ?: return@mapNotNull null
+                val title = Hardcover.italianTitle(it.optString("title")) ?: b.optString("title")
+                Pick("hc:" + b.optInt("id"), title, author, b.optInt("release_year").takeIf { y -> y > 0 }?.toString(), cover, true)
+            }
         }
 
         /** Works with a cover only: the grid is made of covers. */

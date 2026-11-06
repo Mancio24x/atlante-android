@@ -65,6 +65,9 @@ public class SyncTest {
         public JSONObject call(String q, JSONObject v) throws Exception {
             if (q.contains("me {")) return new JSONObject().put("me", new JSONArray().put(new JSONObject().put("id", 7).put("username", "lettrice")));
             if (q.contains("user_books(where:{user_id")) return new JSONObject().put("user_books", v.getInt("offset") == 0 ? userBooks : new JSONArray());
+            if (q.contains("isbn_13:{_in")) { JSONArray found = new JSONArray(); JSONArray asked = v.getJSONArray("i");
+                for (int i = 0; i < asked.length(); i++) if (asked.getString(i).equals("9788835700777")) found.put(new JSONObject().put("isbn_13", "9788835700777").put("book_id", 555).put("book", new JSONObject().put("canonical_id", JSONObject.NULL)));
+                return new JSONObject().put("editions", found); }
             if (q.contains("editions(where")) return new JSONObject().put("editions", v.getString("i").equals("9788835700777") ? new JSONArray().put(new JSONObject().put("id", 1).put("book_id", 555)) : new JSONArray());
             if (q.contains("search(")) return new JSONObject().put("search", new JSONObject().put("results", new JSONObject().put("hits", new JSONArray())));
             if (q.contains("user_books(where:{id")) return new JSONObject().put("user_books", new JSONArray().put(new JSONObject().put("user_book_reads", new JSONArray().put(new JSONObject().put("id", 900)))));

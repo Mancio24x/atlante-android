@@ -1840,22 +1840,38 @@ public final class MainActivity extends AppCompatActivity {
         return label;
     }
 
+    /**
+     * Hardcover sync runs in the background (HardcoverSyncWorker): progress and "Interrompi" in a notification,
+     * the app can be closed. When it ends with the app open, the usual summary appears.
+     */
     private void runHardcover() {
-        if(busy) return; busy=true;
-        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
-        HardcoverSync.Settings s=new HardcoverSync.Settings(); s.createMissing=prefs.getBoolean("hardcoverCreate",true); s.sendToRead=prefs.getBoolean("hardcoverToRead",false);
-        AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Hardcover",dialog,()->s.cancelled=true);
-        worker.execute(()->{
-            Exception failure=null; HardcoverSync.Report r=null;
-            try { s.token=app.atlante.library.sync.HardcoverAuth.token(this); r=HardcoverSync.sync(store,s,m->runOnUiThread(()->label.setText(m))); } catch(Exception e){ failure=e; }
-            final Exception error=failure; final HardcoverSync.Report report=r;
-            runOnUiThread(()->{ dialog[0].dismiss(); busy=false; if(isFinishing()||isDestroyed()) return;
-                if(error!=null){ error(error); return; }
-                String when=java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm",Locale.ITALIAN));
-                String line=when+" · "+report.pushed+" inviati, "+report.pulled+" ricevuti, "+(report.created+report.added)+" nuovi";
-                prefs.edit().putString("hardcoverUser",report.user).putString("hardcoverLast","Ultima sincronizzazione: "+line).apply();
-                syncReport("Hardcover sincronizzato", report.remote+" libri su Hardcover · "+report.linked+" collegati\n"+report.pushed+" aggiornati su Hardcover · "+report.pulled+" aggiornati in Atlante\n"
-                    +report.added+" aggiunti a Hardcover · "+report.created+" nuove schede in Atlante"+(report.recognized>0?"\n"+report.recognized+" libri riconosciuti come già presenti: nessun doppione":""), report.notes); });
+        if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},7);
+        app.atlante.library.sync.HardcoverSyncWorker.start(this);
+        Toast.makeText(this,"Sincronizzazione avviata: segui l’avanzamento nelle notifiche. Puoi usare o chiudere l’app.",Toast.LENGTH_LONG).show();
+        watchHardcoverSync();
+    }
+
+    private boolean watchingHardcover;
+    /** Shows the summary when a background sync ends while the app is open. */
+    private void watchHardcoverSync() {
+        if(watchingHardcover) return; watchingHardcover=true;
+        androidx.work.WorkManager.getInstance(this).getWorkInfosForUniqueWorkLiveData(app.atlante.library.sync.HardcoverSyncWorker.NAME).observe(this,infos->{
+            if(infos==null||infos.isEmpty()) return;
+            androidx.work.WorkInfo w=infos.get(0);
+            if(!w.getState().isFinished()) return;
+            String seen=getPreferences(MODE_PRIVATE).getString("hardcoverShown","");
+            if(seen.equals(w.getId().toString())) return;
+            getPreferences(MODE_PRIVATE).edit().putString("hardcoverShown",w.getId().toString()).apply();
+            androidx.work.Data out=w.getOutputData();
+            String error=out.getString(app.atlante.library.sync.HardcoverSyncWorker.ERROR);
+            if(error!=null){ error(new IOException(error)); return; }
+            if(w.getState()!=androidx.work.WorkInfo.State.SUCCEEDED) return;
+            String notes=out.getString(app.atlante.library.sync.HardcoverSyncWorker.NOTES);
+            renderContent();
+            syncReport(out.getBoolean(app.atlante.library.sync.HardcoverSyncWorker.STOPPED,false)?"Sincronizzazione interrotta":"Hardcover sincronizzato",
+                out.getString(app.atlante.library.sync.HardcoverSyncWorker.SUMMARY),
+                notes==null||notes.isEmpty()?new ArrayList<>():new ArrayList<>(Arrays.asList(notes.split("\n"))));
         });
     }
 
