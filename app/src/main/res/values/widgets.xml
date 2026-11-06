@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_small_label">Lettura attuale</string>
+    <string name="widget_small_description">Copertina, titolo e avanzamento del libro che stai leggendo</string>
+    <string name="widget_medium_label">Continua a leggere</string>
+    <string name="widget_medium_description">Copertina, autore, avanzamento e pulsanti per aggiungere pagine o percentuale</string>
+    <string name="widget_large_label">Dashboard di lettura</string>
+    <string name="widget_large_description">Libro in lettura, obiettivi del giorno, del mese e dell’anno, statistiche</string>
+</resources>

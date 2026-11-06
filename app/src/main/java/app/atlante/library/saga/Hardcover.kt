@@ -3,6 +3,7 @@ package app.atlante.library.saga
 import android.content.Context
 import app.atlante.library.model.BookMatcher
 import app.atlante.library.model.Book
+import app.atlante.library.sync.HardcoverAuth
 import app.atlante.library.sync.HardcoverSync
 import java.util.concurrent.ConcurrentHashMap
 import org.json.JSONArray
@@ -38,14 +39,32 @@ object Hardcover {
     /** Reads the key (and the "use for sagas" switch) saved in the settings. */
     @JvmStatic fun configure(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        useKey(if (p.getBoolean(USE_FOR_SAGAS, true)) p.getString(KEY, "") ?: "" else "")
+        appContext = context.applicationContext
+        // With OAuth the token changes every week: it is asked for at each request (see api).
+        val on = p.getBoolean(USE_FOR_SAGAS, true) && HardcoverAuth.connected(context)
+        useKey(if (!on) "" else if (HardcoverAuth.usesOauth(context)) OAUTH else p.getString(KEY, "") ?: "")
+    }
+
+    private const val OAUTH = "oauth"
+    @Volatile private var appContext: Context? = null
+
+    /** The token for a request: the personal key, or the OAuth token (renewed when needed, once more after a 401). */
+    private fun call(query: String, variables: JSONObject): JSONObject {
+        val context = appContext
+        if (key != OAUTH || context == null) return HardcoverSync.request(key, query, variables)
+        return try { HardcoverSync.request(HardcoverAuth.token(context), query, variables) }
+        catch (e: java.io.IOException) {
+            if (e.message?.startsWith("Hardcover non accetta") != true) throw e
+            val renewed = HardcoverAuth.renewAfterRejection(context) ?: throw e
+            HardcoverSync.request(renewed, query, variables)
+        }
     }
 
     @JvmStatic fun useKey(token: String) { key = token.trim() }
 
     fun interface Api { fun call(query: String, variables: JSONObject): JSONObject }
     /** The network; tests replace it with recorded answers. */
-    @Volatile var api: Api = Api { q, v -> HardcoverSync.request(key, q, v) }
+    @Volatile var api: Api = Api { q, v -> call(q, v) }
 
     /** Checks a key before saving it: the Hardcover user name, or an exception with the reason. */
     @JvmStatic fun username(token: String): String {

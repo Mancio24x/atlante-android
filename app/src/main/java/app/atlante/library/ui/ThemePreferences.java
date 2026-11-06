@@ -7,7 +7,10 @@ import org.json.JSONObject;
 /** Additive preferences, shared by Compose and existing View screens. */
 public final class ThemePreferences {
     public static ThemePalette resolve(SharedPreferences prefs, ThemePalette base, boolean systemDark) {
-        String mode=prefs.getString("appearanceMode","theme");
+        return resolve(prefs, base, systemDark, prefs.getString("appearanceMode","theme"));
+    }
+    /** Same, with the appearance mode given ("light", "dark"…): a widget can be light or dark on its own. */
+    public static ThemePalette resolve(SharedPreferences prefs, ThemePalette base, boolean systemDark, String mode) {
         if(mode.equals("theme")&&!base.id.equals("custom"))return base;
         boolean dark=mode.equals("auto")?systemDark:mode.equals("dark")?true:mode.equals("light")?false:base.dark;
         int paper=base.paper,surface=base.surface,accent=base.accent;

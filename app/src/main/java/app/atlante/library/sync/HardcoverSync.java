@@ -200,6 +200,14 @@ public final class HardcoverSync {
         return CatalogImport.fromFields(f);
     }
 
+    /** Hardcover's own reason, so that the user (and we) can see what it said. */
+    private static String detail(SyncCore.Response r) {
+        String body = r.body == null ? "" : r.body.trim();
+        try { JSONObject j = new JSONObject(body); String d = j.optString("error_description", j.optString("error", j.optString("message"))); if (!d.isEmpty()) return ". Risposta di Hardcover: " + d; }
+        catch (Exception ignored) { }
+        return body.isEmpty() ? "." : ". Risposta di Hardcover: " + body.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim().substring(0, Math.min(160, body.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim().length()));
+    }
+
     /**
      * One GraphQL call with the user's personal key (with or without "Bearer "). Shared by Sync and the saga
      * engine, so that together they stay under Hardcover's limit of 60 requests a minute.
@@ -215,8 +223,8 @@ public final class HardcoverSync {
         }
         Map<String, String> headers = new HashMap<>(); headers.put("authorization", auth);
         SyncCore.Response r = SyncCore.http("POST", ENDPOINT, new JSONObject().put("query", query).put("variables", variables).toString(), headers, null, null, 8 * 1024 * 1024);
-        if (r.status == 401) throw new IOException("Chiave di Hardcover non valida o scaduta: creane una nuova nelle impostazioni del tuo account Hardcover.");
-        if (r.status == 403) throw new IOException("La chiave di Hardcover non ha i permessi necessari (lettura e scrittura della libreria).");
+        if (r.status == 401) throw new IOException("Hardcover non accetta questa chiave (non valida, scaduta o sostituita da una nuova). Copia la chiave personale da hardcover.app/account/api" + detail(r));
+        if (r.status == 403) throw new IOException("Hardcover ha rifiutato la richiesta (403). Usa la chiave personale di hardcover.app/account/api, non quella di un'applicazione" + detail(r));
         if (r.status == 429) throw new IOException("Hardcover chiede di rallentare: riprova tra qualche minuto.");
         if (r.status != 200) throw new IOException("Hardcover ha risposto con codice " + r.status + ".");
         JSONObject body = new JSONObject(r.body);

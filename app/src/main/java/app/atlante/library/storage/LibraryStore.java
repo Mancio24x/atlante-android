@@ -18,6 +18,21 @@ public final class LibraryStore implements SyncStore {
     private final Context context;
     private final File root;
     private final AtomicFile catalog;
+    /** Grows at every save: a screen that drew an older version knows the books changed elsewhere (a widget). */
+    private volatile long version;
+
+    private static LibraryStore shared;
+
+    /**
+     * The one library of the process. The app, the home screen widgets and the background work read and write
+     * the same books, so a page added from a widget is never overwritten by the app's next save (or the reverse).
+     */
+    public static synchronized LibraryStore shared(Context context) throws Exception {
+        if (shared == null) shared = new LibraryStore(context.getApplicationContext());
+        return shared;
+    }
+
+    public long version() { return version; }
 
     public LibraryStore(Context context) throws Exception {
         this.context = context.getApplicationContext();
@@ -45,6 +60,8 @@ public final class LibraryStore implements SyncStore {
             if (out != null) catalog.failWrite(out);
             throw e;
         }
+        version++;
+        app.atlante.library.widget.Widgets.libraryChanged(context);
     }
 
     public File directory(Book b) { return new File(root, b.id); }

@@ -114,7 +114,7 @@ public final class SyncCore {
         try {
             if (body != null) {
                 byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-                c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json"); c.setFixedLengthStreamingMode(bytes.length);
+                c.setDoOutput(true); if (c.getRequestProperty("Content-Type") == null) c.setRequestProperty("Content-Type", "application/json"); c.setFixedLengthStreamingMode(bytes.length);
                 try (OutputStream out = c.getOutputStream()) { out.write(bytes); }
             }
             Response r = new Response(); r.status = c.getResponseCode(); r.headers = c.getHeaderFields();

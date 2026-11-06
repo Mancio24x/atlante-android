@@ -148,7 +148,7 @@ public final class MainActivity extends AppCompatActivity {
         catch (RuntimeException ignored) { /* WorkManager unavailable: sagas are recognized when a book is opened. */ }
         fontSize = Math.max(8, Math.min(80, prefs.getFloat("fontSize", 20)));
         readerDark = prefs.getBoolean("dark", false); manga = prefs.getBoolean("manga", false);
-        try { store = new LibraryStore(this); }
+        try { store = LibraryStore.shared(this); }
         catch (Exception e) {
             dialogBuilder().setTitle("Libreria non disponibile")
                 .setMessage("I dati salvati non sono stati modificati. " + message(e))
@@ -162,6 +162,8 @@ public final class MainActivity extends AppCompatActivity {
         if (destination.equals("Cerca")) destination = "Biblioteca"; // "Cerca" was replaced by Sync: the library has the search bar
         shelfView = prefs.getBoolean("shelfView", false);
         restoreTimer(); showLibrary();
+        if (state == null && isWidgetIntent(getIntent())) widgetIntent = getIntent();
+        if (state == null && app.atlante.library.sync.HardcoverAuth.isCallback(getIntent().getData())) finishHardcoverLogin(getIntent().getData());
         if (keepPage && state.getString("detail") != null) { Book b = store.find(state.getString("detail")); if (b != null) details(b); }
         if (keepPage && state.getString("reading") != null) {
             Book b = store.find(state.getString("reading")); if (b != null) openReader(b);
@@ -289,7 +291,8 @@ public final class MainActivity extends AppCompatActivity {
      */
     private void hardcoverSection(LinearLayout p) {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
-        boolean on=!prefs.getString("hardcoverToken","").isEmpty();
+        boolean on=app.atlante.library.sync.HardcoverAuth.connected(this);
+        boolean oauth=app.atlante.library.sync.HardcoverAuth.usesOauth(this);
         String user=prefs.getString("hardcoverUser","");
         p.addView(text(on?"Chiave inserita"+(user.isEmpty()?"":" · collegato come @"+user):"Nessuna chiave inserita",15,on?INK:MUTED,false));
         p.addView(text("Con la tua chiave personale di Hardcover Atlante riconosce saga, numero del volume, sotto-serie e universo (per esempio il Cosmere) di tutti i libri, anche con il titolo italiano, più in fretta e con più precisione. Senza chiave usa Wikidata e Open Library. Ognuno usa la propria chiave: è gratuita e resta solo su questo telefono.",12,MUTED,false)); gap(p,8);
@@ -300,8 +303,14 @@ public final class MainActivity extends AppCompatActivity {
             app.atlante.library.saga.Hardcover.configure(this);
             if(checked) try { app.atlante.library.saga.SagaScanWorker.recheck(this); } catch(RuntimeException ignored) { }
         });
-        p.addView(button(on?"Cambia o rimuovi la chiave":"Inserisci la tua chiave",!on,this::hardcoverKey),new LinearLayout.LayoutParams(-1,-2));
-        p.addView(button("Crea la chiave su Hardcover ↗",R.style.Atlante_Button_Text,()->openLink("https://hardcover.app/account/api")),new LinearLayout.LayoutParams(-1,-2));
+        if(oauth) p.addView(button("Scollega Hardcover",R.style.Atlante_Button_Text,this::disconnectHardcover),new LinearLayout.LayoutParams(-1,-2));
+        else {
+            // Hardcover asks apps to connect with OAuth: approve on hardcover.app, no key to create or paste.
+            if(app.atlante.library.sync.HardcoverAuth.getOauthAvailable()) p.addView(button("Collega con Hardcover",true,()->app.atlante.library.sync.HardcoverAuth.start(this)),new LinearLayout.LayoutParams(-1,-2));
+            boolean primary=!on&&!app.atlante.library.sync.HardcoverAuth.getOauthAvailable();
+            p.addView(button(on?"Cambia o rimuovi la chiave":"Usa una chiave personale",primary,this::hardcoverKey),new LinearLayout.LayoutParams(-1,-2));
+            if(!on) p.addView(button("Crea la chiave su Hardcover ↗",R.style.Atlante_Button_Text,()->openLink("https://hardcover.app/account/api")),new LinearLayout.LayoutParams(-1,-2));
+        }
     }
 
     /** Asks for the key, checks it with Hardcover before saving, then starts recognizing the library with it. */
@@ -318,6 +327,30 @@ public final class MainActivity extends AppCompatActivity {
             app.atlante.library.saga.Hardcover.configure(this); showLibrary();
         });
         dialog.show();
+    }
+
+    private void disconnectHardcover() {
+        worker.execute(()->{
+            app.atlante.library.sync.HardcoverAuth.disconnect(this);
+            runOnUiThread(()->{ app.atlante.library.saga.Hardcover.configure(this); Toast.makeText(this,"Hardcover scollegato",Toast.LENGTH_SHORT).show(); showLibrary(); });
+        });
+    }
+
+    /** Back from hardcover.app with the user's approval: tokens, user name, then the sagas are checked with Hardcover. */
+    private void finishHardcoverLogin(Uri uri) {
+        AlertDialog waiting=loading("Hardcover","Collegamento in corso…");
+        worker.execute(()->{
+            try {
+                app.atlante.library.sync.HardcoverAuth.finish(this,uri);
+                String user=app.atlante.library.saga.Hardcover.username(app.atlante.library.sync.HardcoverAuth.token(this));
+                runOnUiThread(()->{ waiting.dismiss(); if(isFinishing()||isDestroyed()) return;
+                    getPreferences(MODE_PRIVATE).edit().putString("hardcoverUser",user).apply();
+                    app.atlante.library.saga.Hardcover.configure(this);
+                    try { app.atlante.library.saga.SagaScanWorker.recheck(this); } catch(RuntimeException ignored) { }
+                    Toast.makeText(this,"Collegato a Hardcover come @"+user+". Riconosco le saghe della libreria in background.",Toast.LENGTH_LONG).show();
+                    showLibrary(); });
+            } catch(Exception e) { runOnUiThread(()->{ waiting.dismiss(); error(e); }); }
+        });
     }
 
     private void checkHardcoverKey(String key) {
@@ -1651,7 +1684,7 @@ public final class MainActivity extends AppCompatActivity {
         ko.addView(button("Collega un libro",false,this::linkKoreader));
         ko.addView(button("Ricevi avanzamento da KOReader",true,this::runKoreader));
         LinearLayout hc=surface(p,"HARDCOVER · STATO, PAGINA E VOTO");
-        boolean hcOn=!prefs.getString("hardcoverToken","").isEmpty();
+        boolean hcOn=app.atlante.library.sync.HardcoverAuth.connected(this);
         hc.addView(text(hcOn?"Collegato"+(prefs.getString("hardcoverUser","").isEmpty()?"":" come @"+prefs.getString("hardcoverUser","")):"Non collegato. Serve una chiave personale creata nel tuo account Hardcover.",14,hcOn?INK:MUTED,false));
         if(!prefs.getString("hardcoverLast","").isEmpty()) hc.addView(text(prefs.getString("hardcoverLast",""),12,MUTED,false));
         gap(hc,8);
@@ -1759,7 +1792,7 @@ public final class MainActivity extends AppCompatActivity {
         MaterialSwitch create=new MaterialSwitch(this); create.setText("Crea in Atlante i libri presenti solo su Hardcover"); create.setChecked(prefs.getBoolean("hardcoverCreate",true)); panel.addView(create);
         MaterialSwitch toRead=new MaterialSwitch(this); toRead.setText("Invia anche i libri «Da leggere» non ancora su Hardcover"); toRead.setChecked(prefs.getBoolean("hardcoverToRead",false)); panel.addView(toRead);
         dialogBuilder().setTitle("Hardcover").setView(scrolled(panel)).setNegativeButton("Annulla",null)
-            .setNeutralButton("Scollega",(d,w)->{prefs.edit().remove("hardcoverToken").remove("hardcoverUser").remove("hardcoverLast").apply(); app.atlante.library.saga.Hardcover.configure(this); showLibrary();})
+            .setNeutralButton("Scollega",(d,w)->disconnectHardcover())
             .setPositiveButton("Salva",(d,w)->{prefs.edit().putBoolean("hardcoverCreate",create.isChecked()).putBoolean("hardcoverToRead",toRead.isChecked()).apply(); saveHardcoverKey(token.getText().toString().trim(),null); showLibrary();}).show();
     }
 
@@ -1804,11 +1837,11 @@ public final class MainActivity extends AppCompatActivity {
     private void runHardcover() {
         if(busy) return; busy=true;
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
-        HardcoverSync.Settings s=new HardcoverSync.Settings(); s.token=prefs.getString("hardcoverToken",""); s.createMissing=prefs.getBoolean("hardcoverCreate",true); s.sendToRead=prefs.getBoolean("hardcoverToRead",false);
+        HardcoverSync.Settings s=new HardcoverSync.Settings(); s.createMissing=prefs.getBoolean("hardcoverCreate",true); s.sendToRead=prefs.getBoolean("hardcoverToRead",false);
         AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Hardcover",dialog);
         worker.execute(()->{
             Exception failure=null; HardcoverSync.Report r=null;
-            try { r=HardcoverSync.sync(store,s,m->runOnUiThread(()->label.setText(m))); } catch(Exception e){ failure=e; }
+            try { s.token=app.atlante.library.sync.HardcoverAuth.token(this); r=HardcoverSync.sync(store,s,m->runOnUiThread(()->label.setText(m))); } catch(Exception e){ failure=e; }
             final Exception error=failure; final HardcoverSync.Report report=r;
             runOnUiThread(()->{ dialog[0].dismiss(); busy=false; if(isFinishing()||isDestroyed()) return;
                 if(error!=null){ error(error); return; }
@@ -2200,12 +2233,50 @@ public final class MainActivity extends AppCompatActivity {
         else if (!destination.equals("Home")) navigate("Home");
         updateBack();
     }
-    @Override protected void onStop() { if (reading != null) rememberPage(); persistTimer(); stoppedAt = android.os.SystemClock.elapsedRealtime(); super.onStop(); }
+    @Override protected void onStop() {
+        if (reading != null) rememberPage(); persistTimer(); stoppedAt = android.os.SystemClock.elapsedRealtime();
+        if (store != null) stoppedVersion = store.version();
+        // Theme, goals or books may have changed: the home screen widgets redraw from the saved data.
+        app.atlante.library.widget.Widgets.refresh(this);
+        super.onStop();
+    }
+    private long stoppedVersion = -1;
+
+    // ---- Home screen widgets: they open a book, its progress editor, the statistics or the library -------------
+
+    public static final String OPEN_BOOK = "app.atlante.library.OPEN_BOOK", OPEN_PROGRESS = "app.atlante.library.OPEN_PROGRESS",
+        OPEN_STATS = "app.atlante.library.OPEN_STATS", OPEN_LIBRARY = "app.atlante.library.OPEN_LIBRARY", EXTRA_BOOK = "bookId";
+    private Intent widgetIntent;
+
+    /** The widgets reuse the running app (singleTop): the request is handled when the screen is back in front. */
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent); setIntent(intent);
+        if (isWidgetIntent(intent)) widgetIntent = intent;
+        else if (app.atlante.library.sync.HardcoverAuth.isCallback(intent.getData()) && store != null) finishHardcoverLogin(intent.getData());
+    }
+    private static boolean isWidgetIntent(Intent i) { return i != null && i.getAction() != null && i.getAction().startsWith("app.atlante.library.OPEN_"); }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (store == null || widgetIntent == null) return;
+        Intent i = widgetIntent; widgetIntent = null;
+        String action = i.getAction();
+        if (OPEN_STATS.equals(action)) { if (reading == null) navigate("Statistiche"); return; }
+        if (OPEN_LIBRARY.equals(action)) { if (reading == null) navigate("Biblioteca"); return; }
+        Book b = store.find(i.getStringExtra(EXTRA_BOOK) == null ? "" : i.getStringExtra(EXTRA_BOOK));
+        if (b == null) { Toast.makeText(this, "Questo libro non è più nella libreria.", Toast.LENGTH_LONG).show(); navigate("Biblioteca"); return; }
+        if (reading != null) { rememberPage(); reading = null; }
+        details(b);
+        if (OPEN_PROGRESS.equals(action)) progressEditor(b, 0, false);
+    }
 
     /** Back after more than 10 minutes away: Home again, unless you are reading or in the middle of an edit. */
     @Override protected void onRestart() {
         super.onRestart();
         if (store == null || reading != null || editingPage || stoppedAt == 0) return;
+        if (widgetIntent != null) return;   // a widget asked for a page: onResume opens it
+        // A widget changed the books while the app was in the background: draw them again.
+        if (stoppedVersion >= 0 && store.version() != stoppedVersion) { Book b = detailId == null ? null : store.find(detailId); if (b != null) details(b); else showLibrary(); }
         if (android.os.SystemClock.elapsedRealtime() - stoppedAt > 10 * 60 * 1000L && !destination.equals("Home")) {
             destination = "Home"; detailId = null; closeDrawer(); showLibrary();
         }

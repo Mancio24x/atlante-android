@@ -13,11 +13,34 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Back from hardcover.app after approving Atlante (OAuth). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="app.atlante.library" />
+            </intent-filter>
+        </activity>
+        <receiver android:name=".widget.SmallWidgetReceiver" android:exported="true" android:label="@string/widget_small_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_small" />
+        </receiver>
+        <receiver android:name=".widget.MediumWidgetReceiver" android:exported="true" android:label="@string/widget_medium_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_medium" />
+        </receiver>
+        <receiver android:name=".widget.LargeWidgetReceiver" android:exported="true" android:label="@string/widget_large_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_large" />
+        </receiver>
+        <activity android:name=".widget.WidgetConfigActivity" android:exported="true" android:label="Widget di lettura" android:excludeFromRecents="true" android:taskAffinity="">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
         </activity>
     </application>
 </manifest>

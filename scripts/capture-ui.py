@@ -104,7 +104,7 @@ tap('Il giardino delle storie');shot('12b-book-page')
 tap('Letto',exact=True);time.sleep(.8)
 book=next(b for b in catalog() if b['title']=='Il giardino delle storie')
 assert book['status']=='Letto' and book.get('finished'), 'State change not saved'
-shot('12c-book-read');tap('Aggiorna avanzamento',True);time.sleep(.4);shot('12d-progress-wheels');tap('Annulla',exact=True)
+shot('12c-book-read');tap('Aggiorna avanzamento',True);time.sleep(.4);shot('12d-progress-wheels');tap('Annulla',True,exact=True)
 tap('In pausa',True,exact=True);time.sleep(.6)
 assert status('Il giardino delle storie')=='In pausa', 'Paused state not saved'
 tap('Date, voto e note',True);shot('12e-paused-editor');tap('Salva',exact=True);time.sleep(.6)
