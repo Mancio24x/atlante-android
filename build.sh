@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+# Craft/GUI agent processes may not inherit the interactive shell environment.
+if [[ "$(uname -s)" == Darwin && -f "$HOME/.config/atlante-android/env.sh" ]]; then
+    source "$HOME/.config/atlante-android/env.sh"
+fi
 variant="${1:-release}"
 if [[ "$variant" != release && "$variant" != debug ]]; then
     echo 'Uso: ./build.sh [release|debug]' >&2

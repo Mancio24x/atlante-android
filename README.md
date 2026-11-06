@@ -46,10 +46,14 @@ Android: viene salvata una copia privata, senza cambiare l’originale. Il pulsa
 **Elenco / Griglia** cambia la visualizzazione e ricorda la scelta al riavvio.
 Piano e limiti della modifica sono in [PIANO-E-VERIFICA.md](PIANO-E-VERIFICA.md).
 
-Il Mac usato da Craft Anything non dispone attualmente di Java, Gradle e Android
-SDK: questo impedisce la compilazione locale, ma non quella del workflow
-**Android APK** su GitHub. I sorgenti aggiornati devono essere pubblicati nel
-repository prima di ottenere un nuovo APK dalle release.
+Il Mac usato da Craft Anything è configurato con Java 17, Gradle 8.9 e Android
+SDK 35 (Build Tools 35.0.0). La compilazione locale firmata è stata verificata
+con test e lint. `build.sh` carica automaticamente la configurazione locale da
+`~/.config/atlante-android/env.sh`, quando presente. Per compilare la versione
+attuale: `VERSION_NAME=1.0.12 VERSION_CODE=100012 bash build.sh release`.
+L’APK viene generato nella cartella `dist/`. La chiave di firma e le proprietà
+locali restano escluse da Git. Il workflow **Android APK** su GitHub resta
+disponibile per pubblicare le release.
 
 ## Filtri e ordinamento della biblioteca
 

@@ -6,3 +6,5 @@ signing.properties
 *.keystore
 *.p12
 .DS_Store
+
+/dist/
