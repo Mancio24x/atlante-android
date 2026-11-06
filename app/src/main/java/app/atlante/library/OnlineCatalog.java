@@ -19,7 +19,7 @@ final class OnlineCatalog {
         for (byte b : MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))) hex.append(String.format(Locale.ROOT,"%02x",b & 255));
         return hex.toString();
     }
-    private static byte[] request(String address, int limit) throws Exception {
+    static byte[] request(String address, int limit) throws Exception {
         File file = cacheDirectory == null ? null : new File(cacheDirectory, hash(address));
         long ttl = address.contains("search.json") ? 15 * 60 * 1000L : 24 * 60 * 60 * 1000L;
         if (file != null && file.isFile() && file.length() <= limit && System.currentTimeMillis()-file.lastModified() < ttl) {
@@ -160,9 +160,24 @@ final class OnlineCatalog {
 
     static byte[] loadCover(Book book) {
         if (book.onlineCover != null) return book.onlineCover;
-        if (book.coverId <= 0) return null;
-        try { return request("https://covers.openlibrary.org/b/id/"+book.coverId+"-M.jpg?default=false",2*1024*1024); }
-        catch (Exception ignored) { return null; }
+        try {
+            if (book.coverId > 0) return request("https://covers.openlibrary.org/b/id/"+book.coverId+"-M.jpg?default=false",2*1024*1024);
+            if (book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) return request("https://covers.openlibrary.org/b/isbn/"+book.isbn+"-M.jpg?default=false",2*1024*1024);
+        } catch (Exception ignored) { /* Covers are optional. */ }
+        return null;
+    }
+
+    /** Fills what a library record lacks (cover, plot, subjects, pages) from Open Library's edition with this ISBN. */
+    static void enrichByIsbn(Book book) throws Exception {
+        if (!book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) return;
+        JSONObject edition = new JSONObject(new String(request("https://openlibrary.org/isbn/" + book.isbn + ".json", 2 * 1024 * 1024), StandardCharsets.UTF_8));
+        JSONArray covers = edition.optJSONArray("covers");
+        if (book.coverId == 0 && covers != null && covers.optLong(0) > 0) book.coverId = covers.optLong(0);
+        if (book.totalPages == 0) book.totalPages = Math.max(0, edition.optInt("number_of_pages", 0));
+        JSONArray works = edition.optJSONArray("works");
+        String work = works == null || works.optJSONObject(0) == null ? "" : works.optJSONObject(0).optString("key");
+        if (work.matches("/works/OL[0-9]+W") && book.description.isEmpty())
+            enrichFrom(book, new String(request("https://openlibrary.org" + work + ".json", 2 * 1024 * 1024), StandardCharsets.UTF_8));
     }
 
     static void enrichEdition(Book book, JSONObject response) throws Exception { enrichEdition(book, response, "ita"); }

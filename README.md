@@ -93,6 +93,16 @@ Scegli la **Lingua preferita** (Italiano predefinito, poi English, Français, De
 Español, Português o tutte): i libri con un’edizione in quella lingua compaiono per
 primi, con titolo e copertina di quell’edizione, che viene poi usata per la scheda.
 **Mostra solo libri in questa lingua** esclude gli altri. La scelta viene ricordata.
+
+Con l’**italiano** la ricerca interroga anche il **catalogo SBN** (Servizio Bibliotecario
+Nazionale, ICCU), che raccoglie i libri delle biblioteche italiane e conosce molte più
+edizioni italiane di Open Library, comprese quelle recenti. I risultati SBN compaiono per
+primi, solo libri a stampa e uno per opera (l’edizione più recente con ISBN); quelli già
+presenti tra i risultati di Open Library non vengono ripetuti. Dalla scheda SBN arrivano
+editore, anno, pagine e ISBN; copertina e trama vengono cercate su Open Library tramite
+l’ISBN, quando disponibili. Le ricerche per ISBN usano il campo ISBN del catalogo.
+Il servizio usato è quello JSON dell’app ufficiale OPAC SBN: non è un’API documentata
+e potrebbe cambiare; se non risponde restano i risultati di Open Library.
 **Vedi la scheda completa** apre un’anteprima con copertina, autore, trama e
 metadati dell’edizione di riferimento (preferita italiana tra quelle restituite).
 I campi mancanti sono indicati come non disponibili. Verifica l’edizione e premi
@@ -122,8 +132,8 @@ puoi rinominarlo, dargli da 1 a 5 stelle e scrivere un commento; la sezione most
 media dei capitoli votati. Voti e commenti sono salvati nella scheda e nel backup. **Modifica scheda** resta per i dati del libro. Il segnalibro del lettore
 digitale resta separato dalle pagine dell’edizione cartacea inserite manualmente.
 
-Le ricerche HTTPS avvengono solo su richiesta e inviano a Open Library il testo
-cercato; l’apertura di una scheda richiede metadati e copertina della scheda scelta.
+Le ricerche HTTPS avvengono solo su richiesta e inviano a Open Library (e, per l’italiano,
+a OPAC SBN) il testo cercato; l’apertura di una scheda richiede metadati e copertina della scheda scelta.
 File, catalogo locale e note non vengono inviati. Timeout e dimensioni delle
 risposte sono limitati e le ricerche recenti sono riutilizzate in memoria.
 Riferimenti: [Search API](https://openlibrary.org/dev/docs/api/search),

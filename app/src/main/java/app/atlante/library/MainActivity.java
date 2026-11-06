@@ -593,6 +593,8 @@ public final class MainActivity extends AppCompatActivity {
         field.setText(mapAuthor, false); field.setSelectAllOnFocus(true);
         // Tapping the field lists every author; typing narrows the list.
         field.setOnClickListener(v -> { if (!authors.isEmpty()) field.showDropDown(); });
+        // The first tap only focuses the field: open the list then too.
+        field.setOnFocusChangeListener((v, focused) -> { if (focused && !authors.isEmpty()) field.post(field::showDropDown); });
         field.setOnItemClickListener((parent, view, position, id) -> {
             mapAuthor = parent.getItemAtPosition(position).toString();
             field.clearFocus(); hideKeyboard(field); renderContent();
@@ -964,13 +966,14 @@ public final class MainActivity extends AppCompatActivity {
         previewCover.setContentDescription("Copertina di " + b.title);
         if (image != null) {
             previewCover.setImageBitmap(image); panel.addView(previewCover, new LinearLayout.LayoutParams(-1, dp(220)));
-        } else if (b.coverId > 0) {
+        } else if (b.coverId > 0 || !b.isbn.isEmpty()) {
             previewCover.setBackground(background(PAPER,LINE)); panel.addView(previewCover,new LinearLayout.LayoutParams(-1,dp(220)));
         }
         panel.addView(text(b.title, 28, INK, true)); panel.addView(text(b.author, 18, SAGE, false)); gap(panel, 12);
         bibliographic(panel, b); gap(panel, 14); panel.addView(text("Trama", 20, INK, true));
         panel.addView(text(available(b.description), 16, INK, false)); gap(panel, 12);
-        panel.addView(text(b.source.isEmpty() ? "Dati estratti dal file scelto. Puoi correggerli dalla scheda dopo l’aggiunta." : "Fonte: Open Library · " + b.source + "\nEdizione di riferimento: " + available(b.edition) + " · I dati possono variare tra edizioni. La scheda non include il file del libro.", 13, MUTED, false));
+        panel.addView(text(b.source.isEmpty() ? "Dati estratti dal file scelto. Puoi correggerli dalla scheda dopo l’aggiunta." : (b.source.startsWith("sbn:") ? "Fonte: catalogo SBN delle biblioteche italiane · " + b.source.substring(4) + "\nCopertina e trama da Open Library, se disponibili."
+            : "Fonte: Open Library · " + b.source + "\nEdizione di riferimento: " + available(b.edition)) + " · I dati possono variare tra edizioni. La scheda non include il file del libro.", 13, MUTED, false));
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
         AlertDialog dialog = dialogBuilder().setTitle("Anteprima del libro").setView(scroll)
             .setNegativeButton("Non aggiungere", null).setPositiveButton("Aggiungi alla mia libreria", null).create();
@@ -982,7 +985,7 @@ public final class MainActivity extends AppCompatActivity {
             });
         });
         dialog.setOnCancelListener(d -> { store.discardCandidate(b); next.run(); }); dialog.show();
-        if (image == null && b.coverId > 0) coverWorker.execute(() -> {
+        if (image == null && (b.coverId > 0 || !b.isbn.isEmpty())) coverWorker.execute(() -> {
             byte[] bytes = OnlineCatalog.loadCover(b);
             if (bytes == null) return;
             b.onlineCover=bytes;
@@ -1004,7 +1007,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private void onlineSearch() {
         LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
-        panel.addView(text("Cerca su Open Library per titolo, autore o ISBN. Si aggiunge una scheda personale, anche se non possiedi il file. La ricerca invia al servizio solo il testo inserito.", 14, MUTED, false));
+        panel.addView(text("Cerca per titolo, autore o ISBN nel catalogo delle biblioteche italiane (SBN, per l’italiano) e su Open Library. Si aggiunge una scheda personale, anche se non possiedi il file. La ricerca invia al servizio solo il testo inserito.", 14, MUTED, false));
         gap(panel, 8);
         EditText input = field(panel, "Titolo, autore o ISBN", lastOnlineQuery.isEmpty() ? getPreferences(MODE_PRIVATE).getString("onlineQuery", "") : lastOnlineQuery);
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
@@ -1031,7 +1034,17 @@ public final class MainActivity extends AppCompatActivity {
             prefs.edit().putString("bookLanguage", code).putBoolean("onlyLanguage", only.isChecked()).apply();
             catalogWorker.execute(() -> {
                 try {
-                    ArrayList<Book> found = OnlineCatalog.search(term, code, onlyLanguage);
+                    ArrayList<Book> found = new ArrayList<>();
+                    // Italian: the national library catalog (SBN) knows far more Italian editions than Open Library.
+                    if (code.equals("ita")) { try { found.addAll(SbnCatalog.search(term)); } catch (Exception ignored) { /* Open Library still answers. */ } }
+                    ArrayList<Book> openLibrary;
+                    try { openLibrary = OnlineCatalog.search(term, code, onlyLanguage); }
+                    catch (Exception e) { if (found.isEmpty()) throw e; openLibrary = new ArrayList<>(); }
+                    for (Book other : openLibrary) {
+                        boolean duplicate = false;
+                        for (Book known : found) if (SbnCatalog.sameWork(known, other)) { duplicate = true; break; }
+                        if (!duplicate && found.size() < 40) found.add(other);
+                    }
                     runOnUiThread(() -> {
                         if (isFinishing() || isDestroyed() || !dialog.isShowing()) return;
                         search.setEnabled(true); results.removeAllViews();
@@ -1041,15 +1054,19 @@ public final class MainActivity extends AppCompatActivity {
                             gap(results, 12); LinearLayout tile = column(); tile.setPadding(dp(16),dp(16),dp(16),dp(16));
                             results.addView(card(tile));
                             tile.addView(text(candidate.title, 21, INK, true)); gap(tile,4);
-                            if (!code.isEmpty() && candidate.language.equals(code)) { tile.addView(text("Edizione in " + OnlineCatalog.languageName(code), 12, COPPER, false)); gap(tile, 2); }
-                            tile.addView(text(candidate.author + (candidate.year.isEmpty() ? "" : " · " + candidate.year), 14, SAGE, false)); gap(tile,12);
+                            boolean library = candidate.source.startsWith("sbn:");
+                            String origin = library ? "Biblioteche italiane (SBN)" : "Open Library";
+                            if (!code.isEmpty() && candidate.language.equals(code)) origin += " · edizione in " + OnlineCatalog.languageName(code);
+                            tile.addView(text(origin, 12, COPPER, false)); gap(tile, 2);
+                            tile.addView(text(candidate.author + (candidate.publisher.isEmpty() ? "" : " · " + candidate.publisher) + (candidate.year.isEmpty() ? "" : " · " + candidate.year), 14, SAGE, false)); gap(tile,12);
                             Book existing = store.find(candidate.id);
                             tile.addView(button(existing == null ? "Vedi la scheda completa" : "Già in libreria · Apri", false, () -> {
                                 if (existing != null) { dialog.dismiss(); details(existing); return; }
                                 AlertDialog loading = loading("Scheda del libro", "Caricamento trama e metadati…");
                                 catalogWorker.execute(() -> {
                                     try {
-                                        OnlineCatalog.enrich(candidate, code.isEmpty() ? "ita" : code);
+                                        if (candidate.source.startsWith("sbn:")) SbnCatalog.enrich(candidate);
+                                        else OnlineCatalog.enrich(candidate, code.isEmpty() ? "ita" : code);
                                         runOnUiThread(() -> { loading.dismiss(); if (!isFinishing() && !isDestroyed()) preview(candidate, () -> { dialog.dismiss(); showLibrary(); }); });
                                     } catch (Exception e) { runOnUiThread(() -> { loading.dismiss(); if (!isFinishing() && !isDestroyed()) error(e); }); }
                                 });
