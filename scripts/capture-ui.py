@@ -171,3 +171,27 @@ assert any('Fonti consultate' in n.get('text','') for n in dump().iter('node')),
 tap('Annulla',True,exact=True);back()
 print('Metadata review completed.')
 
+
+# Sagas: a real book is recognized online, its saga rebuilt and shown as a carousel (nothing is added to the library).
+records=catalog()
+records.append(dict(id='f'*64,title='Red Rising',author='Pierce Brown',genre='Fantascienza',year='2014',format='CATALOGO',status='Letto'))
+seed.write_text(json.dumps(records));adb('shell','am','force-stop',package)
+adb('push',str(seed),'/data/local/tmp/atlante-sample.json')
+adb('shell','run-as',package,'cp','/data/local/tmp/atlante-sample.json','files/library.json')
+adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1.5)
+tap('Biblioteca',exact=True);tap('Tutti',exact=True);tap('Red Rising',True,exact=True)
+found=False
+for _ in range(45):
+    texts=[n.get('text','') for n in dump().iter('node')]
+    if any(t in ('Altri libri della saga','Saga non identificata') for t in texts): found=True;break
+    adb('shell','input','swipe','540','1250','540','750','300');time.sleep(1.5)
+shot('50-book-saga')
+assert found, 'Saga section did not appear'
+tap('Visualizza saga completa',True);time.sleep(1);shot('51-full-saga')
+assert any('Golden Son' in n.get('text','') for n in dump().iter('node')), 'Full saga does not list Golden Son'
+tap('Chiudi',exact=True)
+for _ in range(20):
+    if any(n.get('text','').startswith('Altri libri di Pierce') for n in dump().iter('node')): break
+    adb('shell','input','swipe','540','1250','540','750','300');time.sleep(1.5)
+shot('52-book-author-carousel')
+print('Saga carousels completed.')

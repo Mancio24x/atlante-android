@@ -10,3 +10,4 @@ signing.properties
 /dist/
 
 scripts/__pycache__/
+.kotlin/

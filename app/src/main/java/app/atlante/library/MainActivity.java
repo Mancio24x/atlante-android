@@ -689,6 +689,22 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /** Book window: a Material bottom sheet with reading state, plot, chapters and the book's details. */
+    /** Saga section of the book page: opens owned books, searches the others, writes a saga the user picked. */
+    private final app.atlante.library.ui.compose.SagaHost sagaHost = new app.atlante.library.ui.compose.SagaHost() {
+        @Override public void openBook(String id) { Book x = store.find(id); if (x != null) details(x); }
+        @Override public void searchOnline(String q) { lastOnlineQuery = q; onlineSearch(); }
+        @Override public void applySeries(String id, String name, String ordinal, boolean chosen) {
+            Book x = store.find(id); if (x == null || (!chosen && !x.series.isEmpty())) return;
+            double n = 0; try { if (ordinal != null) n = Double.parseDouble(ordinal.replace(',', '.')); } catch (NumberFormatException ignored) { }
+            if (x.series.equals(name) && (n == 0 || x.number == n)) return;
+            String oldSeries = x.series; double oldNumber = x.number;
+            x.series = name; if (n > 0 || chosen) x.number = n;
+            try { store.replace(x); } catch (Exception e) { x.series = oldSeries; x.number = oldNumber; error(e); }
+        }
+        @Override public String coverFile(String id) { Book x = store.find(id); if (x == null) return null; File f = store.cover(x); return f.exists() ? f.getPath() : null; }
+        @Override public java.util.List<Book> library() { return store.snapshot(); }
+    };
+
     private void details(Book b) {
         if (detailId == null) {
             if (grid != null && grid.getLayoutManager() != null) libraryPositions.put(destination,grid.getLayoutManager().onSaveInstanceState());
@@ -753,6 +769,7 @@ public final class MainActivity extends AppCompatActivity {
             panel.addView(expander("Trama", plot, false));
         }
         panel.addView(chaptersSection(b));
+        panel.addView(app.atlante.library.ui.compose.BookSagaView.create(this, palette, b, sagaHost));
 
         LinearLayout info = column();
         if (!b.tags.isEmpty()) info.addView(text("Tag: " + b.tags, 14, INK, false));

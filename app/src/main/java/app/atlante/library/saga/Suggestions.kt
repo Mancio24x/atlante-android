@@ -1,0 +1,147 @@
+package app.atlante.library.saga
+
+import app.atlante.library.model.Book
+import app.atlante.library.model.BookMatcher
+import app.atlante.library.online.OnlineCatalog
+import app.atlante.library.saga.db.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.URLEncoder
+
+/** A book in a carousel: in the library ([ownedBookId]) or only known from a source (never added by itself). */
+data class ShelfItem(
+    val title: String, val author: String, val year: String?, val ordinal: String?,
+    val ownedBookId: String?, val read: Boolean,
+    /** Cover already known (Open Library cover id), or an Open Library work whose cover is fetched when shown. */
+    val coverUrl: String?, val coverWork: String?,
+    /** Text for the online search when the user wants to add it. */
+    val query: String,
+    /** Other titles of the same work (original, Italian, without the saga prefix): used to avoid duplicates. */
+    val alsoKnownAs: List<String> = emptyList(),
+)
+
+data class SagaShelf(
+    val link: BookLink, val series: SeriesEntity?, val items: List<ShelfItem>, val total: Int, val owned: Int,
+    val subseries: List<String>, val universe: String?,
+)
+
+/**
+ * The three carousels of the book page: the rest of the saga, other books by the author, and
+ * "Potrebbero interessarti" (deterministic: same genre, most published editions first, owned books excluded).
+ * Online answers stay in the cache for [suggestionDays].
+ */
+class Suggestions(
+    private val dao: SagaDao,
+    private val library: () -> List<Book>,
+    private val fetch: (String) -> String = { String(OnlineCatalog.request(it, 4 * 1024 * 1024), Charsets.UTF_8) },
+    private val now: () -> Long = System::currentTimeMillis,
+) {
+    var suggestionDays = 30
+
+    suspend fun saga(link: BookLink): SagaShelf? {
+        val seriesId = link.seriesId ?: return null
+        val series = dao.series(seriesId) ?: return null
+        val volumes = dao.volumes(seriesId)
+        val linked = dao.linksForWorks(volumes.map { it.work.id }).groupBy { it.workId }
+        val books = library()
+        val items = volumes.map { v ->
+            val authors = dao.authorsOf(v.work.id).joinToString(" & ") { it.name }
+            val owned = linked[v.work.id]?.firstNotNullOfOrNull { l -> books.firstOrNull { it.id == l.bookId } }
+                ?: books.firstOrNull { b -> titlesOf(v.work).any { t -> BookMatcher.same(Book().apply { title = t; author = authors.ifBlank { b.author } }, b) } }
+            val title = owned?.title ?: v.work.italianTitle ?: v.work.originalTitle
+            ShelfItem(title, owned?.author ?: authors, v.work.firstPublished, v.ordinal, owned?.id, owned?.status == Book.READ,
+                null, v.work.openLibraryId, "$title ${authors.substringBefore(" & ")}".trim(), titlesOf(v.work))
+        }
+        val universe = series.universeId?.let { dao.universe(it)?.name }
+        return SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, dao.subseries(seriesId).map { it.name }, universe)
+    }
+
+    /**
+     * Owned books by the same author first, then the author's other works from Open Library; works already
+     * in [exclude] (the saga carousel, with the original titles of this very book) are left out.
+     */
+    suspend fun byAuthor(book: Book, exclude: List<ShelfItem> = emptyList()): List<ShelfItem> {
+        val name = book.author.split(" & ").first().trim()
+        if (name.isBlank() || name == "Autore sconosciuto") return emptyList()
+        val surnames = BookMatcher.surnames(name)
+        val books = library()
+        val owned = books.filter { it.id != book.id && BookMatcher.surnames(it.author).any { s -> s in surnames } }
+            .sortedBy { it.year.ifBlank { "9999" } }.map { it.asItem() }
+        val online = cachedSearch("author", name, "author=" + URLEncoder.encode(name, "UTF-8"))
+            .filter { w -> w.authors.any { a -> BookMatcher.surnames(a).any { it in surnames } } }
+            .filterNot { w -> BookMatcher.same(Book().apply { title = w.title; author = name }, book) || owned.any { o -> sameTitle(w, o.title) } || listed(w, exclude) }
+        return owned + online.map { it.asItem() }
+    }
+
+    /**
+     * Same genre and period (30 years around the book), most published first, at most two per author;
+     * excludes owned books, this author and the other carousels. Same input, same list.
+     */
+    suspend fun mayInterest(book: Book, exclude: List<ShelfItem> = emptyList()): List<ShelfItem> {
+        val subject = Genres.subjectFor(book.genre) ?: return emptyList()
+        val year = Regex("\\d{4}").find(book.year)?.value?.toInt()
+        val (from, to) = if (year != null) (year - 30) to (year + 30) else 1980 to 2100
+        val books = library()
+        val surnames = BookMatcher.surnames(book.author)
+        val perAuthor = HashMap<String, Int>()
+        return cachedSearch("subject", "$subject:$from-$to", "q=" + URLEncoder.encode("subject:$subject first_publish_year:[$from TO $to]", "UTF-8"))
+            .filterNot { w -> w.authors.any { a -> BookMatcher.surnames(a).any { it in surnames } } }
+            .filterNot { w -> books.any { b -> sameTitle(w, b.title) } || listed(w, exclude) }
+            .filter { w -> (perAuthor.merge(w.authors.firstOrNull() ?: "", 1, Int::plus) ?: 0) <= 2 }
+            .take(20).map { it.asItem() }
+    }
+
+    /** Cover of an Open Library work (first cover of /works/OL…W.json), remembered for [suggestionDays]. */
+    suspend fun workCover(olWork: String): String? {
+        if (!Regex("OL[0-9]+W").matches(olWork)) return null
+        val json = cached("cover:$olWork", "cover") { fetch("https://openlibrary.org/works/$olWork.json") } ?: return null
+        val id = JSONObject(json).optJSONArray("covers")?.optLong(0) ?: 0
+        return OpenLibraryWorks.coverUrl(if (id > 0) id else 0)
+    }
+
+    data class Found(val key: String, val title: String, val authors: List<String>, val year: String?, val coverId: Long)
+
+    private suspend fun cachedSearch(kind: String, value: String, filter: String): List<Found> {
+        val json = cached("$kind:${value.lowercase()}", kind) {
+            fetch("https://openlibrary.org/search.json?$filter&sort=editions&lang=it&limit=60&fields=key,title,author_name,cover_i,first_publish_year,editions,editions.title,editions.language")
+        } ?: return emptyList()
+        return parse(json)
+    }
+
+    private suspend fun cached(key: String, kind: String, load: () -> String): String? {
+        dao.cached(key, now())?.let { return it.json }
+        val json = withContext(Dispatchers.IO) { runCatching(load).getOrNull() } ?: return null
+        dao.putCache(CacheEntry(key, kind, json, now(), now() + suggestionDays * 86_400_000L))
+        return json
+    }
+
+    private fun Found.asItem() = ShelfItem(title, authors.joinToString(" & "), year, null, null, false,
+        OpenLibraryWorks.coverUrl(coverId), null, "$title ${authors.firstOrNull() ?: ""}".trim())
+
+    private fun Book.asItem() = ShelfItem(title, author, year.ifBlank { null }, null, id, status == Book.READ, null, null, title)
+
+    private fun titlesOf(w: WorkEntity) = listOfNotNull(w.originalTitle, w.italianTitle) + w.altTitles.split('\n').filter { it.isNotBlank() } +
+        listOfNotNull(w.originalTitle.substringAfter(": ", "").ifBlank { null }, w.italianTitle?.substringAfter(": ", "")?.ifBlank { null })
+
+    private fun sameTitle(w: Found, title: String) = OnlineCatalog.sameTitle(w.title, title)
+    private fun listed(w: Found, items: List<ShelfItem>) = items.any { i -> (listOf(i.title) + i.alsoKnownAs).any { sameTitle(w, it) } }
+
+    companion object {
+        /** Open Library search answer: the Italian edition title is preferred when there is one. Duplicates removed. */
+        fun parse(json: String): List<Found> {
+            val docs = JSONObject(json).optJSONArray("docs") ?: return emptyList()
+            val seen = HashSet<String>()
+            return (0 until docs.length()).mapNotNull { docs.optJSONObject(it) }.mapNotNull { d ->
+                val key = d.optString("key").substringAfterLast('/')
+                val ed = d.optJSONObject("editions")?.optJSONArray("docs")?.optJSONObject(0)
+                val italian = ed?.takeIf { e -> e.optJSONArray("language")?.let { l -> (0 until l.length()).any { l.optString(it) == "ita" } } == true }?.optString("title")
+                // Catalog titles of Italian editions can carry notes: "Ritratto di Dorian Gray : (con annotazioni)".
+                val title = italian?.substringBefore(" : ")?.replace(Regex("\\s*\\([^)]*\\)\\s*$"), "")?.trim()?.takeIf { it.length > 1 } ?: d.optString("title")
+                if (title.isBlank() || !seen.add(BookMatcher.clean(title))) return@mapNotNull null
+                val authors = d.optJSONArray("author_name")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+                Found(key, title, authors, d.optInt("first_publish_year").takeIf { it > 0 }?.toString(), d.optLong("cover_i"))
+            }
+        }
+    }
+}

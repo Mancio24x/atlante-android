@@ -23,7 +23,9 @@ class SagaRepository(
     suspend fun recognize(book: Book, force: Boolean = false): BookLink {
         val known = dao.link(book.id)
         if (known != null && known.status in USER_STATUSES) return known
-        if (known != null && !force && now() - known.checkedAt < refreshMs) return known
+        // A failed search (often just no connection) is retried after a day, not after the full interval.
+        val interval = if (known?.status == "unidentified") minOf(refreshMs, 86_400_000L) else refreshMs
+        if (known != null && !force && now() - known.checkedAt < interval) return known
         val match = withContext(Dispatchers.IO) { SagaRecognizer.identify(book, sources) }
         var seriesId: Long? = null
         val sagaIds = ArrayList<Pair<WdSeriesLink, Long>>()

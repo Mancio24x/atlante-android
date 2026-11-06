@@ -104,6 +104,12 @@ Le saghe vengono ricostruite da **Wikidata** (serie P179, numero P1545, autore P
 - **Le voci della saga stessa e le singole edizioni** (per esempio un ebook o un audiolibro) non vengono scambiate per l'opera.
 - **Gli universi** (Cosmere) non sono saghe; le sotto-serie (Wax and Wayne dentro Mistborn, la trilogia dentro Red Rising Saga) restano annidate.
 - **Ricostruzione della saga** (`SagaRepository`): ogni saga viene salvata con tutti i volumi, anche quelli che non possiedi, in ordine, con titolo originale e italiano e le sotto-serie annidate. Le serie di audiolibri o di edizioni sono escluse. Se mancano numeri o ci sono buchi nella numerazione, la saga è segnata *Elenco potenzialmente incompleto*. Le saghe vengono riaggiornate ogni 7 giorni (configurabile). Le saghe create a mano e i volumi aggiunti a mano non vengono mai toccati, e un collegamento confermato o scelto dall'utente resta com'è.
+- **Nella pagina del libro** (sezione in Compose) la saga viene cercata la prima volta che apri il libro. Poi ci sono tre caroselli che si caricano uno dopo l'altro:
+  - **Altri libri della saga**, con *Visualizza saga completa*: tutti i volumi, quali possiedi, quali hai letto e quali mancano.
+  - **Altri libri di [autore]**: prima i tuoi, poi le altre opere da Open Library, con *Visualizza tutti i libri dell'autore*.
+  - **Potrebbero interessarti**: stesso genere normalizzato (Epic Fantasy → Fantasy) e libri usciti entro 30 anni dal tuo, i più pubblicati per primi, massimo due per autore, esclusi quelli che hai già. Lo stesso libro dà sempre lo stesso elenco.
+
+  Toccando un libro che non hai si apre la ricerca online: nessun suggerimento entra in biblioteca da solo. Se la saga è incerta l'app chiede conferma. Se manca compare *Saga non identificata*, con le opzioni Riprova, Cerca per titolo originale, Scegli una saga, Crea una saga e Lascia senza saga. Le risposte online restano in cache per 30 giorni.
 - **Il grafo bibliografico** è salvato in un database Room separato (`atlante-bibliography.db`, migrazioni versionate e non distruttive). La libreria personale resta in `library.json` ed è collegata per id del libro. Le correzioni manuali non vengono mai sovrascritte.
 
 I test (`SagaRecognizerTest`, `SagaDatabaseTest`) usano risposte reali di Wikidata salvate in `app/src/test/resources/wikidata`.

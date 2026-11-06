@@ -51,6 +51,7 @@ interface SagaDao {
               FROM series s ORDER BY s.name""")
     suspend fun allSeries(): List<SeriesSummary>
     @Query("SELECT * FROM universes WHERE wikidataId = :qid LIMIT 1") suspend fun universeByWikidata(qid: String): UniverseEntity?
+    @Query("SELECT * FROM universes WHERE id = :id") suspend fun universe(id: Long): UniverseEntity?
     @Insert suspend fun insertUniverse(u: UniverseEntity): Long
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun putRelation(r: WorkRelation)
     @Query("SELECT * FROM work_relations WHERE fromWorkId = :workId") suspend fun relationsFrom(workId: Long): List<WorkRelation>
