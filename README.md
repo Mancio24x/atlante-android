@@ -33,6 +33,20 @@ Il workflow manuale **Android UI preview** esegue sull’emulatore Android 35 un
 prova di menu, impostazioni, temi e riavvio; le schermate sono disponibili tra gli
 artifact. Usa soltanto dati fittizi nell’app debug, separata dalla libreria personale.
 
+## Filtri e ordinamento della biblioteca
+
+**Filtri e ordine**, sotto la ricerca, combina stato di lettura, genere e formato.
+Le scelte restano al riavvio e valgono anche per autori, saghe e mappa; il contatore
+mostra i risultati sul totale. **Azzera filtri** permette di ritrovare tutti i libri.
+L’ordine può essere per titolo, autore o saga e numero del volume (i libri senza
+saga seguono gli altri). La ricerca trova anche gli ISBN salvati.
+
+Questo miglioramento è un’implementazione nativa indipendente ispirata alle viste
+con filtri di [BookLore](https://github.com/booklore-app/BookLore) e al catalogo
+personale mobile con ISBN di [bibliotrack](https://github.com/diegoperu/bibliotrack).
+Non integra i loro server, non copia il loro codice e non aggiunge sincronizzazione
+né scansione dei codici a barre.
+
 ## Ricerca online, schede e avanzamento
 
 Premi **Cerca libri online** e cerca un titolo, autore o ISBN su Open Library.

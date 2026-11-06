@@ -35,6 +35,7 @@ public final class MainActivity extends Activity {
     private int insetTop, insetBottom;
     private String lastOnlineQuery = "";
     private String tab = "Tutti i libri", query = "", mapAuthor = "", exportId;
+    private String filterStatus = "", filterGenre = "", filterFormat = "", sortOrder = "Titolo";
     private Book reading;
     private List<String> pages;
     private int page;
@@ -50,6 +51,8 @@ public final class MainActivity extends Activity {
         }
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         applyPalette(ThemePalette.find(prefs.getString("theme", "atlante")));
+        filterStatus = prefs.getString("filterStatus", ""); filterGenre = prefs.getString("filterGenre", "");
+        filterFormat = prefs.getString("filterFormat", ""); sortOrder = prefs.getString("sortOrder", "Titolo");
         OnlineCatalog.configure(new File(getCacheDir(), "catalog"));
         fontSize = Math.max(8, Math.min(80, prefs.getFloat("fontSize", 20)));
         readerDark = prefs.getBoolean("dark", false); manga = prefs.getBoolean("manga", false);
@@ -262,7 +265,9 @@ public final class MainActivity extends Activity {
                 filterTask = () -> { if (reading == null) renderContent(); }; uiHandler.postDelayed(filterTask, 180); }
             public void afterTextChanged(Editable e) { }
         });
-        gap(header, 12);
+        gap(header, 8);
+        header.addView(button("Filtri e ordine" + (hasFilters() ? " · attivi" : "") + " · " + sortOrder, false, this::libraryFilters));
+        gap(header, 8);
         rule(root);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -272,25 +277,67 @@ public final class MainActivity extends Activity {
     }
 
     private ArrayList<Book> filtered() {
-        ArrayList<Book> list = store.snapshot(); String needle = query.toLowerCase(Locale.ROOT).trim();
-        list.removeIf(b -> !(b.title + " " + b.author + " " + b.series + " " + b.genre).toLowerCase(Locale.ROOT).contains(needle));
-        if (tab.equals("Desideri")) list.removeIf(b -> !b.format.equals("CATALOGO"));
-        if (tab.equals("In lettura")) list.removeIf(b -> !b.status.equals("In lettura"));
-        if (tab.equals("Letti")) list.removeIf(b -> !b.status.equals("Letto"));
-        list.sort((a, b) -> EbookParser.naturalCompare(a.title, b.title)); return list;
+        return LibraryQuery.select(store.snapshot(), query, tab, filterStatus, filterGenre, filterFormat, sortOrder);
+    }
+
+    private boolean hasFilters() { return !filterStatus.isEmpty() || !filterGenre.isEmpty() || !filterFormat.isEmpty(); }
+
+    private Spinner filterPicker(LinearLayout panel, String label, List<String> options, String selected) {
+        panel.addView(text(label, 14, INK, false));
+        Spinner picker = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, options) {
+            @Override public View getView(int position, View convertView, ViewGroup parent) {
+                TextView view = (TextView) super.getView(position, convertView, parent); view.setTextColor(INK); return view;
+            }
+            @Override public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                TextView view = (TextView) super.getDropDownView(position, convertView, parent);
+                view.setTextColor(INK); view.setBackgroundColor(WHITE); return view;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        picker.setAdapter(adapter); picker.setSelection(Math.max(0, options.indexOf(selected)));
+        panel.addView(picker, new LinearLayout.LayoutParams(-1, dp(48))); gap(panel, 10); return picker;
+    }
+
+    private void libraryFilters() {
+        LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
+        TreeSet<String> genres = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (Book book : store.snapshot()) if (!book.genre.isEmpty()) genres.add(book.genre);
+        if (!filterGenre.isEmpty()) genres.add(filterGenre);
+        ArrayList<String> genreOptions = new ArrayList<>(); genreOptions.add("Tutti i generi"); genreOptions.addAll(genres);
+        Spinner status = filterPicker(panel, "Stato di lettura", Arrays.asList("Tutti gli stati", "Da leggere", "In lettura", "Letto", "In pausa", "Abbandonato"), filterStatus);
+        Spinner genre = filterPicker(panel, "Genere", genreOptions, filterGenre);
+        Spinner format = filterPicker(panel, "Formato", Arrays.asList("Tutti i formati", "EPUB", "TXT", "CBZ", "CATALOGO"), filterFormat);
+        Spinner order = filterPicker(panel, "Ordina per", Arrays.asList("Titolo", "Autore", "Saga"), sortOrder);
+        dialogBuilder().setTitle("Filtri e ordine").setView(panel)
+            .setNegativeButton("Annulla", null)
+            .setNeutralButton("Azzera filtri", (d, w) -> { filterStatus = ""; filterGenre = ""; filterFormat = ""; applyLibraryFilters(); })
+            .setPositiveButton("Applica", (d, w) -> {
+                filterStatus = status.getSelectedItemPosition() == 0 ? "" : status.getSelectedItem().toString();
+                filterGenre = genre.getSelectedItemPosition() == 0 ? "" : genre.getSelectedItem().toString();
+                filterFormat = format.getSelectedItemPosition() == 0 ? "" : format.getSelectedItem().toString();
+                sortOrder = order.getSelectedItem().toString(); applyLibraryFilters();
+            }).show();
+    }
+
+    private void applyLibraryFilters() {
+        getPreferences(MODE_PRIVATE).edit().putString("filterStatus", filterStatus).putString("filterGenre", filterGenre)
+            .putString("filterFormat", filterFormat).putString("sortOrder", sortOrder).apply();
+        visibleBooks = 60; showLibrary();
     }
 
     private void renderContent() {
         if (content == null) return;
         content.removeAllViews();
         ArrayList<Book> list = filtered();
-        notice.setText(busy ? "Importazione in corso…" : store.snapshot().size() + " libri · Sul dispositivo · Lettura offline");
+        notice.setText(busy ? "Importazione in corso…" : list.size() + " di " + store.snapshot().size() + " libri · Sul dispositivo · Lettura offline");
         if (list.isEmpty()) {
             gap(content, 32);
             content.addView(text(store.snapshot().isEmpty() ? "Ogni libro è un punto di partenza." : "Nessun libro trovato.", 30, INK, true));
             gap(content, 16);
             content.addView(text(store.snapshot().isEmpty() ? "Apri il menu ☰ per cercare nuovi titoli online o importare EPUB, TXT e CBZ. Tutte le tue letture, anche su carta, trovano posto qui." : "Prova un altro titolo, autore o nome di saga.", 16, MUTED, false));
             gap(content, 24);
+            if (hasFilters()) content.addView(button("Azzera filtri", false, () -> { filterStatus = ""; filterGenre = ""; filterFormat = ""; applyLibraryFilters(); }));
             if (store.snapshot().isEmpty()) content.addView(button("Cerca il tuo primo libro", true, this::onlineSearch));
             return;
         }
