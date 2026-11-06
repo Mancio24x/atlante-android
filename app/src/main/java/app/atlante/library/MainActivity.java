@@ -1201,8 +1201,9 @@ public final class MainActivity extends AppCompatActivity {
 
     private void chooseBackup() {
         if (busy) return;
-        restoreLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
-            .putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"}));
+        // Any file: phones and cloud apps label ZIPs with different types and would grey them out.
+        // The content is checked anyway (atlante-backup.json) before anything is restored.
+        restoreLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"));
     }
 
     private void writeBackup(Uri dest) {
