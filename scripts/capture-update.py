@@ -87,6 +87,8 @@ tap('Avvia il timer di lettura',True);time.sleep(3);tap('Pausa',True,exact=True)
 adb('shell','settings','put','system','accelerometer_rotation','0');adb('shell','settings','put','system','user_rotation','1');time.sleep(1)
 adb('shell','settings','put','system','user_rotation','0');time.sleep(1)
 tap('Riprendi',True,exact=True);time.sleep(2);tap('Termina',True,exact=True);tap('Salva la sessione',True);time.sleep(1)
-sessions=catalog()[0]['journal']['sessions'];assert len(sessions)==1 and sessions[0]['seconds']>=5
+# The wheel update above is a session too (no time); the timed one must be there exactly once, rotation included.
+sessions=catalog()[0]['journal']['sessions'];timed=[x for x in sessions if x.get('timerId')]
+assert len(timed)==1 and timed[0]['seconds']>=5, sessions
 (out/'update-verified.json').write_text(json.dumps({'settings':True,'wheels':True,'timer_rotation':True,'sessions':sessions},indent=2))
 print('SETTINGS, WHEELS AND TIMER CHECKED')
