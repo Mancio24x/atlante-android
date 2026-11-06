@@ -59,7 +59,7 @@ adb('shell','am','force-stop',package)
 adb('push',str(seed),'/data/local/tmp/atlante-sample.json')
 adb('shell','run-as',package,'cp','/data/local/tmp/atlante-sample.json','files/library.json')
 adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
-shot('01-library')
+tap('Biblioteca',exact=True);shot('01-library')
 tap('Apri menu laterale');shot('02-drawer');tap('Chiudi menu laterale')
 tap('Impostazioni');shot('03-settings');tap('◐ Temi');shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
 for theme,name in [('Lavanda','06-lavender'),('Blu polvere','07-blue'),('AMOLED nero','08-amoled')]:
@@ -82,20 +82,27 @@ shot('11-settings-restored')
 tap('Chiudi');shot('12-theme-restored')
 # Manual cataloging must save only after confirmation, without requiring an ISBN.
 def catalog(): return json.loads(adb('exec-out','run-as',package,'cat','files/library.json'))
-# Reading states: chips filter the library; the book sheet changes state with one tap.
-tap('In lettura');shot('12a-chip-reading')
-tap('Il giardino delle storie');shot('12b-sheet')
-tap('Letto');time.sleep(.8)
+def back(): adb('shell','input','keyevent','4');time.sleep(.5)
+def status(title): return next(b for b in catalog() if b['title']==title)['status']
+# Reading states: chips filter the library; the full-screen book page changes state with one tap.
+tap('In lettura',exact=True);shot('12a-chip-reading')
+tap('Il giardino delle storie');shot('12b-book-page')
+tap('Letto',exact=True);time.sleep(.8)
 book=next(b for b in catalog() if b['title']=='Il giardino delle storie')
 assert book['status']=='Letto' and book.get('finished'), 'State change not saved'
-shot('12c-sheet-read');tap('Posizione');time.sleep(.4);shot('12d-position-wheel');tap('Annulla')
+shot('12c-book-read');tap('Aggiorna avanzamento',True);time.sleep(.4);shot('12d-progress-wheels');tap('Annulla',exact=True)
+tap('In pausa',True,exact=True);time.sleep(.6)
+assert status('Il giardino delle storie')=='In pausa', 'Paused state not saved'
+tap('Date, voto e note',True);shot('12e-paused-editor');tap('Salva',exact=True);time.sleep(.6)
+assert status('Il giardino delle storie')=='In pausa', 'Editor changed the paused state'
+back();tap('Tutti',exact=True)
 # Chapters: added with a wheel, then rated with stars and a comment.
-tap('Tutti');tap('Il sentiero di casa');tap('Capitoli');tap('Aggiungi capitoli');tap('Aggiungi',exact=True)
-tap('Capitolo 1',True,exact=True);shot('12e-chapter');tap('Salva')
+tap('Il sentiero di casa');tap('Capitoli',True);tap('Aggiungi capitoli',True);tap('Aggiungi',exact=True)
+tap('Capitolo 1',True,exact=True);shot('12f-chapter');tap('Salva',exact=True)
 book=next(b for b in catalog() if b['title']=='Il sentiero di casa')
 assert len(book.get('chapters',[]))==10, 'Chapters not added'
-shot('12f-chapters');tap('Chiudi')
-tap('Tutti')
+shot('12g-chapters');back()
+# Manual cataloging must save only after confirmation, without requiring an ISBN.
 count=len(catalog())
 tap('Aggiungi libro');tap('Annulla')
 assert len(catalog()) == count, 'Canceled manual entry was saved'
@@ -103,8 +110,7 @@ tap('Aggiungi libro');tap('Titolo',editable=True)
 adb('shell','input','text','AtlanteManualeProva')
 shot('13a-manual-form-filled')
 # Android's keyboard may overlay floating-dialog controls even when they are in the UI tree.
-adb('shell','input','keyevent','4');time.sleep(.4)
-shot('13b-manual-ready-to-save');tap('Salva')
+back();shot('13b-manual-ready-to-save');tap('Salva',exact=True)
 for _ in range(20):
     records=catalog()
     if len(records)==count+1: break
@@ -116,10 +122,17 @@ if len(records)!=count+1:
     raise AssertionError('Manual book not saved')
 manual=next(b for b in records if b['title']=='AtlanteManualeProva')
 assert manual.get('isbn','')=='', 'Manual book unexpectedly requires ISBN'
-shot('13-manual-book');tap('Chiudi');tap('Elenco');shot('14-list-view')
+shot('13-manual-book');back()
+tap('Elenco');tap('Elenco',exact=True);shot('14-list-view')
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity')
 tap('Impostazioni');tap('Chiudi')
 assert any('Griglia' in (n.get('text',''),n.get('content-desc','')) for n in dump().iter('node')), 'List preference was not restored'
 assert any(b['title']=='AtlanteManualeProva' for b in catalog()), 'Manual book lost after restart'
 shot('15-manual-and-list-restored')
-print('Navigation, themes, canceled/confirmed manual entry and list persistence completed.')
+# Bottom navigation: every destination draws and Home is restored.
+tap('Home',exact=True);shot('16-home')
+tap('Statistiche',exact=True);shot('17-statistics')
+tap('Scopri',exact=True);shot('18-discover')
+tap('Cerca',exact=True);shot('19-search')
+tap('Home',exact=True);shot('20-home-restored')
+print('Navigation, themes, reading states, progress wheels, chapters, manual entry, list view and bottom navigation completed.')

@@ -44,9 +44,9 @@ public class CatalogTest {
         assertEquals(b.addedAt, copy.addedAt); assertEquals(9, copy.page);
         assertEquals(1, LibraryQuery.select(java.util.Arrays.asList(copy), "viaggio", "Tutti i libri", "", "", "Titolo").size());
     }
-    @Test public void olderStatesMigrateToTheThreeReadingStates() throws Exception {
+    @Test public void fourReadingStatesAndAbandonedGoesBackToRead() throws Exception {
         String id = new String(new char[64]).replace('\0', 'd');
-        String[][] cases = {{"In pausa", "In lettura"}, {"Abbandonato", "Da leggere"}, {"Letto", "Letto"}, {"qualcosa", "Da leggere"}};
+        String[][] cases = {{"In pausa", "In pausa"}, {"Abbandonato", "Da leggere"}, {"In lettura", "In lettura"}, {"Letto", "Letto"}, {"qualcosa", "Da leggere"}};
         for (String[] c : cases)
             assertEquals(c[1], Book.from(new JSONObject().put("id", id).put("format", "EPUB").put("status", c[0])).status);
     }

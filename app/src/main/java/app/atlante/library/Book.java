@@ -6,19 +6,21 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 final class Book {
-    /** The only reading states. Older catalogs used five: see {@link #normalizeStatus}. */
-    static final String TO_READ = "Da leggere", READING = "In lettura", READ = "Letto";
-    static final String[] STATES = {TO_READ, READING, READ};
+    /** The four reading states, in the order shown by the app. */
+    static final String TO_READ = "Da leggere", READING = "In lettura", PAUSED = "In pausa", READ = "Letto";
+    static final String[] STATES = {TO_READ, READING, PAUSED, READ};
 
-    /** "In pausa" is still a book being read; "Abbandonato" goes back to the books to read. */
+    /** Known states are kept; "Abbandonato" (older versions) goes back to the books to read. */
     static String normalizeStatus(String status) {
         if (status == null) return TO_READ;
         switch (status) {
-            case READING: case "In pausa": return READING;
-            case READ: return READ;
+            case READING: case PAUSED: case READ: return status;
             default: return TO_READ;
         }
     }
+
+    JSONObject journal = new JSONObject();
+    private JSONObject retained = new JSONObject();
 
     String id, title = "", author = "Autore sconosciuto", series = "", genre = "";
     String description = "", format = "", status = "Da leggere";
@@ -63,7 +65,7 @@ final class Book {
     }
 
     JSONObject json() throws JSONException {
-        return new JSONObject().put("id", id).put("title", title).put("author", author)
+        return new JSONObject(retained.toString()).put("journal", journal).put("id", id).put("title", title).put("author", author)
             .put("subtitle", subtitle).put("tags", tags).put("location", location).put("medium", medium)
             .put("started", started).put("finished", finished).put("rating", rating).put("addedAt", addedAt)
             .put("series", series).put("genre", genre).put("description", description)
@@ -79,6 +81,9 @@ final class Book {
 
     static Book from(JSONObject j) throws JSONException {
         Book b = new Book();
+        b.retained = new JSONObject(j.toString());
+        JSONObject journal = j.optJSONObject("journal");
+        if (journal != null) b.journal = new JSONObject(journal.toString());
         b.id = j.getString("id");
         if (!b.id.matches("[0-9a-f]{64}")) throw new JSONException("Identificatore non valido");
         b.subtitle = j.optString("subtitle"); b.tags = j.optString("tags"); b.location = j.optString("location");

@@ -8,3 +8,5 @@ signing.properties
 .DS_Store
 
 /dist/
+
+scripts/__pycache__/

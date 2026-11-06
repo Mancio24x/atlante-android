@@ -1,0 +1,9 @@
+# Reading companion migration (2026-11-06)
+
+The existing Android edition is Java/AppCompat, Material 3 and RecyclerView, with a private JSON catalog written by AtomicFile. Book IDs, paths, original ebooks, cover files, chapter annotations and existing field names remain unchanged. Desktop Rust code and personal data are untouched.
+
+Before changing storage, the model and backup/import pipelines were inspected. New reading companion data lives in an optional `journal` object on each book, included automatically in existing ZIP backups. Missing fields default to empty; unknown top-level fields are retained on round trips. Existing whole-star `rating` remains compatible; `journal.rating` holds half-stars. The states are Da leggere, In lettura, In pausa and Letto; records saved as "Abbandonato" load as Da leggere. No destructive migration, renumbering, network refresh or automatic metadata replacement runs at startup.
+
+Sessions include local date, UTC timestamp, duration, start/end pages and attempt number. Personal reviews and structured notes are independent of bibliographic metadata. Timer state and goals use existing activity preferences; timer state survives backgrounding/process recreation and uses monotonic time within the same boot. Export the existing backup before downgrading: older versions cannot retain new journal fields when they rewrite records. Goal/timer preferences are device-local and are not part of the catalog ZIP.
+
+Visual direction: retain Atlante's cream/petrol/copper, serif titles, real covers and author→series map from the four reference images; add Material 3 navigation, rounded surfaces and reading dashboards. Public Bookmory features and calendar screenshot were studied at https://bookmory.web.app/ and its store listing; no proprietary assets are included. Bestseller links identify the source and open its current rankings rather than inventing a local ranking.

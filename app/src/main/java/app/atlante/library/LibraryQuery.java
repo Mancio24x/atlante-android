@@ -13,10 +13,13 @@ final class LibraryQuery {
         ArrayList<Book> result = new ArrayList<>();
         String needle = query.toLowerCase(Locale.ROOT).trim();
         for (Book b : books) {
-            if (!(b.title + " " + b.author + " " + b.series + " " + b.genre + " " + b.isbn + " " + b.tags + " " + b.subtitle)
+            if (!(b.title + " " + b.author + " " + b.series + " " + b.genre + " " + b.isbn + " " + b.tags + " " + b.subtitle + " " + b.notes + " " + b.journal.toString())
                     .toLowerCase(Locale.ROOT).contains(needle)) continue;
             if (tab.equals("Da leggere") && !b.status.equals(Book.TO_READ)) continue;
             if (tab.equals("In lettura") && !b.status.equals(Book.READING)) continue;
+            if (tab.equals("Preferiti") && !b.journal.optBoolean("favorite")) continue;
+            if (tab.equals(Book.PAUSED) && !b.status.equals(Book.PAUSED)) continue;
+            if (tab.startsWith("Scaffale: ") && !ReadingJournal.inCollection(b, tab.substring(10))) continue;
             if (tab.equals("Letti") && !b.status.equals(Book.READ)) continue;
             if (!genre.isEmpty() && !genre.equalsIgnoreCase(b.genre)) continue;
             if (!format.isEmpty() && !format.equals(b.format)) continue;

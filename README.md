@@ -132,23 +132,20 @@ Anche i file importati passano da una scheda di anteprima: ogni libro viene
 aggiunto solo dopo conferma. I dati del file, inclusa la trama se presente,
 restano modificabili in **Modifica scheda**. I cataloghi esistenti vengono conservati.
 
-Gli stati di lettura sono tre: **Da leggere**, **In lettura** e **Letto**. Le schede
-create con le versioni precedenti vengono convertite all’apertura: «In pausa» diventa
-In lettura, «Abbandonato» diventa Da leggere. Nella scheda del libro la sezione
-**Lettura** cambia lo stato con un tocco (In lettura imposta la data di inizio, Letto
-quella di fine e l’ultima pagina) e mostra avanzamento, date, voto e note.
-**Posizione** apre due rotelle, pagina e totale, oppure una rotella in percentuale:
-il piccolo selettore **Pagina / %** si ricorda l’ultima scelta. **Date, voto e note**
-raccoglie stato, date scelte dal calendario, valutazione da 0 a 5 stelle e note; si
-salva solo con **Salva**.
+Gli stati di lettura sono quattro: **Da leggere**, **In lettura**, **In pausa** e
+**Letto**. Le schede che nelle versioni precedenti erano «Abbandonato» tornano Da leggere.
+Nella pagina del libro la sezione **La tua lettura** cambia lo stato con un tocco
+(In lettura imposta la data di inizio, Letto quella di fine e l’ultima pagina) e mostra
+un anello di avanzamento, pagine rimaste e, con abbastanza sessioni, il tempo stimato.
+**Aggiorna avanzamento** apre una pagina con le rotelle: il piccolo selettore
+**Pagina / % / Pagine lette** si ricorda l’ultima scelta (pagina e totale, percentuale,
+oppure pagine lette in questa sessione) e una rotella facoltativa registra i minuti.
+**Date, voto e note** raccoglie stato, date scelte dal calendario, voto da 0 a 5 stelle
+con le mezze stelle e note; si salva solo con **Salva**.
 
-Toccando un libro si apre la sua finestra dal basso: stato di lettura, posizione,
-**Trama** e **Dettagli della scheda** chiusi finché non li tocchi, e **Capitoli**.
-Per gli EPUB i capitoli si leggono dall’indice del libro (EPUB 3 o NCX); per gli altri
-**Aggiungi capitoli** ne crea quanti ne scegli con una rotella. Toccando un capitolo
-puoi rinominarlo, dargli da 1 a 5 stelle e scrivere un commento; la sezione mostra la
-media dei capitoli votati. Voti e commenti sono salvati nella scheda e nel backup. **Modifica scheda** resta per i dati del libro. Il segnalibro del lettore
-digitale resta separato dalle pagine dell’edizione cartacea inserite manualmente.
+Toccando un libro si apre la sua pagina a tutto schermo: stato e avanzamento, timer di
+lettura, voto, recensione, taccuino, **Trama** e **Dettagli della scheda** chiusi finché
+non li tocchi, **Capitoli** e storia della lettura.
 
 Le ricerche HTTPS avvengono solo su richiesta e inviano a Open Library (e, per l’italiano,
 a OPAC SBN) il testo cercato; l’apertura di una scheda richiede metadati e copertina della scheda scelta.
@@ -264,3 +261,33 @@ telefono/emulatore resta necessaria prima di considerare collaudata una release.
 
 Codice applicativo MIT, vedi LICENSE. Libri e copertine importati mantengono
 i diritti dei rispettivi autori e non fanno parte di questo progetto.
+
+
+## Compagno di lettura
+
+La barra Material 3 in basso porta a cinque sezioni: **Home**, **Biblioteca**,
+**Scopri**, **Statistiche** e **Cerca**; ognuna ricorda posizione e ricerca, e Indietro
+riporta a Home. **Home** mostra i libri in lettura con pagine rimaste e aggiornamento
+rapido, il riepilogo di oggi (pagine, minuti, giorni di fila, obiettivo quotidiano),
+gli obiettivi annuale e mensile con un anello di avanzamento, l’attività recente e
+alcuni suggerimenti presi dalla tua biblioteca (indicati come tali, non sono classifiche).
+
+Nella pagina del libro **Inizia a leggere** avvia un timer che continua anche fuori
+dall’app, con pausa, ripresa e chiusura: alla fine chiede la nuova posizione e salva
+la sessione. Ci sono anche voto con mezze stelle, recensione (titolo, testo, data, voto),
+taccuino ricercabile (note, pensieri, citazioni, domande, riassunti con pagina e tag),
+cronologia con sessioni e riletture. Dal menu del libro: preferito, collezioni,
+**Inizia una rilettura** (le letture precedenti restano nella cronologia) e
+**Apri con KOReader**, che riceve il file con un permesso temporaneo; le posizioni dei
+due lettori restano indipendenti.
+
+**Statistiche** riassume pagine, minuti e giorni di fila, gli obiettivi, un calendario
+mensile (tocca un giorno per vedere le sessioni), i libri per stato e per genere.
+**Scopri** apre la ricerca online, l’esplorazione per genere, le classifiche italiane
+(collegamenti alle pagine aggiornate di IBS e laFeltrinelli, senza posizioni inventate)
+e le collezioni. In **Biblioteca** la vista può essere Scaffale, Griglia o Elenco, con i
+chip Tutti, Da leggere, In lettura, In pausa, Letti e Preferiti.
+
+I nuovi dati personali stanno in un oggetto `journal` facoltativo di ogni libro e passano
+nei backup esistenti; obiettivi e timer restano nelle preferenze del telefono. Dettagli e
+limiti: [REDESIGN-MIGRATION.md](REDESIGN-MIGRATION.md).
