@@ -109,5 +109,8 @@ private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun Steps(values: List<Int>, current: Int, unit: String, onPick: (Int) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { values.forEach { v -> FilterChip(current == v, { onPick(v) }, label = { Text("+$v$unit") }) } }
+    // One scrolling row: on narrow phones the last step would otherwise be squeezed into a tall, unreadable chip.
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        values.forEach { v -> FilterChip(current == v, { onPick(v) }, label = { Text("+$v$unit", maxLines = 1) }) }
+    }
 }

@@ -22,10 +22,11 @@ def find(label,exact=False,desc=True):
     return None
 def tap_node(n):
     b=list(map(int,re.findall(r'\d+',n.get('bounds',''))));adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
-def tap(label,exact=False):
-    for _ in range(10):
+def tap(label,exact=False,scroll=False):
+    for i in range(10):
         n=find(label,exact)
         if n is not None: tap_node(n);time.sleep(.8);return
+        if scroll: adb('shell','input','swipe','540','1300','540','600','300')
         time.sleep(.6)
     raise RuntimeError('Widget control missing: '+label)
 def shot(name):
@@ -74,7 +75,7 @@ print('Quick progress saved.')
 
 # Settings of one widget: another book and dark colours, the others unchanged.
 tap('Scegli il libro e i colori del widget');time.sleep(1.5);shot('72-widget-settings')
-tap('Il nome della rosa');tap('Scuro',exact=True);tap('Salva',exact=True);time.sleep(4)
+tap('Il nome della rosa');tap('Scuro',exact=True,scroll=True);shot('72a-widget-settings-colors');tap('Salva',exact=True);time.sleep(4)
 shot('73-widget-other-book')
 texts=[n.get('text','') for n in nodes()]
 assert 'Il nome della rosa' in texts and texts.count('Dune')>=2, 'Per-widget book choice: '+str([t for t in texts if t])
