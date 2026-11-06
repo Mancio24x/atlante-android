@@ -1,4 +1,10 @@
 package app.atlante.library;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.sync.KoreaderSync;
+import app.atlante.library.online.OnlineCatalog;
+import app.atlante.library.online.SeriesCatalog;
+import app.atlante.library.sync.SyncCore;
 import org.junit.Test;
 import org.json.*;
 import static org.junit.Assert.*;

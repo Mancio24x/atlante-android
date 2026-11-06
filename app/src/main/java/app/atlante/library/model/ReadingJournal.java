@@ -1,26 +1,26 @@
-package app.atlante.library;
+package app.atlante.library.model;
 
 import org.json.*;
 import java.time.*;
 import java.util.*;
 
 /** Additive personal data; bibliographic refreshes must never replace this object. */
-final class ReadingJournal {
-    static JSONArray array(Book b, String key) {
+public final class ReadingJournal {
+    public static JSONArray array(Book b, String key) {
         JSONArray a = b.journal.optJSONArray(key);
         return a == null ? new JSONArray() : a;
     }
-    static void put(Book b, String key, Object value) {
+    public static void put(Book b, String key, Object value) {
         try { b.journal.put(key, value); } catch (JSONException e) { throw new IllegalArgumentException(e); }
     }
-    static double rating(Book b) { return b.journal.optDouble("rating", b.rating); }
-    static boolean inCollection(Book b, String name) {
+    public static double rating(Book b) { return b.journal.optDouble("rating", b.rating); }
+    public static boolean inCollection(Book b, String name) {
         JSONArray a = array(b, "collections");
         for (int i=0;i<a.length();i++) if (name.equals(a.optString(i))) return true;
         return false;
     }
-    static int attempt(Book b) { return Math.max(1, b.journal.optInt("attempt", 1)); }
-    static void session(Book b, int from, int to, long seconds, LocalDate day) {
+    public static int attempt(Book b) { return Math.max(1, b.journal.optInt("attempt", 1)); }
+    public static void session(Book b, int from, int to, long seconds, LocalDate day) {
         try {
             JSONArray a = array(b, "sessions");
             a.put(new JSONObject().put("date",day.toString()).put("at",System.currentTimeMillis())
@@ -29,7 +29,7 @@ final class ReadingJournal {
             put(b,"sessions",a);
         } catch (JSONException e) { throw new IllegalArgumentException(e); }
     }
-    static long[] totals(List<Book> books, LocalDate day) {
+    public static long[] totals(List<Book> books, LocalDate day) {
         long pages=0, seconds=0;
         for (Book b:books) { JSONArray a=array(b,"sessions");
             for(int i=0;i<a.length();i++) { JSONObject s=a.optJSONObject(i); if(s==null) continue;
@@ -38,7 +38,7 @@ final class ReadingJournal {
         }
         return new long[]{pages,seconds};
     }
-    static int streak(List<Book> books, LocalDate today) {
+    public static int streak(List<Book> books, LocalDate today) {
         Set<String> days=new HashSet<>();
         for(Book b:books) { JSONArray a=array(b,"sessions"); for(int i=0;i<a.length();i++) {
             JSONObject s=a.optJSONObject(i); if(s!=null && (s.optInt("pages")>0 || s.optLong("seconds")>0)) days.add(s.optString("date"));
@@ -46,7 +46,7 @@ final class ReadingJournal {
         LocalDate d=days.contains(today.toString())?today:today.minusDays(1); int count=0;
         while(days.contains(d.toString())) { count++; d=d.minusDays(1); } return count;
     }
-    static int completed(List<Book> books, LocalDate day, boolean monthly) {
+    public static int completed(List<Book> books, LocalDate day, boolean monthly) {
         int n=0;
         for(Book b:books) {
             Set<String> finishes=new HashSet<>();

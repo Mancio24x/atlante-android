@@ -1,5 +1,10 @@
 package app.atlante.library;
 
+import app.atlante.library.model.Book;
+import app.atlante.library.sync.CalibreSync;
+import app.atlante.library.model.ReadingJournal;
+import app.atlante.library.sync.SyncCore;
+
 import static org.junit.Assert.*;
 import static org.junit.Assume.assumeTrue;
 import java.net.Socket;

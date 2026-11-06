@@ -1,5 +1,8 @@
 package app.atlante.library;
 
+import app.atlante.library.model.Book;
+import app.atlante.library.model.LibraryQuery;
+
 import java.util.Arrays;
 import org.junit.Test;
 import static org.junit.Assert.*;

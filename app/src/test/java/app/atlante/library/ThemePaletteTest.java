@@ -1,4 +1,6 @@
 package app.atlante.library;
+
+import app.atlante.library.ui.ThemePalette;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import java.util.HashSet;

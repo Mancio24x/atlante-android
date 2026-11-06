@@ -1,5 +1,7 @@
 package app.atlante.library;
 
+import app.atlante.library.ui.Covers;
+
 import static org.junit.Assert.*;
 import org.junit.Test;
 

@@ -1,5 +1,8 @@
 package app.atlante.library;
 
+import app.atlante.library.model.Book;
+import app.atlante.library.online.SbnCatalog;
+
 import static org.junit.Assert.*;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;

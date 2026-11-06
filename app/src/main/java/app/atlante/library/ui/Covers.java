@@ -1,4 +1,4 @@
-package app.atlante.library;
+package app.atlante.library.ui;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -12,7 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Cover cache and loader: grid thumbnails are decoded off the UI thread at card size. */
-final class Covers {
+public final class Covers {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService workers = Executors.newFixedThreadPool(2);
     private final LruCache<String, Bitmap> cache = new LruCache<String, Bitmap>(
@@ -21,7 +21,7 @@ final class Covers {
     };
 
     /** Large cover for detail and preview dialogs (decoded once, then cached). */
-    Bitmap large(String id, File file) {
+    public Bitmap large(String id, File file) {
         Bitmap cached = cache.get(id); if (cached != null) return cached;
         if (!file.exists()) return null;
         Bitmap bitmap = decode(file.getPath(), null, 512);
@@ -34,7 +34,7 @@ final class Covers {
      * {@code fallback} is shown only when the book has no readable cover.
      * Recycled views are protected by the tag: a late result for another book is dropped.
      */
-    void thumbnail(String id, File file, int size, ImageView image, View fallback) {
+    public void thumbnail(String id, File file, int size, ImageView image, View fallback) {
         String key = "t:" + id;
         image.setTag(key);
         Bitmap cached = cache.get(key);
@@ -53,11 +53,11 @@ final class Covers {
         });
     }
 
-    void forget(String id) { cache.remove(id); cache.remove("t:" + id); }
-    void clear() { cache.evictAll(); }
-    void shutdown() { workers.shutdownNow(); }
+    public void forget(String id) { cache.remove(id); cache.remove("t:" + id); }
+    public void clear() { cache.evictAll(); }
+    public void shutdown() { workers.shutdownNow(); }
 
-    static Bitmap thumbnail(String file, int max) {
+    public static Bitmap thumbnail(String file, int max) {
         BitmapFactory.Options options = new BitmapFactory.Options(); options.inJustDecodeBounds = true;
         BitmapFactory.decodeFile(file, options);
         if (options.outWidth <= 0 || options.outHeight <= 0) return null;
@@ -67,13 +67,13 @@ final class Covers {
     }
 
     /** Largest power of two that keeps both sides at least {@code max} (or the original size if smaller). */
-    static int sampleSize(int width, int height, int max) {
+    public static int sampleSize(int width, int height, int max) {
         int sample = 1;
         while (width / (sample * 2) >= max || height / (sample * 2) >= max) sample *= 2;
         return sample;
     }
 
-    static Bitmap decode(String file, byte[] bytes, int max) {
+    public static Bitmap decode(String file, byte[] bytes, int max) {
         BitmapFactory.Options options = new BitmapFactory.Options(); options.inJustDecodeBounds = true;
         if (file != null) BitmapFactory.decodeFile(file, options); else BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
         options.inSampleSize = 1;

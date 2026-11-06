@@ -1,4 +1,8 @@
-package app.atlante.library;
+package app.atlante.library.ui;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.online.SeriesCatalog;
+import app.atlante.library.MainActivity;
 
 import android.graphics.*;
 import android.text.TextPaint;
@@ -10,8 +14,8 @@ import java.util.*;
  * Vertical reading map for phones: author at the top, then each series with its books
  * in reading order, connected by a spine. Fills the screen width and scrolls vertically.
  */
-final class ReadingMap extends View {
-    interface OpenBook { void open(Book book); }
+public final class ReadingMap extends View {
+    public interface OpenBook { void open(Book book); }
     private final MainActivity activity;
     private final String author;
     private final LinkedHashMap<String, ArrayList<Book>> groups = new LinkedHashMap<>();
@@ -26,11 +30,11 @@ final class ReadingMap extends View {
     private static final int SPINE = 36, SAGA_X = 56, BOOK_SPINE = 76, BOOK_X = 96;
 
     private static final class Hit {
-        final RectF rect; final Book book;
-        Hit(RectF rect, Book book) { this.rect = rect; this.book = book; }
+        public final RectF rect; public final Book book;
+        public Hit(RectF rect, Book book) { this.rect = rect; this.book = book; }
     }
 
-    ReadingMap(MainActivity activity, String author, ArrayList<Book> books, OpenBook open) {
+    public ReadingMap(MainActivity activity, String author, ArrayList<Book> books, OpenBook open) {
         super(activity); this.activity = activity; this.author = author; this.open = open; bookCount = books.size();
         books.sort((a, b) -> {
             if (a.series.isEmpty() != b.series.isEmpty()) return a.series.isEmpty() ? 1 : -1; // single books last
@@ -46,7 +50,7 @@ final class ReadingMap extends View {
     }
 
     /** Height in dp: depends only on how many groups and books there are, not on the screen width. */
-    static int height(Collection<? extends List<Book>> groups) {
+    public static int height(Collection<? extends List<Book>> groups) {
         int y = PAD + AUTHOR_H;
         for (List<Book> group : groups) y += GROUP_GAP + SAGA_H + BOOK_GAP + group.size() * (BOOK_H + BOOK_GAP);
         return y + PAD;

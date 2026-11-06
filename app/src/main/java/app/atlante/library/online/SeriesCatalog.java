@@ -1,17 +1,19 @@
-package app.atlante.library;
+package app.atlante.library.online;
+
+import app.atlante.library.model.Book;
 import java.text.Normalizer;
 import java.util.*;
 import java.util.regex.*;
 
 /** Conservative, reviewable series proposals. Never treats a genre or a shared universe as a reading order. */
-final class SeriesCatalog {
-    static final class Proposal {
-        final String series; final double number;
-        Proposal(String series,double number){this.series=series;this.number=number;}
+public final class SeriesCatalog {
+    public static final class Proposal {
+        public final String series; public final double number;
+        public Proposal(String series,double number){this.series=series;this.number=number;}
     }
     private static final class Entry {
-        final String author,series;final String[] titles;
-        Entry(String author,String series,String...titles){this.author=author;this.series=series;this.titles=titles;}
+        public final String author,series;final String[] titles;
+        public Entry(String author,String series,String...titles){this.author=author;this.series=series;this.titles=titles;}
     }
     private static final Entry[] CATALOG={
         new Entry("sanderson","Mistborn · Era 1","l ultimo impero|the final empire","il pozzo dell ascensione|the well of ascension","il campione delle ere|the hero of ages"),
@@ -25,8 +27,8 @@ final class SeriesCatalog {
         new Entry("rowling","Harry Potter","harry potter e la pietra filosofale|harry potter and the philosopher s stone","harry potter e la camera dei segreti|harry potter and the chamber of secrets","harry potter e il prigioniero di azkaban|harry potter and the prisoner of azkaban","harry potter e il calice di fuoco|harry potter and the goblet of fire","harry potter e l ordine della fenice|harry potter and the order of the phoenix","harry potter e il principe mezzosangue|harry potter and the half blood prince","harry potter e i doni della morte|harry potter and the deathly hallows"),
         new Entry("dinniman","Dungeon Crawler Carl","dungeon crawler carl","il giorno del giudizio|carl s doomsday scenario","il ricettario dell anarchico|the dungeon anarchist s cookbook","il varco degli dei selvaggi|the gate of the feral gods")
     };
-    static String normalize(String s){return Normalizer.normalize(s,Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim();}
-    static Proposal suggest(Book b){
+    public static String normalize(String s){return Normalizer.normalize(s,Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim();}
+    public static Proposal suggest(Book b){
         String title=normalize(b.title),author=normalize(b.author);
         if(title.matches(".*\\b(omnibus|integrale|completa|trilogia|raccolta)\\b.*"))return null;
         if(author.contains("dinniman")) {
@@ -46,5 +48,5 @@ final class SeriesCatalog {
         if(m.find())return new Proposal(m.group(1).trim(),Double.parseDouble(m.group(2).replace(',','.')));
         return null;
     }
-    static int compareNumber(double a,double b){return Double.compare(a>0?a:Double.MAX_VALUE,b>0?b:Double.MAX_VALUE);}
+    public static int compareNumber(double a,double b){return Double.compare(a>0?a:Double.MAX_VALUE,b>0?b:Double.MAX_VALUE);}
 }

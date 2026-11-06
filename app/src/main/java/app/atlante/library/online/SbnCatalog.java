@@ -1,4 +1,7 @@
-package app.atlante.library;
+package app.atlante.library.online;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.model.BookMatcher;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -13,13 +16,13 @@ import org.json.JSONObject;
  * Italian national library catalog (OPAC SBN, ICCU): the most complete index of books published in Italy.
  * Uses the public JSON service of the official OPAC SBN mobile app; only the search text is sent.
  */
-final class SbnCatalog {
-    static final String BASE = "https://opac.sbn.it/opacmobilegw/";
+public final class SbnCatalog {
+    public static final String BASE = "https://opac.sbn.it/opacmobilegw/";
     private static final Pattern BID = Pattern.compile("IT\\\\ICCU\\\\[A-Z0-9]{3,4}\\\\[0-9]{5,8}");
     private static final Pattern YEAR = Pattern.compile("(1[5-9]|20)[0-9]{2}");
     private static final Pattern PAGES = Pattern.compile("([0-9]{2,5}) *p\\.");
 
-    static ArrayList<Book> search(String query) throws Exception {
+    public static ArrayList<Book> search(String query) throws Exception {
         String clean = query.trim().replaceAll("\\s+", " ");
         String isbn = clean.replaceAll("[\\s-]", "");
         String parameter = isbn.matches("97[89][0-9]{10}|[0-9]{9}[0-9Xx]") ? "isbn=" + isbn : "any=" + URLEncoder.encode(clean, "UTF-8");
@@ -31,7 +34,7 @@ final class SbnCatalog {
      * Printed monographs only (no games, videos or e-resources), one result per work:
      * among editions with the same title and author, the most recent one with an ISBN wins.
      */
-    static ArrayList<Book> parseSearch(String response) throws Exception {
+    public static ArrayList<Book> parseSearch(String response) throws Exception {
         JSONArray records = new JSONObject(response).optJSONArray("briefRecords");
         LinkedHashMap<String, Book> works = new LinkedHashMap<>();
         if (records == null) return new ArrayList<>();
@@ -49,7 +52,7 @@ final class SbnCatalog {
         return new ArrayList<>(works.values());
     }
 
-    static Book fromRecord(JSONObject r) throws Exception {
+    public static Book fromRecord(JSONObject r) throws Exception {
         Book b = new Book(); b.format = "CATALOGO"; b.language = "ita";
         String bid = r.optString("codiceIdentificativo");
         b.source = "sbn:" + bid; b.id = sha("sbn:" + bid);
@@ -72,7 +75,7 @@ final class SbnCatalog {
     }
 
     /** Pages, language and ISBN from the full record of the chosen edition. */
-    static void enrich(Book b) throws Exception {
+    public static void enrich(Book b) throws Exception {
         String bid = b.source.startsWith("sbn:") ? b.source.substring(4) : "";
         if (!BID.matcher(bid).matches()) throw new java.io.IOException("Scheda SBN non valida");
         String response = new String(OnlineCatalog.request(BASE + "full.json?bid=" + URLEncoder.encode(bid, "UTF-8"), 1024 * 1024), StandardCharsets.UTF_8);
@@ -82,7 +85,7 @@ final class SbnCatalog {
         }
     }
 
-    static void enrichFrom(Book b, JSONObject full) {
+    public static void enrichFrom(Book b, JSONObject full) {
         Matcher pages = PAGES.matcher(full.optString("descrizioneFisica"));
         if (pages.find()) b.totalPages = Integer.parseInt(pages.group(1));
         if ("ITALIANO".equalsIgnoreCase(full.optString("linguaPubblicazione"))) b.language = "ita";
@@ -97,7 +100,7 @@ final class SbnCatalog {
 
     /** Same work in two catalogs: same ISBN, or same title with a word of the author in common. */
     /** Same book in two records: see {@link BookMatcher} (ISBN, title without subtitles, surnames). */
-    static boolean sameWork(Book a, Book b) { return BookMatcher.same(a, b); }
+    public static boolean sameWork(Book a, Book b) { return BookMatcher.same(a, b); }
 
     private static boolean better(Book candidate, Book current) {
         if (candidate.isbn.isEmpty() != current.isbn.isEmpty()) return !candidate.isbn.isEmpty();
@@ -105,7 +108,7 @@ final class SbnCatalog {
     }
 
     /** "Giannone, Francesca <1982- >" → "Francesca Giannone". */
-    static String person(String value) {
+    public static String person(String value) {
         String name = value.replaceAll("<[^>]*>", "").trim();
         String[] parts = name.split(", ", 2);
         return tidy(parts.length == 2 ? parts[1] + " " + parts[0] : name);
@@ -115,7 +118,7 @@ final class SbnCatalog {
         return value.replaceAll("\\s+", " ").replaceAll("^[\\s.:;,/]+|[\\s.:;,/]+$", "").trim();
     }
 
-    static String normalize(String value) {
+    public static String normalize(String value) {
         return java.text.Normalizer.normalize(value.toLowerCase(Locale.ITALIAN), java.text.Normalizer.Form.NFD)
             .replaceAll("\\p{M}", "").replaceAll("[^a-z0-9]+", " ").trim();
     }

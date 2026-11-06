@@ -1,4 +1,8 @@
 package app.atlante.library;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.model.LibraryQuery;
+import app.atlante.library.online.OnlineCatalog;
 import org.junit.Test;
 import org.json.JSONObject;
 import static org.junit.Assert.*;

@@ -1,4 +1,7 @@
-package app.atlante.library;
+package app.atlante.library.sync;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.model.ReadingJournal;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -11,16 +14,16 @@ import org.json.JSONObject;
  * Highlights and notes from a Kindle's "My Clippings.txt" (Italian or English device language).
  * Bookmarks are skipped. Amazon offers no way to read position or reading state, so only these come in.
  */
-final class KindleClippings {
-    static final class Clip {
-        String title = "", author = "", type = "Citazione", text = "";
-        int page, location;
+public final class KindleClippings {
+    public static final class Clip {
+        public String title = "", author = "", type = "Citazione", text = "";
+        public int page, location;
     }
 
     private static final Pattern PAGE = Pattern.compile("(?i)(?:pagina|page|pag\\.)\\s*(\\d+)");
     private static final Pattern LOCATION = Pattern.compile("(?i)(?:posizione|location|loc\\.)\\s*(\\d+)");
 
-    static List<Clip> parse(String text) {
+    public static List<Clip> parse(String text) {
         if (text.startsWith("\uFEFF")) text = text.substring(1);
         List<Clip> clips = new ArrayList<>();
         for (String block : text.split("\r?\n==========\r?\n?")) {
@@ -52,7 +55,7 @@ final class KindleClippings {
     }
 
     /** Adds the clips as notes of the book; returns how many were new (identical notes are not repeated). */
-    static int addTo(Book b, List<Clip> clips, String today) {
+    public static int addTo(Book b, List<Clip> clips, String today) {
         try {
             JSONArray notes = ReadingJournal.array(b, "notes"); Set<String> known = new HashSet<>();
             for (int i = 0; i < notes.length(); i++) { JSONObject n = notes.optJSONObject(i); if (n != null) known.add(n.optString("body").trim()); }

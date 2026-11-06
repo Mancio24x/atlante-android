@@ -1,5 +1,13 @@
 package app.atlante.library;
 
+import app.atlante.library.model.Book;
+import app.atlante.library.storage.CatalogImport;
+import app.atlante.library.sync.HardcoverSync;
+import app.atlante.library.sync.KindleClippings;
+import app.atlante.library.model.ReadingJournal;
+import app.atlante.library.sync.SyncCore;
+import app.atlante.library.storage.SyncStore;
+
 import static org.junit.Assert.*;
 import java.util.*;
 import org.json.JSONArray;

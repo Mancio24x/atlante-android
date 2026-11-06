@@ -1,4 +1,8 @@
-package app.atlante.library;
+package app.atlante.library.storage;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.ui.Covers;
+import app.atlante.library.ebook.EbookParser;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -17,34 +21,34 @@ import java.util.zip.ZipOutputStream;
  * Backup ZIP of the private library: catalog, notes, progress, covers and optionally book files.
  * Platform independent so that it can be tested on the JVM.
  */
-final class BackupArchive {
-    static final String MANIFEST = "atlante-backup.json";
-    static final String KIND = "atlante-backup";
-    static final int VERSION = 1;
-    static final int MANIFEST_LIMIT = 16 * 1024 * 1024;
-    static final int COVER_LIMIT = 12 * 1024 * 1024;
-    static final long BOOK_LIMIT = 512L * 1024 * 1024;
-    static final int MAX_BOOKS = 100_000;
+public final class BackupArchive {
+    public static final String MANIFEST = "atlante-backup.json";
+    public static final String KIND = "atlante-backup";
+    public static final int VERSION = 1;
+    public static final int MANIFEST_LIMIT = 16 * 1024 * 1024;
+    public static final int COVER_LIMIT = 12 * 1024 * 1024;
+    public static final long BOOK_LIMIT = 512L * 1024 * 1024;
+    public static final int MAX_BOOKS = 100_000;
     private static final Pattern ENTRY = Pattern.compile("books/([0-9a-f]{64})/(cover|book\\.(epub|txt|cbz))");
 
-    static final class Contents {
-        final ArrayList<Book> books = new ArrayList<>();
-        long createdAt;
-        boolean includesFiles;
+    public static final class Contents {
+        public final ArrayList<Book> books = new ArrayList<>();
+        public long createdAt;
+        public boolean includesFiles;
         /** What was recognized, shown in the summary (e.g. "Backup di Atlante", "Goodreads (CSV)"). */
-        String kind = "Backup di Atlante";
+        public String kind = "Backup di Atlante";
         /** Atlante data with its own identifiers and possibly files; otherwise new catalog sheets. */
-        boolean atlante = true;
+        public boolean atlante = true;
         /** Inner ZIP that holds the backup, and the folder of the manifest inside it ("" at the root). */
-        String nested, prefix = "";
+        public String nested, prefix = "";
         /** Read from a ZIP (book files and covers can then be extracted from it). */
-        boolean fromZip;
+        public boolean fromZip;
         /** Covers carried inside the imported file (HTML catalogs, Calibre folders), by book id. */
-        final Map<String, byte[]> covers = new HashMap<>();
+        public final Map<String, byte[]> covers = new HashMap<>();
     }
 
     /** Writes the manifest first, then covers and, if requested, the imported book files. */
-    static void write(OutputStream target, JSONArray catalog, File booksRoot, boolean includeFiles, long createdAt) throws Exception {
+    public static void write(OutputStream target, JSONArray catalog, File booksRoot, boolean includeFiles, long createdAt) throws Exception {
         ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(target));
         JSONObject manifest = new JSONObject().put("format", KIND).put("version", VERSION)
             .put("createdAt", createdAt).put("includesFiles", includeFiles).put("books", catalog);
@@ -76,7 +80,7 @@ final class BackupArchive {
     }
 
     /** Reads and validates only the catalog; files are extracted later, after confirmation. */
-    static Contents readManifest(InputStream source) throws Exception {
+    public static Contents readManifest(InputStream source) throws Exception {
         try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(source))) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
@@ -107,12 +111,12 @@ final class BackupArchive {
      * Unknown, unsafe or mismatching entries are skipped; book files must match their SHA-256 identity.
      * Returns the identifiers whose book file was restored.
      */
-    static Set<String> extract(InputStream source, Map<String, Book> wanted, File staging) throws Exception {
+    public static Set<String> extract(InputStream source, Map<String, Book> wanted, File staging) throws Exception {
         return extract(source, wanted, staging, null, "");
     }
 
     /** As above, for a backup kept in a folder ({@code prefix}) or inside another ZIP ({@code nested}). */
-    static Set<String> extract(InputStream source, Map<String, Book> wanted, File staging, String nested, String prefix) throws Exception {
+    public static Set<String> extract(InputStream source, Map<String, Book> wanted, File staging, String nested, String prefix) throws Exception {
         try (ZipInputStream outer = new ZipInputStream(new BufferedInputStream(source))) {
             if (nested == null) return extractEntries(outer, wanted, staging, prefix);
             ZipEntry entry;

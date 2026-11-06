@@ -1,4 +1,7 @@
-package app.atlante.library;
+package app.atlante.library.storage;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.ebook.EbookParser;
 
 import android.content.Context;
 import android.net.Uri;
@@ -10,13 +13,13 @@ import java.io.*;
 import java.security.MessageDigest;
 import java.util.*;
 
-final class LibraryStore implements SyncStore {
-    final ArrayList<Book> books = new ArrayList<>();
+public final class LibraryStore implements SyncStore {
+    public final ArrayList<Book> books = new ArrayList<>();
     private final Context context;
     private final File root;
     private final AtomicFile catalog;
 
-    LibraryStore(Context context) throws Exception {
+    public LibraryStore(Context context) throws Exception {
         this.context = context.getApplicationContext();
         root = new File(context.getFilesDir(), "books");
         if (!root.isDirectory() && !root.mkdirs()) throw new IOException("Impossibile creare la libreria");
@@ -30,7 +33,7 @@ final class LibraryStore implements SyncStore {
         }
     }
 
-    synchronized void save() throws Exception {
+    public synchronized void save() throws Exception {
         JSONArray array = new JSONArray();
         for (Book b : books) array.put(b.json());
         FileOutputStream out = null;
@@ -44,23 +47,23 @@ final class LibraryStore implements SyncStore {
         }
     }
 
-    File directory(Book b) { return new File(root, b.id); }
-    File original(Book b) { return new File(directory(b), "book." + b.format.toLowerCase(Locale.ROOT)); }
-    File cover(Book b) { return new File(directory(b), "cover"); }
+    public File directory(Book b) { return new File(root, b.id); }
+    public File original(Book b) { return new File(directory(b), "book." + b.format.toLowerCase(Locale.ROOT)); }
+    public File cover(Book b) { return new File(directory(b), "cover"); }
     @Override public synchronized Book find(String id) {
         for (Book b : books) if (b.id.equals(id)) return b;
         return null;
     }
     @Override public synchronized ArrayList<Book> snapshot() { return new ArrayList<>(books); }
 
-    String name(Uri uri) {
+    public String name(Uri uri) {
         try (Cursor c = context.getContentResolver().query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
             if (c != null && c.moveToFirst()) return c.getString(0);
         } catch (Exception ignored) { /* Some providers do not expose a display name. */ }
         return "libro";
     }
 
-    Book importBook(Uri uri) throws Exception {
+    public Book importBook(Uri uri) throws Exception {
         String name = name(uri);
         int dot = name.lastIndexOf('.');
         String ext = dot < 0 ? "" : name.substring(dot + 1).toUpperCase(Locale.ROOT);
@@ -132,7 +135,7 @@ final class LibraryStore implements SyncStore {
         try { save(); } catch (Exception e) { books.set(index, previous); throw e; }
     }
 
-    synchronized void saveDownloadedCover(Book book, byte[] bytes) throws Exception {
+    public synchronized void saveDownloadedCover(Book book, byte[] bytes) throws Exception {
         if (find(book.id) == null) return;
         if (!directory(book).isDirectory() && !directory(book).mkdirs()) return;
         AtomicFile image = new AtomicFile(cover(book)); FileOutputStream out = null;
@@ -141,12 +144,12 @@ final class LibraryStore implements SyncStore {
     }
 
     /** Private directory on the same volume as the library, so restored files can be moved in place. */
-    File staging() { return new File(context.getFilesDir(), "restore"); }
+    public File staging() { return new File(context.getFilesDir(), "restore"); }
 
-    static void clear(File directory) { deleteTree(directory); }
+    public static void clear(File directory) { deleteTree(directory); }
 
     /** Adds restored books that are not in the catalog yet; existing books are never overwritten. */
-    synchronized int restore(List<Book> incoming, File staging) throws Exception {
+    public synchronized int restore(List<Book> incoming, File staging) throws Exception {
         ArrayList<Book> added = new ArrayList<>();
         try {
             for (Book book : incoming) {
@@ -167,11 +170,11 @@ final class LibraryStore implements SyncStore {
         return added.size();
     }
 
-    synchronized void discardCandidate(Book candidate) {
+    public synchronized void discardCandidate(Book candidate) {
         if (find(candidate.id) == null) deleteTree(directory(candidate));
     }
 
-    synchronized void remove(Book b) throws Exception {
+    public synchronized void remove(Book b) throws Exception {
         int index = books.indexOf(b);
         books.remove(b);
         try { save(); }

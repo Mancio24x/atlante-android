@@ -1,5 +1,8 @@
 package app.atlante.library;
 
+import app.atlante.library.model.Book;
+import app.atlante.library.ebook.EbookParser;
+
 import static org.junit.Assert.*;
 import java.io.StringReader;
 import java.util.Arrays;

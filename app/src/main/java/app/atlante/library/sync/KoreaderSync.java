@@ -1,4 +1,6 @@
-package app.atlante.library;
+package app.atlante.library.sync;
+
+import app.atlante.library.model.Book;
 
 import java.io.IOException;
 import java.net.URI;
@@ -6,18 +8,18 @@ import java.util.*;
 import org.json.*;
 
 /** KOReader progress receiver. EPUB XPointer positions must never be fabricated from a percentage. */
-final class KoreaderSync {
-    static final class Progress {
-        final Book book; final double percentage;
-        Progress(Book book,double percentage){this.book=book;this.percentage=percentage;}
+public final class KoreaderSync {
+    public static final class Progress {
+        public final Book book; public final double percentage;
+        public Progress(Book book,double percentage){this.book=book;this.percentage=percentage;}
     }
-    static String document(String filename) { return SyncCore.md5(filename); }
-    static double percentage(JSONObject json) throws IOException {
+    public static String document(String filename) { return SyncCore.md5(filename); }
+    public static double percentage(JSONObject json) throws IOException {
         double value=json.optDouble("percentage",Double.NaN);
         if(!Double.isFinite(value)||value<0||value>1)throw new IOException("Avanzamento KOReader non valido");
         return value;
     }
-    static List<Progress> receive(String server,String user,String key,List<Book> books) throws Exception {
+    public static List<Progress> receive(String server,String user,String key,List<Book> books) throws Exception {
         URI uri=new URI(server);
         if(!"https".equalsIgnoreCase(uri.getScheme())||uri.getHost()==null||uri.getUserInfo()!=null||uri.getQuery()!=null||uri.getFragment()!=null)
             throw new IOException("Inserisci un indirizzo HTTPS valido per il server KOReader");
@@ -39,7 +41,7 @@ final class KoreaderSync {
         }
         return results;
     }
-    static void apply(Progress p){
+    public static void apply(Progress p){
         Book b=p.book;b.percent=(int)Math.round(p.percentage*100);
         if(b.totalPages>0)b.currentPage=(int)Math.round(p.percentage*b.totalPages);
         b.status=p.percentage>=1?Book.READ:p.percentage>0?Book.READING:Book.TO_READ;

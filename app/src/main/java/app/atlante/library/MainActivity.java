@@ -1,5 +1,26 @@
 package app.atlante.library;
 
+import app.atlante.library.storage.BackupArchive;
+import app.atlante.library.model.Book;
+import app.atlante.library.ui.BookAdapter;
+import app.atlante.library.model.BookMatcher;
+import app.atlante.library.sync.CalibreSync;
+import app.atlante.library.storage.CatalogImport;
+import app.atlante.library.ui.Covers;
+import app.atlante.library.ebook.EbookParser;
+import app.atlante.library.sync.HardcoverSync;
+import app.atlante.library.sync.KindleClippings;
+import app.atlante.library.sync.KoreaderSync;
+import app.atlante.library.model.LibraryQuery;
+import app.atlante.library.storage.LibraryStore;
+import app.atlante.library.online.OnlineCatalog;
+import app.atlante.library.model.ReadingJournal;
+import app.atlante.library.ui.ReadingMap;
+import app.atlante.library.online.SbnCatalog;
+import app.atlante.library.online.SeriesCatalog;
+import app.atlante.library.sync.SyncCore;
+import app.atlante.library.ui.ThemePalette;
+
 import org.json.JSONObject;
 
 import android.app.*;
@@ -45,7 +66,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 /** Android edition: Material 3 components, private storage and the system document picker. */
 public final class MainActivity extends AppCompatActivity {
-    int INK, PAPER, WHITE, SAGE, COPPER, GOLD, MUTED, LINE, ON_ACCENT;
+    public int INK, PAPER, WHITE, SAGE, COPPER, GOLD, MUTED, LINE, ON_ACCENT;
     private ThemePalette palette = ThemePalette.ALL[0];
     private final android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable filterTask;
@@ -320,7 +341,7 @@ public final class MainActivity extends AppCompatActivity {
         }
     }
 
-    int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+    public int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     LinearLayout column() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.VERTICAL); return v; }
     LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); v.setGravity(Gravity.CENTER_VERTICAL); return v; }
     TextView text(String value, float size, int color, boolean serif) {
@@ -590,7 +611,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     static String order(Book b) { return b.number > 0 ? " · n. " + number(b.number) : ""; }
-    static String number(double number) { return number == (long)number ? Long.toString((long)number) : Double.toString(number); }
+    public static String number(double number) { return number == (long)number ? Long.toString((long)number) : Double.toString(number); }
     private void forgetCover(String id) { covers.forget(id); }
     private Bitmap cover(Book b) { return covers.large(b.id, store.cover(b)); }
     static Bitmap decode(String file, byte[] bytes, int max) { return Covers.decode(file, bytes, max); }

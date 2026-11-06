@@ -1,4 +1,8 @@
-package app.atlante.library;
+package app.atlante.library.storage;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.ebook.EbookParser;
+import app.atlante.library.online.SbnCatalog;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -19,12 +23,12 @@ import org.xmlpull.v1.XmlPullParserFactory;
  * StoryGraph exports), Atlante HTML catalogs with embedded data, Calibre libraries (metadata.opf) and JSON lists.
  * Nothing is written here: the caller shows a summary and restores after confirmation.
  */
-final class CatalogImport {
-    static final int TEXT_LIMIT = 32 * 1024 * 1024, COVER_LIMIT = 2 * 1024 * 1024, COVERS_TOTAL = 64 * 1024 * 1024, MAX_BOOKS = 20000;
-    static final String UNKNOWN = "Formato non riconosciuto. Puoi importare: backup di Atlante (ZIP, anche estratto o dentro un altro ZIP), "
+public final class CatalogImport {
+    public static final int TEXT_LIMIT = 32 * 1024 * 1024, COVER_LIMIT = 2 * 1024 * 1024, COVERS_TOTAL = 64 * 1024 * 1024, MAX_BOOKS = 20000;
+    public static final String UNKNOWN = "Formato non riconosciuto. Puoi importare: backup di Atlante (ZIP, anche estratto o dentro un altro ZIP), "
         + "elenchi CSV (anche da Goodreads e StoryGraph), cataloghi HTML di Atlante e librerie Calibre (ZIP con i file metadata.opf).";
 
-    static BackupArchive.Contents read(InputStream source, String fileName) throws Exception {
+    public static BackupArchive.Contents read(InputStream source, String fileName) throws Exception {
         BufferedInputStream in = new BufferedInputStream(source);
         in.mark(4);
         byte[] magic = new byte[4]; int n = in.read(magic); in.reset();
@@ -38,11 +42,11 @@ final class CatalogImport {
     // ---- ZIP archives ---------------------------------------------------------------------------
 
     private static final class Scan {
-        BackupArchive.Contents atlante, text;
-        final ArrayList<Book> opf = new ArrayList<>();
-        final Map<String, String> opfFolders = new HashMap<>(); // book id -> folder inside the ZIP
-        final Map<String, byte[]> folderCovers = new HashMap<>();
-        long coverBytes;
+        public BackupArchive.Contents atlante, text;
+        public final ArrayList<Book> opf = new ArrayList<>();
+        public final Map<String, String> opfFolders = new HashMap<>(); // book id -> folder inside the ZIP
+        public final Map<String, byte[]> folderCovers = new HashMap<>();
+        public long coverBytes;
     }
 
     private static BackupArchive.Contents readZip(InputStream in) throws Exception {
@@ -89,7 +93,7 @@ final class CatalogImport {
 
     // ---- Text formats ---------------------------------------------------------------------------
 
-    static BackupArchive.Contents readText(byte[] bytes, String fileName) throws Exception {
+    public static BackupArchive.Contents readText(byte[] bytes, String fileName) throws Exception {
         String text = new String(bytes, StandardCharsets.UTF_8);
         if (text.startsWith("\uFEFF")) text = text.substring(1);
         String trimmed = text.trim(), lower = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
@@ -140,7 +144,7 @@ final class CatalogImport {
     }
 
     /** Generic JSON: an array of books or an object with a "books" array (as in Atlante's HTML catalog). */
-    static BackupArchive.Contents json(String text, String kind) throws Exception {
+    public static BackupArchive.Contents json(String text, String kind) throws Exception {
         JSONArray array;
         try {
             Object root = text.startsWith("[") ? new JSONArray(text) : new JSONObject(text);
@@ -184,7 +188,7 @@ final class CatalogImport {
 
     // ---- CSV ------------------------------------------------------------------------------------
 
-    static BackupArchive.Contents csv(String text) throws Exception {
+    public static BackupArchive.Contents csv(String text) throws Exception {
         String firstLine = text.split("\r?\n", 2)[0];
         char delimiter = ',';
         int commas = count(firstLine, ','), semicolons = count(firstLine, ';'), tabs = count(firstLine, '\t');
@@ -210,7 +214,7 @@ final class CatalogImport {
     private static int count(String s, char c) { int n = 0; boolean quoted = false; for (char x : s.toCharArray()) { if (x == '"') quoted = !quoted; else if (x == c && !quoted) n++; } return n; }
 
     /** RFC 4180: quoted fields may contain delimiters, doubled quotes and line breaks. */
-    static List<List<String>> parseCsv(String text, char delimiter) {
+    public static List<List<String>> parseCsv(String text, char delimiter) {
         List<List<String>> rows = new ArrayList<>(); List<String> row = new ArrayList<>(); StringBuilder cell = new StringBuilder();
         boolean quoted = false;
         for (int i = 0; i < text.length(); i++) {
@@ -234,25 +238,25 @@ final class CatalogImport {
 
     // ---- Field mapping shared by CSV and JSON ---------------------------------------------------
 
-    static final String[] TITLE = {"titolo", "title", "book title", "nome"};
-    static final String[] AUTHOR = {"autore", "autori", "author", "authors", "autore principale", "author l f"};
-    static final String[] SERIES = {"serie", "saga", "series", "ciclo"};
-    static final String[] NUMBER = {"numero", "number", "volume", "order", "series index", "numero serie", "numero nella saga"};
-    static final String[] ISBN = {"isbn13", "isbn", "isbn uid", "ean"};
-    static final String[] PUBLISHER = {"editore", "publisher", "casa editrice"};
-    static final String[] YEAR = {"anno", "year", "year published", "original publication year", "anno di pubblicazione"};
-    static final String[] PAGES = {"pagine", "pages", "number of pages", "numero pagine", "numero di pagine"};
-    static final String[] GENRE = {"genere", "genre", "genres", "categoria"};
-    static final String[] TAGS = {"tag", "tags", "bookshelves", "scaffali", "shelves"};
-    static final String[] STATUS = {"stato", "status", "exclusive shelf", "read status", "stato di lettura"};
-    static final String[] RATING = {"voto", "rating", "my rating", "star rating", "valutazione"};
-    static final String[] NOTES = {"note", "notes", "my review", "review", "commento", "recensione"};
-    static final String[] PLOT = {"trama", "descrizione", "description", "synopsis", "sinossi"};
-    static final String[] STARTED = {"date started", "data inizio", "iniziato", "inizio lettura"};
-    static final String[] FINISHED = {"date read", "last date read", "data fine", "finito", "fine lettura", "data lettura"};
-    static final String[] LANGUAGE = {"lingua", "language"};
-    static final String[] LOCATION = {"posizione", "location", "scaffale"};
-    static final String[] FILE = {"file originale", "file", "path", "percorso"};
+    public static final String[] TITLE = {"titolo", "title", "book title", "nome"};
+    public static final String[] AUTHOR = {"autore", "autori", "author", "authors", "autore principale", "author l f"};
+    public static final String[] SERIES = {"serie", "saga", "series", "ciclo"};
+    public static final String[] NUMBER = {"numero", "number", "volume", "order", "series index", "numero serie", "numero nella saga"};
+    public static final String[] ISBN = {"isbn13", "isbn", "isbn uid", "ean"};
+    public static final String[] PUBLISHER = {"editore", "publisher", "casa editrice"};
+    public static final String[] YEAR = {"anno", "year", "year published", "original publication year", "anno di pubblicazione"};
+    public static final String[] PAGES = {"pagine", "pages", "number of pages", "numero pagine", "numero di pagine"};
+    public static final String[] GENRE = {"genere", "genre", "genres", "categoria"};
+    public static final String[] TAGS = {"tag", "tags", "bookshelves", "scaffali", "shelves"};
+    public static final String[] STATUS = {"stato", "status", "exclusive shelf", "read status", "stato di lettura"};
+    public static final String[] RATING = {"voto", "rating", "my rating", "star rating", "valutazione"};
+    public static final String[] NOTES = {"note", "notes", "my review", "review", "commento", "recensione"};
+    public static final String[] PLOT = {"trama", "descrizione", "description", "synopsis", "sinossi"};
+    public static final String[] STARTED = {"date started", "data inizio", "iniziato", "inizio lettura"};
+    public static final String[] FINISHED = {"date read", "last date read", "data fine", "finito", "fine lettura", "data lettura"};
+    public static final String[] LANGUAGE = {"lingua", "language"};
+    public static final String[] LOCATION = {"posizione", "location", "scaffale"};
+    public static final String[] FILE = {"file originale", "file", "path", "percorso"};
 
     private static String key(String header) {
         String k = java.text.Normalizer.normalize(header.toLowerCase(Locale.ROOT), java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
@@ -260,7 +264,7 @@ final class CatalogImport {
     }
 
     /** First non-empty value among the aliases; "None"/"null" count as empty. */
-    static String field(Map<String, String> fields, String[] aliases) {
+    public static String field(Map<String, String> fields, String[] aliases) {
         Map<String, String> byKey = new HashMap<>();
         for (Map.Entry<String, String> e : fields.entrySet()) byKey.put(key(e.getKey()), e.getValue());
         for (String alias : aliases) {
@@ -270,7 +274,7 @@ final class CatalogImport {
         return null;
     }
 
-    static Book fromFields(Map<String, String> f) throws Exception {
+    public static Book fromFields(Map<String, String> f) throws Exception {
         String title = field(f, TITLE);
         if (title == null) return null;
         Book b = new Book(); b.format = "CATALOGO"; b.addedAt = System.currentTimeMillis();
@@ -299,7 +303,7 @@ final class CatalogImport {
         return b;
     }
 
-    static String status(String value) {
+    public static String status(String value) {
         String v = key(value);
         if (v.matches("read|letto|letti|finished|finito|completed|completato")) return Book.READ;
         if (v.matches("currently reading|reading|in lettura|sto leggendo|in corso|currently-reading")) return Book.READING;
@@ -308,7 +312,7 @@ final class CatalogImport {
     }
 
     /** yyyy-MM-dd from the usual forms (2023/05/14, 2023-05-14, 14/05/2023, 14.05.2023); empty if unclear. */
-    static String date(String value) {
+    public static String date(String value) {
         if (value == null) return "";
         Matcher iso = Pattern.compile("((?:19|20)[0-9]{2})[-/.]([0-9]{1,2})[-/.]([0-9]{1,2})").matcher(value);
         Matcher eu = Pattern.compile("([0-9]{1,2})[-/.]([0-9]{1,2})[-/.]((?:19|20)[0-9]{2})").matcher(value);
@@ -329,7 +333,7 @@ final class CatalogImport {
     private static String or(String value, String fallback) { return value == null ? fallback : value; }
 
     /** Text without HTML tags (Calibre and some exports store HTML descriptions). */
-    static String plain(String html) {
+    public static String plain(String html) {
         if (!html.contains("<") && !html.contains("&")) return html.trim();
         return html.replaceAll("(?i)<br\\s*/?>|</p>", "\n").replaceAll("<[^>]+>", "")
             .replace("&nbsp;", " ").replace("&quot;", "\"").replace("&#39;", "'").replace("&apos;", "'")
@@ -338,7 +342,7 @@ final class CatalogImport {
 
     // ---- Calibre metadata.opf -------------------------------------------------------------------
 
-    static Book opf(byte[] bytes) throws Exception {
+    public static Book opf(byte[] bytes) throws Exception {
         XmlPullParserFactory factory = XmlPullParserFactory.newInstance(); factory.setNamespaceAware(true);
         XmlPullParser p = factory.newPullParser();
         p.setInput(new ByteArrayInputStream(bytes), null);

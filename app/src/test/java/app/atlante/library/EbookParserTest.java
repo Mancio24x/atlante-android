@@ -1,5 +1,7 @@
 package app.atlante.library;
 
+import app.atlante.library.ebook.EbookParser;
+
 import static org.junit.Assert.*;
 import org.junit.Test;
 import java.io.*;

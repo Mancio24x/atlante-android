@@ -1,5 +1,8 @@
 package app.atlante.library;
 
+import app.atlante.library.model.Book;
+import app.atlante.library.model.BookMatcher;
+
 import static org.junit.Assert.*;
 import org.junit.Test;
 

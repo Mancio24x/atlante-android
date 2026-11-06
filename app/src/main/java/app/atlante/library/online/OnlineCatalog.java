@@ -1,4 +1,8 @@
-package app.atlante.library;
+package app.atlante.library.online;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.ui.Covers;
+import app.atlante.library.ebook.EbookParser;
 
 import java.io.*;
 import java.net.*;
@@ -8,18 +12,18 @@ import java.util.*;
 import org.json.*;
 
 /** On-demand HTTPS lookups only; never uploads the local catalog, notes or book files. */
-final class OnlineCatalog {
+public final class OnlineCatalog {
     private static final Map<String, Long> nextRequest = new HashMap<>();
     private static File cacheDirectory;
     private static final LinkedHashMap<String, String> cache = new LinkedHashMap<>();
     private static final Map<String,Long> cacheTimes = new HashMap<>();
-    static synchronized void configure(File directory) { cacheDirectory = directory; }
+    public static synchronized void configure(File directory) { cacheDirectory = directory; }
     private static String hash(String value) throws Exception {
         StringBuilder hex = new StringBuilder();
         for (byte b : MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))) hex.append(String.format(Locale.ROOT,"%02x",b & 255));
         return hex.toString();
     }
-    static byte[] request(String address, int limit) throws Exception {
+    public static byte[] request(String address, int limit) throws Exception {
         File file = cacheDirectory == null ? null : new File(cacheDirectory, hash(address));
         long ttl = address.contains("search.json") ? 15 * 60 * 1000L : 24 * 60 * 60 * 1000L;
         if (file != null && file.isFile() && file.length() <= limit && System.currentTimeMillis()-file.lastModified() < ttl) {
@@ -62,22 +66,22 @@ final class OnlineCatalog {
     }
 
     /** Book languages: Open Library (MARC) code, ISO code for the {@code lang} parameter, name. "" means any language. */
-    static final String[][] LANGUAGES = {
+    public static final String[][] LANGUAGES = {
         {"ita", "it", "Italiano"}, {"eng", "en", "English"}, {"fre", "fr", "Français"}, {"ger", "de", "Deutsch"},
         {"spa", "es", "Español"}, {"por", "pt", "Português"}, {"", "", "Tutte le lingue"}
     };
-    static String languageName(String code) {
+    public static String languageName(String code) {
         for (String[] l : LANGUAGES) if (l[0].equals(code)) return l[2];
         return "Tutte le lingue";
     }
 
-    static ArrayList<Book> search(String query) throws Exception { return search(query, "ita", false); }
+    public static ArrayList<Book> search(String query) throws Exception { return search(query, "ita", false); }
 
     /**
      * Searches works, preferring {@code language}: works with an edition in that language come first and
      * show that edition's title and cover; with {@code only} the others are left out.
      */
-    static ArrayList<Book> search(String query, String language, boolean only) throws Exception {
+    public static ArrayList<Book> search(String query, String language, boolean only) throws Exception {
         query = query.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
         String iso = "";
         for (String[] l : LANGUAGES) if (l[0].equals(language)) iso = l[1];
@@ -101,9 +105,9 @@ final class OnlineCatalog {
         return parseSearch(response, language, only);
     }
 
-    static ArrayList<Book> parseSearch(String response) throws Exception { return parseSearch(response, "", false); }
+    public static ArrayList<Book> parseSearch(String response) throws Exception { return parseSearch(response, "", false); }
 
-    static ArrayList<Book> parseSearch(String response, String language, boolean only) throws Exception {
+    public static ArrayList<Book> parseSearch(String response, String language, boolean only) throws Exception {
         JSONArray docs = new JSONObject(response).getJSONArray("docs");
         ArrayList<Book> preferred = new ArrayList<>(), others = new ArrayList<>();
         for (int i = 0; i < docs.length(); i++) {
@@ -142,15 +146,15 @@ final class OnlineCatalog {
         return false;
     }
 
-    static String join(JSONArray values, int maximum) {
+    public static String join(JSONArray values, int maximum) {
         ArrayList<String> strings = new ArrayList<>();
         for (int i = 0; i < Math.min(values.length(), maximum); i++) strings.add(values.optString(i));
         return String.join(", ", strings);
     }
 
-    static void enrich(Book book) throws Exception { enrich(book, book.language.isEmpty() ? "ita" : book.language); }
+    public static void enrich(Book book) throws Exception { enrich(book, book.language.isEmpty() ? "ita" : book.language); }
 
-    static void enrich(Book book, String language) throws Exception {
+    public static void enrich(Book book, String language) throws Exception {
         if (!book.source.matches("/works/OL[0-9]+W")) throw new IOException("Scheda non valida");
         String response = new String(request("https://openlibrary.org" + book.source + ".json", 2 * 1024 * 1024), StandardCharsets.UTF_8);
         enrichFrom(book, response);
@@ -158,7 +162,7 @@ final class OnlineCatalog {
         enrichEdition(book, editions, language);
     }
 
-    static byte[] loadCover(Book book) {
+    public static byte[] loadCover(Book book) {
         if (book.onlineCover != null) return book.onlineCover;
         try {
             if (book.coverId > 0) return request("https://covers.openlibrary.org/b/id/"+book.coverId+"-M.jpg?default=false",2*1024*1024);
@@ -171,7 +175,7 @@ final class OnlineCatalog {
      * Finds a cover for a book that has none: Open Library by ISBN, otherwise the first search result whose
      * title matches. Returns the image bytes (JPEG/PNG) or null.
      */
-    static byte[] findCover(Book book) {
+    public static byte[] findCover(Book book) {
         try {
             if (book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) {
                 byte[] image = image(request("https://covers.openlibrary.org/b/isbn/" + book.isbn + "-M.jpg?default=false", 2 * 1024 * 1024));
@@ -209,7 +213,7 @@ final class OnlineCatalog {
     }
 
     /** Google Books fallback: exact ISBN, or title AND author. Never choose a cover by title alone. */
-    static byte[] googleCover(Book book) {
+    public static byte[] googleCover(Book book) {
         try {
             String isbn=book.isbn.replaceAll("[^0-9Xx]","");
             boolean hasIsbn=isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}");
@@ -228,7 +232,7 @@ final class OnlineCatalog {
         }catch(Exception ignored){ /* An unavailable provider does not prevent the other sources. */ }
         return null;
     }
-    static boolean googleMatches(Book book,JSONObject info){
+    public static boolean googleMatches(Book book,JSONObject info){
         String isbn=book.isbn.replaceAll("[^0-9Xx]","");
         JSONArray ids=info.optJSONArray("industryIdentifiers");
         if(!isbn.isEmpty())for(int i=0;ids!=null&&i<ids.length();i++)if(isbn.equalsIgnoreCase(ids.optJSONObject(i)==null?"":ids.optJSONObject(i).optString("identifier")))return true;
@@ -243,7 +247,7 @@ final class OnlineCatalog {
     }
 
     /** Same title after normalizing, or the same main title when one adds a subtitle after ":" or " - ". */
-    static boolean sameTitle(String a, String b) {
+    public static boolean sameTitle(String a, String b) {
         String x = SbnCatalog.normalize(a), y = SbnCatalog.normalize(b);
         if (x.isEmpty() || y.isEmpty()) return false;
         return x.equals(y) || SbnCatalog.normalize(mainTitle(a)).equals(SbnCatalog.normalize(mainTitle(b)));
@@ -257,7 +261,7 @@ final class OnlineCatalog {
     }
 
     /** Fills what a library record lacks (cover, plot, subjects, pages) from Open Library's edition with this ISBN. */
-    static void enrichByIsbn(Book book) throws Exception {
+    public static void enrichByIsbn(Book book) throws Exception {
         if (!book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) return;
         JSONObject edition = new JSONObject(new String(request("https://openlibrary.org/isbn/" + book.isbn + ".json", 2 * 1024 * 1024), StandardCharsets.UTF_8));
         JSONArray covers = edition.optJSONArray("covers");
@@ -269,10 +273,10 @@ final class OnlineCatalog {
             enrichFrom(book, new String(request("https://openlibrary.org" + work + ".json", 2 * 1024 * 1024), StandardCharsets.UTF_8));
     }
 
-    static void enrichEdition(Book book, JSONObject response) throws Exception { enrichEdition(book, response, "ita"); }
+    public static void enrichEdition(Book book, JSONObject response) throws Exception { enrichEdition(book, response, "ita"); }
 
     /** Picks the edition found by the search, else the first one in the preferred language, else the first one. */
-    static void enrichEdition(Book book, JSONObject response, String language) throws Exception {
+    public static void enrichEdition(Book book, JSONObject response, String language) throws Exception {
         JSONArray entries = response.optJSONArray("entries");
         if (entries == null || entries.length() == 0) return;
         JSONObject chosen = entries.getJSONObject(0), inLanguage = null, found = null;
@@ -298,7 +302,7 @@ final class OnlineCatalog {
         if (covers != null && covers.optLong(0) > 0) book.coverId = covers.optLong(0);
     }
 
-    static void enrichFrom(Book book, String response) throws Exception {
+    public static void enrichFrom(Book book, String response) throws Exception {
         JSONObject work = new JSONObject(response);
         Object description = work.opt("description");
         if (description instanceof JSONObject) book.description = ((JSONObject)description).optString("value");

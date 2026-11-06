@@ -1,4 +1,6 @@
-package app.atlante.library;
+package app.atlante.library.ebook;
+
+import app.atlante.library.model.Book;
 
 import android.text.Html;
 import android.util.Xml;
@@ -9,12 +11,12 @@ import java.util.*;
 import java.util.zip.*;
 
 /** All imported markup becomes text; EPUB scripts and network resources never run. */
-final class EbookParser {
-    static final int ENTRY_LIMIT = 32 * 1024 * 1024;
-    static final int TEXT_LIMIT = 32 * 1024 * 1024;
-    static final int MAX_PAGES = 5000;
+public final class EbookParser {
+    public static final int ENTRY_LIMIT = 32 * 1024 * 1024;
+    public static final int TEXT_LIMIT = 32 * 1024 * 1024;
+    public static final int MAX_PAGES = 5000;
 
-    static byte[] read(InputStream in, int max) throws IOException {
+    public static byte[] read(InputStream in, int max) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buffer = new byte[16384]; int count;
         while ((count = in.read(buffer)) != -1) {
@@ -24,26 +26,26 @@ final class EbookParser {
         return out.toByteArray();
     }
 
-    static byte[] entry(ZipFile zip, String name) throws IOException {
+    public static byte[] entry(ZipFile zip, String name) throws IOException {
         ZipEntry e = zip.getEntry(name);
         if (e == null) throw new IOException("File mancante nell'archivio: " + name);
         if (e.getSize() > ENTRY_LIMIT) throw new IOException("Pagina troppo grande");
         try (InputStream in = zip.getInputStream(e)) { return read(in, ENTRY_LIMIT); }
     }
 
-    static XmlPullParser xml(byte[] data) throws Exception {
+    public static XmlPullParser xml(byte[] data) throws Exception {
         XmlPullParser p = Xml.newPullParser();
         p.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true);
         p.setInput(new ByteArrayInputStream(data), null);
         return p;
     }
 
-    static String attr(XmlPullParser p, String name) {
+    public static String attr(XmlPullParser p, String name) {
         for (int i = 0; i < p.getAttributeCount(); i++) if (name.equals(p.getAttributeName(i))) return p.getAttributeValue(i);
         return "";
     }
 
-    static String path(String parent, String href) throws IOException {
+    public static String path(String parent, String href) throws IOException {
         String reference = href.split("#", 2)[0];
         try { reference = java.net.URLDecoder.decode(reference.replace("+", "%2B"), "UTF-8"); }
         catch (IllegalArgumentException e) { throw new IOException("Percorso EPUB non valido", e); }
@@ -59,13 +61,13 @@ final class EbookParser {
         return String.join("/", parts);
     }
 
-    static final class Package {
-        String file, coverId = "", nav, ncx;
-        Map<String, String> manifest = new LinkedHashMap<>();
-        List<String> spine = new ArrayList<>();
+    public static final class Package {
+        public String file, coverId = "", nav, ncx;
+        public Map<String, String> manifest = new LinkedHashMap<>();
+        public List<String> spine = new ArrayList<>();
     }
 
-    static Package epub(ZipFile zip, Book book) throws Exception {
+    public static Package epub(ZipFile zip, Book book) throws Exception {
         Package opf = new Package();
         XmlPullParser container = xml(entry(zip, "META-INF/container.xml"));
         for (int t = container.getEventType(); t != XmlPullParser.END_DOCUMENT; t = container.next()) {
@@ -121,10 +123,10 @@ final class EbookParser {
         return opf;
     }
 
-    static final int MAX_CHAPTERS = 2000;
+    public static final int MAX_CHAPTERS = 2000;
 
     /** Chapter titles from the EPUB table of contents: EPUB 3 navigation first, then the EPUB 2 NCX. */
-    static List<String> tableOfContents(File file) throws Exception {
+    public static List<String> tableOfContents(File file) throws Exception {
         try (ZipFile zip = new ZipFile(file)) {
             Package p = epub(zip, null);
             List<String> titles = new ArrayList<>();
@@ -135,7 +137,7 @@ final class EbookParser {
     }
 
     /** Links inside the {@code <nav epub:type="toc">} of an EPUB 3 navigation document. */
-    static List<String> navTitles(XmlPullParser p) throws Exception {
+    public static List<String> navTitles(XmlPullParser p) throws Exception {
         List<String> titles = new ArrayList<>(); int tocDepth = -1;
         for (int t = p.getEventType(); t != XmlPullParser.END_DOCUMENT && titles.size() < MAX_CHAPTERS; t = p.next()) {
             if (t == XmlPullParser.END_TAG && p.getDepth() == tocDepth && p.getName().equals("nav")) tocDepth = -1;
@@ -147,7 +149,7 @@ final class EbookParser {
     }
 
     /** {@code navPoint/navLabel/text} entries of an EPUB 2 NCX, in document order. */
-    static List<String> ncxTitles(XmlPullParser p) throws Exception {
+    public static List<String> ncxTitles(XmlPullParser p) throws Exception {
         List<String> titles = new ArrayList<>(); boolean label = false;
         for (int t = p.getEventType(); t != XmlPullParser.END_DOCUMENT && titles.size() < MAX_CHAPTERS; t = p.next()) {
             if (t == XmlPullParser.START_TAG && p.getName().equals("navLabel")) label = true;
@@ -163,14 +165,14 @@ final class EbookParser {
     }
 
     /** All text inside the current element, including nested tags such as {@code <span>}. */
-    static String text(XmlPullParser p) throws Exception {
+    public static String text(XmlPullParser p) throws Exception {
         StringBuilder out = new StringBuilder(); int depth = p.getDepth();
         for (int t = p.next(); !(t == XmlPullParser.END_TAG && p.getDepth() == depth) && t != XmlPullParser.END_DOCUMENT; t = p.next())
             if (t == XmlPullParser.TEXT) out.append(p.getText());
         return out.toString();
     }
 
-    static void metadata(File file, File cover, Book book) throws Exception {
+    public static void metadata(File file, File cover, Book book) throws Exception {
         if (book.format.equals("TXT")) return;
         try (ZipFile zip = new ZipFile(file)) {
             String image = null;
@@ -204,12 +206,12 @@ final class EbookParser {
         }
     }
 
-    static String plain(String html) {
+    public static String plain(String html) {
         // Native text rendering: no WebView, scripts, remote fonts or image requests.
         return Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY).toString().trim();
     }
 
-    static List<String> textPages(File file, String format) throws Exception {
+    public static List<String> textPages(File file, String format) throws Exception {
         StringBuilder text = new StringBuilder();
         if (format.equals("TXT")) {
             try (InputStream in = new FileInputStream(file)) { text.append(new String(read(in, TEXT_LIMIT), StandardCharsets.UTF_8)); }
@@ -239,7 +241,7 @@ final class EbookParser {
         return pages;
     }
 
-    static List<String> comicPages(ZipFile zip) throws IOException {
+    public static List<String> comicPages(ZipFile zip) throws IOException {
         List<String> pages = new ArrayList<>();
         Enumeration<? extends ZipEntry> entries = zip.entries();
         int count = 0; boolean mixed = false; int depth = -1;
@@ -264,7 +266,7 @@ final class EbookParser {
         return pages;
     }
 
-    static int naturalCompare(String a, String b) {
+    public static int naturalCompare(String a, String b) {
         int i = 0, j = 0;
         a = a.toLowerCase(Locale.ROOT); b = b.toLowerCase(Locale.ROOT);
         while (i < a.length() && j < b.length()) {

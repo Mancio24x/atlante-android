@@ -1,5 +1,9 @@
 package app.atlante.library;
 
+import app.atlante.library.storage.BackupArchive;
+import app.atlante.library.model.Book;
+import app.atlante.library.storage.CatalogImport;
+
 import static org.junit.Assert.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;

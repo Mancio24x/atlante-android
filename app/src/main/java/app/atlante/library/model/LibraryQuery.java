@@ -1,4 +1,7 @@
-package app.atlante.library;
+package app.atlante.library.model;
+
+import app.atlante.library.ebook.EbookParser;
+import app.atlante.library.online.SeriesCatalog;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -6,9 +9,9 @@ import java.util.List;
 import java.util.Locale;
 
 /** Local catalog views; never alters the catalog or the reader's position. */
-final class LibraryQuery {
+public final class LibraryQuery {
     /** Tabs: "Tutti i libri", one per reading state ("Da leggere", "In lettura", "Letti"), or a view such as "Mappa". */
-    static ArrayList<Book> select(List<Book> books, String query, String tab,
+    public static ArrayList<Book> select(List<Book> books, String query, String tab,
             String genre, String format, String order) {
         ArrayList<Book> result = new ArrayList<>();
         String needle = query.toLowerCase(Locale.ROOT).trim();

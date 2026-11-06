@@ -1,4 +1,8 @@
-package app.atlante.library;
+package app.atlante.library.sync;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.ebook.EbookParser;
+import app.atlante.library.model.ReadingJournal;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -13,41 +17,41 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /** Shared pieces of the Sync section: reading snapshots, the merge rule and a small HTTP client. */
-final class SyncCore {
+public final class SyncCore {
     /** What a service can know about a reading: state, page, chapter and rating (fields it lacks stay empty). */
-    static final class Snapshot {
-        String status = Book.TO_READ, chapter = "";
-        int page;
-        double rating;
-        Snapshot() { }
-        Snapshot(String status, int page, String chapter, double rating) {
+    public static final class Snapshot {
+        public String status = Book.TO_READ, chapter = "";
+        public int page;
+        public double rating;
+        public Snapshot() { }
+        public Snapshot(String status, int page, String chapter, double rating) {
             this.status = Book.normalizeStatus(status); this.page = Math.max(0, page);
             this.chapter = chapter == null ? "" : chapter.trim(); this.rating = Math.round(Math.max(0, Math.min(5, rating)) * 2) / 2.0;
         }
         /** The page only matters while reading or paused; a finished or unstarted book has no "current page". */
-        int relevantPage() { return status.equals(Book.READING) || status.equals(Book.PAUSED) ? page : 0; }
-        boolean empty() { return status.equals(Book.TO_READ) && page == 0 && chapter.isEmpty() && rating == 0; }
-        boolean same(Snapshot o, boolean chapters, boolean ratings) {
+        public int relevantPage() { return status.equals(Book.READING) || status.equals(Book.PAUSED) ? page : 0; }
+        public boolean empty() { return status.equals(Book.TO_READ) && page == 0 && chapter.isEmpty() && rating == 0; }
+        public boolean same(Snapshot o, boolean chapters, boolean ratings) {
             return o != null && status.equals(o.status) && relevantPage() == o.relevantPage()
                 && (!chapters || chapter.equals(o.chapter)) && (!ratings || rating == o.rating);
         }
-        JSONObject json() throws JSONException { return new JSONObject().put("status", status).put("page", page).put("chapter", chapter).put("rating", rating); }
-        static Snapshot from(JSONObject j) {
+        public JSONObject json() throws JSONException { return new JSONObject().put("status", status).put("page", page).put("chapter", chapter).put("rating", rating); }
+        public static Snapshot from(JSONObject j) {
             return j == null ? null : new Snapshot(j.optString("status", Book.TO_READ), j.optInt("page"), j.optString("chapter"), j.optDouble("rating", 0));
         }
-        static Snapshot of(Book b) {
+        public static Snapshot of(Book b) {
             String chapter = b.journal.optString("chapter");
             return new Snapshot(b.status, b.currentPage, chapter, ReadingJournal.rating(b));
         }
     }
 
-    enum Action { NONE, PUSH, PULL }
+    public enum Action { NONE, PUSH, PULL }
 
     /**
      * Book by book: whichever side changed since the last sync wins; if both changed the phone wins.
      * On the first link (no synced snapshot) the more advanced reading wins.
      */
-    static Action decide(Snapshot local, Snapshot remote, Snapshot synced, boolean chapters, boolean ratings) {
+    public static Action decide(Snapshot local, Snapshot remote, Snapshot synced, boolean chapters, boolean ratings) {
         if (local.same(remote, chapters, ratings)) return Action.NONE;
         if (synced == null) {
             if (remote.empty()) return Action.PUSH;
@@ -65,7 +69,7 @@ final class SyncCore {
     }
 
     /** Applies a remote snapshot to a book, with the usual side effects of a state change. */
-    static void apply(Book b, Snapshot s, boolean chapters, boolean ratings, String today) {
+    public static void apply(Book b, Snapshot s, boolean chapters, boolean ratings, String today) {
         b.status = s.status;
         if (s.relevantPage() > 0) { b.currentPage = b.totalPages > 0 ? Math.min(s.page, b.totalPages) : s.page; if (b.totalPages > 0) b.percent = Math.round(100f * b.currentPage / b.totalPages); }
         if (chapters && !s.chapter.isEmpty()) ReadingJournal.put(b, "chapter", s.chapter);
@@ -74,7 +78,7 @@ final class SyncCore {
     }
 
     /** Remembers what both sides agreed on, under journal.sync.&lt;service&gt;. */
-    static void remember(Book b, String service, JSONObject link, Snapshot agreed) {
+    public static void remember(Book b, String service, JSONObject link, Snapshot agreed) {
         try {
             JSONObject sync = b.journal.optJSONObject("sync");
             if (sync == null) sync = new JSONObject();
@@ -82,17 +86,17 @@ final class SyncCore {
             sync.put(service, entry); ReadingJournal.put(b, "sync", sync);
         } catch (JSONException e) { throw new IllegalArgumentException(e); }
     }
-    static JSONObject link(Book b, String service) {
+    public static JSONObject link(Book b, String service) {
         JSONObject sync = b.journal.optJSONObject("sync");
         return sync == null ? null : sync.optJSONObject(service);
     }
 
     // ---- HTTP -------------------------------------------------------------------------------------
 
-    static final class Response { int status; String body; Map<String, List<String>> headers; }
+    public static final class Response { public int status; String body; Map<String, List<String>> headers; }
 
     /** GET/POST with optional Basic or Digest credentials (Calibre) or extra headers (Hardcover). */
-    static Response http(String method, String address, String body, Map<String, String> headers, String user, String password, int limit) throws IOException {
+    public static Response http(String method, String address, String body, Map<String, String> headers, String user, String password, int limit) throws IOException {
         // Ask first without credentials: the server's challenge says whether it wants Basic or Digest
         // (Calibre in Digest mode rejects an unsolicited Basic header with 400).
         Response r = send(method, address, body, headers, null, limit);
@@ -121,7 +125,7 @@ final class SyncCore {
     }
 
     /** Authorization header answering a WWW-Authenticate challenge. */
-    static String answer(String challenge, String method, String address, String user, String password) throws IOException {
+    public static String answer(String challenge, String method, String address, String user, String password) throws IOException {
         return challenge != null && challenge.regionMatches(true, 0, "Digest", 0, 6) ? digest(challenge, method, new URL(address).getFile(), user, password) : basic(user, password);
     }
 
@@ -132,12 +136,12 @@ final class SyncCore {
         return null;
     }
 
-    static String basic(String user, String password) {
+    public static String basic(String user, String password) {
         return "Basic " + Base64.getEncoder().encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8));
     }
 
     /** RFC 7616 Digest with MD5 and qop=auth, as used by Calibre's content server. */
-    static String digest(String challenge, String method, String uri, String user, String password) {
+    public static String digest(String challenge, String method, String uri, String user, String password) {
         Map<String, String> p = new HashMap<>();
         Matcher m = Pattern.compile("(\\w+)=(?:\"([^\"]*)\"|([^,\\s]*))").matcher(challenge);
         while (m.find()) p.put(m.group(1).toLowerCase(Locale.ROOT), m.group(2) != null ? m.group(2) : m.group(3));
@@ -151,7 +155,7 @@ final class SyncCore {
             + (qop ? ", qop=auth, nc=" + nc + ", cnonce=\"" + cnonce + "\"" : "") + (opaque != null ? ", opaque=\"" + opaque + "\"" : "") + ", algorithm=MD5";
     }
 
-    static String md5(String value) {
+    public static String md5(String value) {
         try { return hex(MessageDigest.getInstance("MD5").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch (Exception e) { throw new IllegalStateException(e); }
     }

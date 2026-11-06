@@ -1,5 +1,8 @@
 package app.atlante.library;
 
+import app.atlante.library.storage.BackupArchive;
+import app.atlante.library.model.Book;
+
 import static org.junit.Assert.*;
 import org.json.JSONArray;
 import org.json.JSONObject;

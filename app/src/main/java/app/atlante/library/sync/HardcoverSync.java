@@ -1,4 +1,11 @@
-package app.atlante.library;
+package app.atlante.library.sync;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.model.BookMatcher;
+import app.atlante.library.storage.CatalogImport;
+import app.atlante.library.online.OnlineCatalog;
+import app.atlante.library.online.SbnCatalog;
+import app.atlante.library.storage.SyncStore;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -11,19 +18,19 @@ import org.json.JSONObject;
  * reading state, current page and half-star rating, both ways. Hardcover has no chapter field.
  * Statuses: 1 want to read, 2 currently reading, 3 read, 4 paused, 5 did not finish, 6 ignored.
  */
-final class HardcoverSync {
-    static final String SERVICE = "hardcover", ENDPOINT = "https://api.hardcover.app/v1/graphql";
+public final class HardcoverSync {
+    public static final String SERVICE = "hardcover", ENDPOINT = "https://api.hardcover.app/v1/graphql";
     private static long nextRequest;
 
-    static final class Settings { String token = ""; boolean createMissing = true, sendToRead = false; }
-    static final class Report {
-        String user = ""; int remote, linked, pushed, pulled, created, added, onlyHere, recognized;
-        final List<String> notes = new ArrayList<>();
+    public static final class Settings { public String token = ""; public boolean createMissing = true, sendToRead = false; }
+    public static final class Report {
+        public String user = ""; public int remote, linked, pushed, pulled, created, added, onlyHere, recognized;
+        public final List<String> notes = new ArrayList<>();
     }
-    interface Progress { void update(String message); }
-    interface Api { JSONObject call(String query, JSONObject variables) throws Exception; }
+    public interface Progress { void update(String message); }
+    public interface Api { JSONObject call(String query, JSONObject variables) throws Exception; }
 
-    static Report sync(SyncStore store, Settings s, Progress progress) throws Exception {
+    public static Report sync(SyncStore store, Settings s, Progress progress) throws Exception {
         String token = s.token.trim();
         if (token.isEmpty()) throw new IOException("Incolla prima la chiave personale di Hardcover.");
         String auth = token.regionMatches(true, 0, "Bearer ", 0, 7) ? token : "Bearer " + token;
@@ -31,7 +38,7 @@ final class HardcoverSync {
     }
 
     /** The API is injected so that the merge can be tested without a network. */
-    static Report sync(SyncStore store, Settings s, Progress progress, Api api) throws Exception {
+    public static Report sync(SyncStore store, Settings s, Progress progress, Api api) throws Exception {
         Report report = new Report();
         progress.update("Collegamento a Hardcover…");
         Object me = api.call("query { me { id username } }", new JSONObject()).opt("me");
@@ -127,7 +134,7 @@ final class HardcoverSync {
     }
 
     /** Hardcover book id: by ISBN among editions, otherwise the first search result with the same title and an author in common. */
-    static Integer findBook(Api api, Book b) throws Exception {
+    public static Integer findBook(Api api, Book b) throws Exception {
         if (b.isbn.matches("97[89][0-9]{10}|[0-9]{9}[0-9Xx]")) {
             String field = b.isbn.length() == 13 ? "isbn_13" : "isbn_10";
             JSONArray editions = api.call("query($i:String!){ editions(where:{" + field + ":{_eq:$i}}, limit:1) { id book_id } }", new JSONObject().put("i", b.isbn)).optJSONArray("editions");
@@ -152,7 +159,7 @@ final class HardcoverSync {
     }
 
     /** Link saved earlier, otherwise the best record by ISBN or title and author (see BookMatcher). */
-    static JSONObject match(Book local, List<JSONObject> remote, Set<Integer> taken) {
+    public static JSONObject match(Book local, List<JSONObject> remote, Set<Integer> taken) {
         JSONObject link = SyncCore.link(local, SERVICE);
         if (link != null) for (JSONObject ub : remote) if (ub.optInt("id") == link.optInt("id") && !taken.contains(ub.optInt("id"))) return ub;
         List<JSONObject> free = new ArrayList<>();
@@ -160,14 +167,14 @@ final class HardcoverSync {
         return BookMatcher.best(local, free, ub -> { Book b = sheetIdentity(ub); return b == null ? new Book() : b; });
     }
 
-    static SyncCore.Snapshot snapshot(JSONObject ub) {
+    public static SyncCore.Snapshot snapshot(JSONObject ub) {
         JSONObject read = read(ub);
         double rating = ub.isNull("rating") ? 0 : ub.optDouble("rating", 0);
         return new SyncCore.Snapshot(status(ub.optInt("status_id")), read == null || read.isNull("progress_pages") ? 0 : read.optInt("progress_pages"), "", rating);
     }
 
-    static String status(int id) { return id == 2 ? Book.READING : id == 3 ? Book.READ : id == 4 ? Book.PAUSED : Book.TO_READ; }
-    static int statusId(String status) { return status.equals(Book.READING) ? 2 : status.equals(Book.READ) ? 3 : status.equals(Book.PAUSED) ? 4 : 1; }
+    public static String status(int id) { return id == 2 ? Book.READING : id == 3 ? Book.READ : id == 4 ? Book.PAUSED : Book.TO_READ; }
+    public static int statusId(String status) { return status.equals(Book.READING) ? 2 : status.equals(Book.READ) ? 3 : status.equals(Book.PAUSED) ? 4 : 1; }
 
     private static JSONObject read(JSONObject ub) { JSONArray reads = ub.optJSONArray("user_book_reads"); return reads == null ? null : reads.optJSONObject(0); }
     private static int pages(JSONObject ub) {
@@ -187,7 +194,7 @@ final class HardcoverSync {
         return b;
     }
 
-    static Book sheet(JSONObject ub) throws Exception {
+    public static Book sheet(JSONObject ub) throws Exception {
         Book id = sheetIdentity(ub); if (id == null || id.title.isEmpty()) return null;
         Map<String, String> f = new HashMap<>();
         f.put("title", id.title); f.put("author", id.author); f.put("isbn", id.isbn); f.put("pages", Integer.toString(pages(ub)));

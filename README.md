@@ -254,6 +254,24 @@ del tuo repository, per esempio `https://github.com/TUO-NOME/atlante-android`.
 Scegli la sorgente GitHub e conferma. Viene distribuito un solo APK universale,
 senza scelta del processore. Le future release saranno rilevate da Obtainium.
 
+## Struttura del codice
+
+Il codice è diviso per argomento in `app/src/main/java/app/atlante/library/`:
+
+| Cartella | Contenuto |
+| --- | --- |
+| *(radice)* | `MainActivity`: navigazione e schermate (in migrazione verso Jetpack Compose) |
+| `model/` | `Book`, diario di lettura (`ReadingJournal`), filtri (`LibraryQuery`), riconoscimento dei doppioni (`BookMatcher`) |
+| `storage/` | catalogo sul telefono (`LibraryStore`), backup ZIP, importazione di cataloghi |
+| `online/` | Open Library, catalogo SBN, saghe |
+| `sync/` | Calibre, Hardcover, KOReader, evidenziazioni del Kindle e regole di sincronizzazione |
+| `ebook/` | lettura di EPUB, TXT e CBZ |
+| `ui/` | griglia, copertine, mappa delle letture, palette dei temi |
+
+I test JVM sono in `app/src/test/java/app/atlante/library/`. `MainActivity` resta nella
+radice perché il nome della sua classe identifica il file delle preferenze (tema, filtri,
+collegamenti di Sync).
+
 ## Compilazione locale per chi sviluppa
 
 Servono JDK 17, Gradle 8.9, piattaforma Android 35 e Build Tools 35.0.0.

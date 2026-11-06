@@ -1,4 +1,10 @@
-package app.atlante.library;
+package app.atlante.library.sync;
+
+import app.atlante.library.model.Book;
+import app.atlante.library.model.BookMatcher;
+import app.atlante.library.storage.CatalogImport;
+import app.atlante.library.ebook.EbookParser;
+import app.atlante.library.storage.SyncStore;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -12,24 +18,24 @@ import org.json.JSONObject;
  * Calibre content server: reads the library and syncs reading state, page and chapter through three custom
  * columns (by default #stato, #pagina, #capitolo). Writing needs a Calibre user with write permission.
  */
-final class CalibreSync {
-    static final String SERVICE = "calibre";
+public final class CalibreSync {
+    public static final String SERVICE = "calibre";
 
-    static final class Settings {
-        String url = "", user = "", password = "", library = "";
-        String statusColumn = "#stato", pageColumn = "#pagina", chapterColumn = "#capitolo";
-        boolean createMissing = true;
+    public static final class Settings {
+        public String url = "", user = "", password = "", library = "";
+        public String statusColumn = "#stato", pageColumn = "#pagina", chapterColumn = "#capitolo";
+        public boolean createMissing = true;
     }
 
-    static final class Report {
-        int remote, linked, pushed, pulled, created, unchanged, onlyHere, recognized;
-        final List<String> notes = new ArrayList<>();
-        String library = "";
+    public static final class Report {
+        public int remote, linked, pushed, pulled, created, unchanged, onlyHere, recognized;
+        public final List<String> notes = new ArrayList<>();
+        public String library = "";
     }
 
-    interface Progress { void update(String message); }
+    public interface Progress { void update(String message); }
 
-    static Report sync(SyncStore store, Settings s, Progress progress) throws Exception {
+    public static Report sync(SyncStore store, Settings s, Progress progress) throws Exception {
         String base = s.url.trim().replaceAll("/+$", "");
         if (!base.matches("(?i)https?://[^\\s/]+(:[0-9]+)?(/.*)?")) throw new IOException("Indirizzo del server Calibre non valido, per esempio http://192.168.1.10:8080");
         Report report = new Report();
@@ -108,7 +114,7 @@ final class CalibreSync {
 
     /** Link saved earlier, then ISBN, then same title with an author in common. */
     /** Link saved earlier, otherwise the best record by ISBN or title and author (see BookMatcher). */
-    static Integer match(Book local, Map<Integer, JSONObject> remote, Set<Integer> taken) {
+    public static Integer match(Book local, Map<Integer, JSONObject> remote, Set<Integer> taken) {
         JSONObject link = SyncCore.link(local, SERVICE);
         if (link != null && remote.containsKey(link.optInt("id")) && !taken.contains(link.optInt("id"))) return link.optInt("id");
         List<Integer> free = new ArrayList<>();
@@ -116,7 +122,7 @@ final class CalibreSync {
         return BookMatcher.best(local, free, id -> identity(remote.get(id)));
     }
 
-    static Book identity(JSONObject r) {
+    public static Book identity(JSONObject r) {
         Book b = new Book(); b.title = r.optString("title"); b.author = authors(r);
         JSONObject ident = r.optJSONObject("identifiers"); b.isbn = ident == null ? "" : ident.optString("isbn");
         if (!r.isNull("series")) b.series = r.optString("series");
@@ -124,7 +130,7 @@ final class CalibreSync {
         return b;
     }
 
-    static SyncCore.Snapshot snapshot(JSONObject book, Settings s, boolean status, boolean page, boolean chapter) {
+    public static SyncCore.Snapshot snapshot(JSONObject book, Settings s, boolean status, boolean page, boolean chapter) {
         JSONObject meta = book.optJSONObject("user_metadata");
         String st = status ? value(meta, s.statusColumn) : "";
         String pg = page ? value(meta, s.pageColumn) : "";
@@ -138,7 +144,7 @@ final class CalibreSync {
         return v == null || v == JSONObject.NULL ? "" : String.valueOf(v).trim();
     }
 
-    static Book sheet(JSONObject r) throws Exception {
+    public static Book sheet(JSONObject r) throws Exception {
         Map<String, String> f = new HashMap<>();
         f.put("title", r.optString("title")); f.put("author", authors(r));
         JSONObject ident = r.optJSONObject("identifiers"); if (ident != null) f.put("isbn", ident.optString("isbn"));
@@ -154,7 +160,7 @@ final class CalibreSync {
         return b;
     }
 
-    static String authors(JSONObject r) {
+    public static String authors(JSONObject r) {
         JSONArray a = r.optJSONArray("authors");
         if (a == null || a.length() == 0) return "Autore sconosciuto";
         List<String> names = new ArrayList<>(); for (int i = 0; i < a.length(); i++) names.add(a.optString(i));

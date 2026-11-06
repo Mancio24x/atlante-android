@@ -1,5 +1,9 @@
 package app.atlante.library;
 
+import app.atlante.library.model.Book;
+import app.atlante.library.model.LibraryQuery;
+import app.atlante.library.model.ReadingJournal;
+
 import org.junit.Test;
 import org.json.*;
 import java.time.LocalDate;
