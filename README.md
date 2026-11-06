@@ -123,6 +123,27 @@ Le saghe vengono ricostruite da **Wikidata** (serie P179, numero P1545, autore P
 
 I test (`SagaRecognizerTest`, `SagaDatabaseTest`) usano risposte reali di Wikidata salvate in `app/src/test/resources/wikidata`.
 
+## Copertine: motore di ricerca
+
+`CoverSearch` raccoglie le copertine candidate da fonti pubbliche e gratuite, senza chiavi, e tiene la più nitida che appartiene davvero al libro.
+
+**Fonti, dalla più precisa:**
+1. Open Library per ISBN (sia a 10 che a 13 cifre).
+2. Google Books per ISBN.
+3. Apple Books per ISBN.
+4. Le altre edizioni della stessa opera su Open Library, prima quelle italiane.
+5. Titolo + autore su Apple Books, Google Books e Open Library.
+
+**Come sceglie:**
+- **Controllo del libro**: una copertina vale solo se ha lo stesso ISBN, oppure lo stesso titolo **e** lo stesso autore. Le etichette di volume (*Blackwater I*) non bastano. Un titolo di una sola parola deve coincidere esattamente, così *Dune* non diventa *I figli di Dune*.
+- **Ordine di preferenza**: prima la stessa edizione, poi le edizioni italiane (ISBN 978-88 o 979-12), poi le più grandi, fino a circa 1000 px.
+- **Scarti**: segnaposto, immagini minuscole e immagini orizzontali.
+
+**Come si usa:**
+- **Nella pagina del libro**, *Scegli copertina online* mostra tutte le copertine trovate, con fonte e dimensioni. Tocchi quella che vuoi.
+- **Nelle Impostazioni**, *Cerca e migliora le copertine* scarica quelle mancanti e sostituisce quelle sotto i 300 px, ma solo se ne trova una almeno 1,5 volte più grande.
+- **Le tue scelte restano**: le copertine scelte da te (dalla galleria o online) non vengono mai sostituite in automatico.
+
 ## Importare un catalogo da altre app
 
 **☰ › Importa catalogo o backup** (oppure **Impostazioni › Backup › Ripristina o importa

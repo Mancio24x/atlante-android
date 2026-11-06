@@ -197,9 +197,23 @@ for _ in range(20):
     if any(n.get('text','').startswith('Altri libri di Pierce') for n in dump().iter('node')): break
     adb('shell','input','swipe','540','1250','540','750','300');time.sleep(1.5)
 shot('52-book-author-carousel')
+tap('Scegli copertina online',True)
+for _ in range(40):
+    texts=[n.get('text','') for n in dump().iter('node')]
+    if any(t.startswith('Tocca la copertina') or t.startswith('Nessuna copertina') for t in texts): break
+    time.sleep(1.5)
+shot('52c-cover-picker')
+assert any(n.get('text','').startswith('Tocca la copertina') for n in dump().iter('node')), 'No online cover found for Red Rising'
+tap('Chiudi',exact=True)
 back();tap('Apri menu laterale');tap('Universi',exact=True);time.sleep(1);shot('52a-universes')
 assert any(n.get('text','')=='Universi narrativi' for n in dump().iter('node')), 'Universes view missing'
-tap('Biblioteca',exact=True);tap('Filtri e ordine');shot('52b-filters');tap('Annulla',exact=True)
+tap('Biblioteca',exact=True);tap('Tutti',exact=True)
+# The filter chip is at the end of the horizontal chip strip: scroll the strip sideways first.
+for node in dump().iter('node'):
+    if node.get('text','')=='Letti':
+        b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));y=str((b[1]+b[3])//2)
+        adb('shell','input','swipe','900',y,'100',y,'300');time.sleep(.5);break
+tap('Filtri e ordine');shot('52b-filters');tap('Annulla',exact=True)
 print('Saga carousels completed.')
 
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.

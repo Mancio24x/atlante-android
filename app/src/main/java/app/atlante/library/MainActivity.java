@@ -259,7 +259,8 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(text("Salva catalogo, note, avanzamento e copertine in un file ZIP da conservare fuori dall’app. Disinstallando Atlante i dati interni vengono cancellati. "
             + "Per importare puoi scegliere un backup di Atlante (anche estratto), un elenco CSV (anche Goodreads o StoryGraph), un catalogo HTML di Atlante o una libreria Calibre.",14,MUTED,false)); gap(panel,8);
         panel.addView(button("Esporta backup",false,() -> { exportBackup(); })); gap(panel,8);
-        panel.addView(button("Scarica copertine mancanti",false,() -> { fetchMissingCovers(store.snapshot(), true); })); gap(panel,8);
+        panel.addView(button("Cerca e migliora le copertine",false,() -> { improveCovers(store.snapshot(), true, true); })); gap(panel,8);
+        panel.addView(text("Scarica le copertine mancanti e sostituisce quelle piccole o sfocate con una più nitida della stessa edizione o dello stesso titolo e autore. Le copertine scelte da te non vengono toccate.",12,MUTED,false)); gap(panel,8);
         Button restore = button("Ripristina o importa un catalogo",false,() -> { chooseBackup(); }); restore.setEnabled(!busy); panel.addView(restore);
         gap(panel,20); panel.addView(sectionLabel("ATLANTE LIBRARY")); gap(panel,8);
         panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
@@ -804,6 +805,7 @@ public final class MainActivity extends AppCompatActivity {
 
         panel.addView(button("Completa i dati online", R.style.Atlante_Button_Tonal, () -> completeMetadata(b)), new LinearLayout.LayoutParams(-1, -2));
         panel.addView(button("Modifica scheda", R.style.Atlante_Button_Tonal, () -> { sheet.dismiss(); edit(b); }), new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(button("Scegli copertina online", R.style.Atlante_Button_Tonal, () -> chooseOnlineCover(b)), new LinearLayout.LayoutParams(-1, -2));
         panel.addView(button("Scegli copertina dalla galleria", R.style.Atlante_Button_Tonal, () -> {
             coverBookId = b.id; sheet.dismiss();
             coverLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"));
@@ -1368,30 +1370,74 @@ public final class MainActivity extends AppCompatActivity {
      * Downloads, one by one in the background, the covers that are missing: by ISBN, otherwise by title and author.
      * Only ISBN, title and author are sent to Open Library. Existing covers are never replaced.
      */
-    private void fetchMissingCovers(List<Book> books, boolean announce) {
-        ArrayList<Book> missing = new ArrayList<>();
-        for (Book b : books) { Book current = store.find(b.id); if (current != null && !store.cover(current).isFile()) missing.add(current); }
-        if (missing.isEmpty()) { if (announce) Toast.makeText(this, "Tutti i libri hanno già una copertina", Toast.LENGTH_SHORT).show(); return; }
-        if (fetchingCovers) { if (announce) Toast.makeText(this, "Download delle copertine già in corso", Toast.LENGTH_SHORT).show(); return; }
+    private void fetchMissingCovers(List<Book> books, boolean announce) { improveCovers(books, announce, false); }
+
+    /** Width of the saved cover in pixels, 0 when there is none. */
+    private int coverWidth(Book b) {
+        File f = store.cover(b); if (!f.isFile()) return 0;
+        BitmapFactory.Options o = new BitmapFactory.Options(); o.inJustDecodeBounds = true; BitmapFactory.decodeFile(f.getPath(), o);
+        return Math.max(0, o.outWidth);
+    }
+
+    /** Where the current cover comes from: "gallery" (chosen by you), "online" (chosen by you online), "auto". */
+    private void markCover(Book b, String source) {
+        Book current = store.find(b.id); if (current == null) return;
+        try { current.meta.put("coverSource", source); store.replace(current); } catch (Exception ignored) { /* The cover is saved anyway. */ }
+    }
+
+    /**
+     * Missing covers are downloaded; with {@code improve} also small ones (under 300 px) are replaced when a
+     * clearly sharper cover of the same book is found. Covers chosen by the user are never replaced.
+     */
+    private void improveCovers(List<Book> books, boolean announce, boolean improve) {
+        ArrayList<Book> todo = new ArrayList<>();
+        for (Book b : books) {
+            Book current = store.find(b.id); if (current == null) continue;
+            String source = current.meta.optString("coverSource", "");
+            if (!store.cover(current).isFile()) todo.add(current);
+            else if (improve && !source.equals("gallery") && !source.equals("online") && coverWidth(current) < 300) todo.add(current);
+        }
+        if (todo.isEmpty()) { if (announce) Toast.makeText(this, "Tutte le copertine sono già presenti e nitide", Toast.LENGTH_SHORT).show(); return; }
+        if (fetchingCovers) { if (announce) Toast.makeText(this, "Ricerca delle copertine già in corso", Toast.LENGTH_SHORT).show(); return; }
         fetchingCovers = true;
-        if (announce) Toast.makeText(this, "Cerco " + missing.size() + " copertine su Open Library e Google Books…", Toast.LENGTH_LONG).show();
+        if (announce) Toast.makeText(this, "Cerco " + todo.size() + " copertine su Open Library, Google Books e Apple Books…", Toast.LENGTH_LONG).show();
         coverWorker.execute(() -> {
-            int found = 0;
-            for (Book b : missing) {
+            int found = 0, better = 0;
+            for (Book b : todo) {
                 if (isDestroyed()) break;
-                byte[] image = OnlineCatalog.findCover(b);
-                if (image == null || decode(null, image, 64) == null) continue;
-                try { store.saveDownloadedCover(b, image); found++; } catch (Exception ignored) { continue; }
-                final boolean refresh = found % 4 == 0;
+                int old = coverWidth(b);
+                app.atlante.library.online.CoverSearch.Cover c;
+                try { c = app.atlante.library.online.CoverSearch.INSTANCE.best(b, (url, limit) -> { try { return OnlineCatalog.request(url, limit); } catch (Exception e) { throw new RuntimeException(e); } }, 8); }
+                catch (RuntimeException e) { continue; }
+                if (c == null || decode(null, c.getBytes(), 64) == null) continue;
+                if (old > 0 && c.getWidth() < old * 3 / 2) continue;      // not clearly sharper: keep what is there
+                try { store.saveDownloadedCover(b, c.getBytes()); markCover(b, "auto"); } catch (Exception ignored) { continue; }
+                if (old == 0) found++; else better++;
+                final boolean refresh = (found + better) % 4 == 0;
                 runOnUiThread(() -> { forgetCover(b.id); if (refresh && reading == null && detailId == null) renderContent(); });
             }
-            final int total = found;
+            final int added = found, improved = better;
             runOnUiThread(() -> {
                 fetchingCovers = false; if (isFinishing() || isDestroyed()) return;
                 if (reading == null && detailId == null) renderContent();
-                Toast.makeText(this, total + " copertine trovate su " + missing.size(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, added + " copertine nuove" + (improve ? ", " + improved + " migliorate" : "") + " su " + todo.size() + " libri", Toast.LENGTH_LONG).show();
             });
         });
+    }
+
+    /** Covers found online for one book; the one you tap replaces the current cover. */
+    private void chooseOnlineCover(Book b) {
+        View[] holder = new View[1];
+        holder[0] = app.atlante.library.ui.compose.CoverPickerView.create(this, palette, b, bytes -> {
+            screen.removeView(holder[0]);
+            worker.execute(() -> {
+                try {
+                    store.saveDownloadedCover(b, bytes); markCover(b, "online");
+                    runOnUiThread(() -> { forgetCover(b.id); Book current = store.find(b.id); if (current != null) details(current); });
+                } catch (Exception e) { runOnUiThread(() -> error(e)); }
+            });
+        }, () -> screen.removeView(holder[0]));
+        screen.addView(holder[0], new FrameLayout.LayoutParams(1, 1));
     }
 
     // ---- Sync: Hardcover, Calibre, Kindle highlights ----------------------------------------------
@@ -1789,6 +1835,7 @@ public final class MainActivity extends AppCompatActivity {
                     ByteArrayOutputStream out = new ByteArrayOutputStream();
                     image.compress(Bitmap.CompressFormat.JPEG, 85, out); image.recycle();
                     store.saveDownloadedCover(target, out.toByteArray());
+                    markCover(target, "gallery");
                     runOnUiThread(() -> { forgetCover(target.id); renderContent(); details(target); });
                 } catch (Exception e) { runOnUiThread(() -> error(e)); }
             });
