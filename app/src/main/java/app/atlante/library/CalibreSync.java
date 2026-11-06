@@ -22,7 +22,7 @@ final class CalibreSync {
     }
 
     static final class Report {
-        int remote, linked, pushed, pulled, created, unchanged, onlyHere;
+        int remote, linked, pushed, pulled, created, unchanged, onlyHere, recognized;
         final List<String> notes = new ArrayList<>();
         String library = "";
     }
@@ -91,6 +91,8 @@ final class CalibreSync {
         if (s.createMissing) {
             for (Map.Entry<Integer, JSONObject> e : remote.entrySet()) {
                 if (matched.contains(e.getKey())) continue;
+                // Never a duplicate: a second Calibre record of a book already here (another edition) is not added.
+                if (BookMatcher.best(identity(e.getValue()), store.snapshot(), b -> b) != null) { report.recognized++; continue; }
                 progress.update("Nuova scheda da Calibre: " + e.getValue().optString("title"));
                 Book b = sheet(e.getValue());
                 SyncCore.Snapshot there = snapshot(e.getValue(), s, hasStatus, hasPage, hasChapter);
@@ -105,21 +107,21 @@ final class CalibreSync {
     }
 
     /** Link saved earlier, then ISBN, then same title with an author in common. */
+    /** Link saved earlier, otherwise the best record by ISBN or title and author (see BookMatcher). */
     static Integer match(Book local, Map<Integer, JSONObject> remote, Set<Integer> taken) {
         JSONObject link = SyncCore.link(local, SERVICE);
         if (link != null && remote.containsKey(link.optInt("id")) && !taken.contains(link.optInt("id"))) return link.optInt("id");
-        for (Map.Entry<Integer, JSONObject> e : remote.entrySet()) {
-            if (taken.contains(e.getKey())) continue;
-            JSONObject ident = e.getValue().optJSONObject("identifiers");
-            String isbn = ident == null ? "" : ident.optString("isbn").replaceAll("[^0-9Xx]", "");
-            if (!local.isbn.isEmpty() && local.isbn.equalsIgnoreCase(isbn)) return e.getKey();
-        }
-        for (Map.Entry<Integer, JSONObject> e : remote.entrySet()) {
-            if (taken.contains(e.getKey())) continue;
-            Book other = new Book(); other.title = e.getValue().optString("title"); other.author = authors(e.getValue());
-            if (SbnCatalog.sameWork(local, other)) return e.getKey();
-        }
-        return null;
+        List<Integer> free = new ArrayList<>();
+        for (Integer id : remote.keySet()) if (!taken.contains(id)) free.add(id);
+        return BookMatcher.best(local, free, id -> identity(remote.get(id)));
+    }
+
+    static Book identity(JSONObject r) {
+        Book b = new Book(); b.title = r.optString("title"); b.author = authors(r);
+        JSONObject ident = r.optJSONObject("identifiers"); b.isbn = ident == null ? "" : ident.optString("isbn");
+        if (!r.isNull("series")) b.series = r.optString("series");
+        if (!r.isNull("series_index")) b.number = r.optDouble("series_index", 0);
+        return b;
     }
 
     static SyncCore.Snapshot snapshot(JSONObject book, Settings s, boolean status, boolean page, boolean chapter) {

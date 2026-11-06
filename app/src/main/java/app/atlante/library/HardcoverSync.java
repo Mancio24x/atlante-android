@@ -17,7 +17,7 @@ final class HardcoverSync {
 
     static final class Settings { String token = ""; boolean createMissing = true, sendToRead = false; }
     static final class Report {
-        String user = ""; int remote, linked, pushed, pulled, created, added, onlyHere;
+        String user = ""; int remote, linked, pushed, pulled, created, added, onlyHere, recognized;
         final List<String> notes = new ArrayList<>();
     }
     interface Progress { void update(String message); }
@@ -100,6 +100,8 @@ final class HardcoverSync {
             if (matched.contains(ub.getInt("id"))) continue;
             Book b = sheet(ub);
             if (b == null || store.find(b.id) != null) continue;
+            // Never a duplicate: a book already here (another edition, a different title form) is not added again.
+            if (BookMatcher.best(b, store.snapshot(), x -> x) != null) { report.recognized++; continue; }
             progress.update("Nuova scheda da Hardcover: " + b.title);
             SyncCore.apply(b, snapshot(ub), false, true, today);
             SyncCore.remember(b, SERVICE, new JSONObject().put("id", ub.getInt("id")).put("book", ub.optInt("book_id")), SyncCore.Snapshot.of(b));
@@ -149,20 +151,13 @@ final class HardcoverSync {
         return null;
     }
 
+    /** Link saved earlier, otherwise the best record by ISBN or title and author (see BookMatcher). */
     static JSONObject match(Book local, List<JSONObject> remote, Set<Integer> taken) {
         JSONObject link = SyncCore.link(local, SERVICE);
         if (link != null) for (JSONObject ub : remote) if (ub.optInt("id") == link.optInt("id") && !taken.contains(ub.optInt("id"))) return ub;
-        for (JSONObject ub : remote) {
-            if (taken.contains(ub.optInt("id"))) continue;
-            JSONObject e = ub.optJSONObject("edition");
-            if (e != null && !local.isbn.isEmpty() && (local.isbn.equalsIgnoreCase(e.optString("isbn_13")) || local.isbn.equalsIgnoreCase(e.optString("isbn_10")))) return ub;
-        }
-        for (JSONObject ub : remote) {
-            if (taken.contains(ub.optInt("id"))) continue;
-            Book other = sheetIdentity(ub);
-            if (other != null && SbnCatalog.sameWork(local, other)) return ub;
-        }
-        return null;
+        List<JSONObject> free = new ArrayList<>();
+        for (JSONObject ub : remote) if (!taken.contains(ub.optInt("id"))) free.add(ub);
+        return BookMatcher.best(local, free, ub -> { Book b = sheetIdentity(ub); return b == null ? new Book() : b; });
     }
 
     static SyncCore.Snapshot snapshot(JSONObject ub) {

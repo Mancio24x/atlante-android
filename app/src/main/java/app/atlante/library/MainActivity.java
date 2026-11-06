@@ -1042,7 +1042,7 @@ public final class MainActivity extends AppCompatActivity {
                             if (!code.isEmpty() && candidate.language.equals(code)) origin += " · edizione in " + OnlineCatalog.languageName(code);
                             tile.addView(text(origin, 12, COPPER, false)); gap(tile, 2);
                             tile.addView(text(candidate.author + (candidate.publisher.isEmpty() ? "" : " · " + candidate.publisher) + (candidate.year.isEmpty() ? "" : " · " + candidate.year), 14, SAGE, false)); gap(tile,12);
-                            Book existing = store.find(candidate.id);
+                            Book existing = store.find(candidate.id) != null ? store.find(candidate.id) : BookMatcher.best(candidate, store.snapshot(), x -> x);
                             tile.addView(button(existing == null ? "Vedi la scheda completa" : "Già in libreria · Apri", false, () -> {
                                 if (existing != null) { dialog.dismiss(); details(existing); return; }
                                 AlertDialog loading = loading("Scheda del libro", "Caricamento trama e metadati…");
@@ -1231,7 +1231,7 @@ public final class MainActivity extends AppCompatActivity {
         LinkedHashMap<String, Book> fresh = new LinkedHashMap<>();
         for (Book b : contents.books) {
             boolean present = store.find(b.id) != null;
-            if (!present && !contents.atlante) for (Book known : library) if (SbnCatalog.sameWork(known, b)) { present = true; break; }
+            if (!present) for (Book known : library) if (BookMatcher.same(known, b)) { present = true; break; }
             if (!present) fresh.put(b.id, b);
         }
         int kept = contents.books.size() - fresh.size();
@@ -1420,7 +1420,7 @@ public final class MainActivity extends AppCompatActivity {
                 String line=when+" · "+report.pushed+" inviati, "+report.pulled+" ricevuti, "+(report.created+report.added)+" nuovi";
                 prefs.edit().putString("hardcoverUser",report.user).putString("hardcoverLast","Ultima sincronizzazione: "+line).apply();
                 syncReport("Hardcover sincronizzato", report.remote+" libri su Hardcover · "+report.linked+" collegati\n"+report.pushed+" aggiornati su Hardcover · "+report.pulled+" aggiornati in Atlante\n"
-                    +report.added+" aggiunti a Hardcover · "+report.created+" nuove schede in Atlante", report.notes); });
+                    +report.added+" aggiunti a Hardcover · "+report.created+" nuove schede in Atlante"+(report.recognized>0?"\n"+report.recognized+" libri riconosciuti come già presenti: nessun doppione":""), report.notes); });
         });
     }
 
@@ -1440,7 +1440,7 @@ public final class MainActivity extends AppCompatActivity {
                 String when=java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm",Locale.ITALIAN));
                 prefs.edit().putString("calibreLast","Ultima sincronizzazione: "+when+" · "+report.pushed+" inviati, "+report.pulled+" ricevuti, "+report.created+" nuovi").apply();
                 syncReport("Calibre sincronizzato", report.remote+" libri in Calibre ("+report.library+") · "+report.linked+" collegati\n"+report.pushed+" aggiornati in Calibre · "+report.pulled+" aggiornati in Atlante\n"
-                    +report.created+" nuove schede in Atlante", report.notes); });
+                    +report.created+" nuove schede in Atlante"+(report.recognized>0?"\n"+report.recognized+" libri riconosciuti come già presenti: nessun doppione":""), report.notes); });
         });
     }
 

@@ -96,13 +96,8 @@ final class SbnCatalog {
     }
 
     /** Same work in two catalogs: same ISBN, or same title with a word of the author in common. */
-    static boolean sameWork(Book a, Book b) {
-        if (!a.isbn.isEmpty() && a.isbn.equalsIgnoreCase(b.isbn)) return true;
-        if (!normalize(a.title).equals(normalize(b.title))) return false;
-        Set<String> words = new HashSet<>(Arrays.asList(normalize(a.author).split(" ")));
-        for (String w : normalize(b.author).split(" ")) if (w.length() > 2 && words.contains(w)) return true;
-        return false;
-    }
+    /** Same book in two records: see {@link BookMatcher} (ISBN, title without subtitles, surnames). */
+    static boolean sameWork(Book a, Book b) { return BookMatcher.same(a, b); }
 
     private static boolean better(Book candidate, Book current) {
         if (candidate.isbn.isEmpty() != current.isbn.isEmpty()) return !candidate.isbn.isEmpty();
