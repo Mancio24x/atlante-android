@@ -42,6 +42,9 @@ def tap(label, scroll=False, editable=False, exact=False):
             if any((v.casefold()==label.casefold()) if exact else v.casefold().startswith(label.casefold()) for v in values):
                 bounds=list(map(int,re.findall(r'\d+',node.get('bounds',''))))
                 if len(bounds)==4 and bounds[3]>bounds[1] and bounds[2]>bounds[0]:
+                    screen=list(map(int,re.findall(r'\d+',tree.find('node').get('bounds','0,0,1080,1920'))))
+                    # A control at the bottom edge may sit under the system bar: scroll first, then tap.
+                    if scroll and (bounds[1]+bounds[3])//2 > screen[3]*0.8: break
                     adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2));time.sleep(.4);return
         if scroll: adb('shell','input','swipe','540','1250','540','550','350')
         time.sleep(.3)
@@ -84,7 +87,7 @@ def visible(fragment, scroll=False):
     return False
 # After the restart the settings page must mark AMOLED as the chosen theme.
 if not visible('AMOLED nero  ✓', True):
-    (out/'failure-prefs.xml').write_bytes(adb('exec-out','run-as',package,'cat','shared_prefs/MainActivity.xml'))
+    (out/'failure-prefs.xml').write_bytes(adb('exec-out','run-as',package,'sh','-c','cat shared_prefs/*.xml'))
     raise AssertionError('Theme preference was not restored')
 shot('11-settings-restored')
 adb('shell','input','keyevent','4');time.sleep(.5);shot('12-theme-restored')
