@@ -277,25 +277,19 @@ public final class MainActivity extends AppCompatActivity {
         Picker mode=new Picker(p,"Modalità",Arrays.asList("Tema scelto","Chiara","Scura","Automatica"),
             Arrays.asList("Tema scelto","Chiara","Scura","Automatica").get(Arrays.asList("theme","light","dark","auto").indexOf(prefs.getString("appearanceMode","theme"))));
         p.addView(button("Applica modalità",false,()->{prefs.edit().putString("appearanceMode",new String[]{"theme","light","dark","auto"}[mode.position()]).commit();recreate();}));
-        LinearLayout custom=column();
-        custom.addView(text("Scegli i tre colori in formato #RRGGBB. Il testo viene adattato per il contrasto. La modalità automatica adegua gli sfondi al telefono.",13,MUTED,false));
-        EditText name=field(custom,"Nome del tema","Il mio tema");
-        EditText paper=field(custom,"Sfondo",String.format(Locale.ROOT,"#%06X",PAPER&0xffffff));
-        EditText surface=field(custom,"Schede",String.format(Locale.ROOT,"#%06X",WHITE&0xffffff));
-        EditText accent=field(custom,"Accento",String.format(Locale.ROOT,"#%06X",SAGE&0xffffff));
-        custom.addView(button("Salva e applica il tema",true,()->{
-            for(EditText f:new EditText[]{paper,surface,accent})if(!f.getText().toString().matches("#[0-9a-fA-F]{6}")){f.setError("Usa #RRGGBB, per esempio #326359");return;}
-            if(name.getText().toString().trim().isEmpty()){name.setError("Inserisci un nome");return;}
+        // Three colours chosen by touch (square + hue bar), stored as before ("#RRGGBB" strings in the preferences).
+        ArrayList<String> savedNames=new ArrayList<>();
+        try { JSONObject saved=new JSONObject(prefs.getString("savedThemes","{}")); Iterator<String> keys=saved.keys(); while(keys.hasNext()) savedNames.add(keys.next()); } catch(Exception ignored) { }
+        View custom=app.atlante.library.ui.compose.ThemeEditorView.create(this,palette,PAPER,WHITE,SAGE,savedNames,(name,paper,surface,accent)->{
             try {
-                JSONObject colors=new JSONObject().put("paper",paper.getText().toString()).put("surface",surface.getText().toString()).put("accent",accent.getText().toString());
-                JSONObject saved=new JSONObject(prefs.getString("savedThemes","{}")); saved.put(name.getText().toString().trim(),colors);
+                JSONObject colors=new JSONObject().put("paper",String.format(Locale.ROOT,"#%06X",paper&0xffffff)).put("surface",String.format(Locale.ROOT,"#%06X",surface&0xffffff)).put("accent",String.format(Locale.ROOT,"#%06X",accent&0xffffff));
+                JSONObject saved=new JSONObject(prefs.getString("savedThemes","{}")); saved.put(name,colors);
                 prefs.edit().putString("savedThemes",saved.toString()).putString("customPalette",colors.toString()).putString("theme","custom").commit();recreate();
-            }catch(Exception e){error(e);}
-        }));
-        try {JSONObject saved=new JSONObject(prefs.getString("savedThemes","{}"));Iterator<String> keys=saved.keys();while(keys.hasNext()){
-            String key=keys.next();String colors=saved.getJSONObject(key).toString();
-            custom.addView(button(key,false,()->{prefs.edit().putString("customPalette",colors).putString("theme","custom").commit();recreate();}));
-        }}catch(Exception ignored) { }
+            } catch(Exception e){error(e);}
+        },name->{
+            try { String colors=new JSONObject(prefs.getString("savedThemes","{}")).getJSONObject(name).toString(); prefs.edit().putString("customPalette",colors).putString("theme","custom").commit(); recreate(); }
+            catch(Exception e){error(e);}
+        });
         p.addView(expander("I miei temi · tre colori",custom,false));
     }
 
@@ -596,6 +590,17 @@ public final class MainActivity extends AppCompatActivity {
     /** Book grid: a RecyclerView keeps only the visible cards in memory, however large the library. */
     private void showGrid(List<Book> list) {
         int count = list.size();
+        if (shelfView) {
+            // Bookcase: spines on shelves (Compose); same filtered and sorted list as grid and list views.
+            body.removeAllViews(); grid = null; adapter = null; content = null; shownCount = count;
+            int total = store.snapshot().size();
+            String header = (count == total ? total + (total == 1 ? " libro" : " libri") : count + " di " + total + " libri") + " · ordinati per " + sortOrder.toLowerCase(Locale.ROOT) + " · tieni premuto un dorso per le azioni";
+            body.addView(app.atlante.library.ui.compose.ShelfView.create(this, palette, list, header, getPreferences(MODE_PRIVATE), motion(), new app.atlante.library.ui.compose.ShelfView.Host() {
+                @Override public void open(String id) { Book b = store.find(id); if (b != null) details(b); }
+                @Override public void actions(String id) { Book b = store.find(id); if (b != null) bookActions(b); }
+            }), new FrameLayout.LayoutParams(-1, -1));
+            return;
+        }
         if (grid == null) {
             body.removeAllViews(); content = null;
             grid = new RecyclerView(this); grid.setClipToPadding(false);

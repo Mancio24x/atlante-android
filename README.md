@@ -94,6 +94,17 @@ restano deselezionati. Le copertine dell’edizione si scelgono tra quelle trova
 e segnaposto vengono scartati) e la precedente viene conservata. Ogni dato accettato
 ricorda la sua fonte, visibile in *Dettagli della scheda*.
 
+## Vista Scaffale e temi personali
+
+**Scaffale**: mensole a più piani con i libri girati, di cui si vede solo il dorso con il titolo, scritto dal basso verso l'alto come sui libri italiani.
+- **Aspetto dei dorsi**: larghezza (maggiore per i libri con più pagine) e altezza cambiano da libro a libro, ma ogni libro ha sempre lo stesso aspetto.
+- **Colori**: *Colori vari* oppure *Colori del tema*.
+- **Mensole**: sei materiali disegnati senza immagini (Legno naturale, Noce scuro, Rovere chiaro, Metallo, Material, Minimal). La scelta resta salvata.
+- **Tocchi**: un tocco solleva il libro e apre la scheda; una pressione prolungata apre le azioni del libro.
+- **Ordine e filtri**: sono gli stessi di Griglia ed Elenco, e le mensole si caricano mentre scorri, quindi va bene anche con migliaia di libri.
+
+**I miei temi**: i tre colori (sfondo, schede, accento) si scelgono col dito, senza codici: un riquadro per saturazione e luminosità, una barra per la tonalità, alcune tinte pronte e un'anteprima dal vivo. I temi salvati prima restano.
+
 ## Scopri
 
 Scopri (in Compose) mostra una **griglia di 6 copertine**: senza filtro sono i libri più letti, cioè quelli che più lettori di Open Library vogliono leggere, scelti fra quelli che hanno un'edizione italiana. Con un genere scelto (Fantasy, Gialli, Fantascienza, Classici…) sono i 6 più letti di quel genere.

@@ -252,3 +252,31 @@ shot('54-repair-sagas')
 assert any(n.get('text','').startswith('Fatto:') for n in dump().iter('node')), 'Ripara saghe did not finish'
 assert len(catalog())==before, 'Ripara saghe changed the number of books'
 print('Repair completed.')
+
+# Bookcase: spines on shelves; a tap on a spine opens the book.
+back();tap('Biblioteca',exact=True);tap('Tutti',exact=True)
+for node in dump().iter('node'):
+    if node.get('content-desc','') in ('Griglia','Elenco'):
+        b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2));break
+time.sleep(.6);tap('Scaffale',exact=True);time.sleep(1.2);shot('60-bookcase')
+spines=[n for n in dump().iter('node') if n.get('content-desc','').startswith('Red Rising, di Pierce Brown')]
+assert spines, 'Spine of Red Rising not found on the bookcase'
+tap('Legno naturale',exact=True);time.sleep(.4)
+tap('Noce scuro',exact=True);time.sleep(.6);shot('60a-bookcase-walnut')
+tap('Colori del tema',exact=True);time.sleep(.6);shot('60b-bookcase-theme-colors')
+tap('Red Rising, di Pierce Brown');time.sleep(1.5);shot('61-bookcase-open')
+assert any(n.get('text','').startswith('Avvia il timer') for n in dump().iter('node')), 'Tapping a spine did not open the book'
+print('Bookcase completed.')
+
+# Custom theme: colours chosen by touch in a square and a hue bar, no colour codes; saved and applied.
+back();tap('Impostazioni');tap('I miei temi',True);time.sleep(.6)
+assert not any('#RRGGBB' in n.get('text','') or re.fullmatch(r'#[0-9A-Fa-f]{6}',n.get('text','')) for n in dump().iter('node')), 'Colour codes still shown'
+tap('Modifica il colore Accento',True);time.sleep(.4)
+square=[n for n in dump().iter('node') if n.get('content-desc','').startswith('Saturazione e luminosità')]
+assert square, 'Colour square missing'
+b=list(map(int,re.findall(r'\d+',square[0].get('bounds',''))))
+adb('shell','input','swipe',str(b[0]+20),str(b[3]-20),str(b[2]-20),str(b[1]+20),'500');time.sleep(.6)
+shot('62-theme-editor')
+tap('Salva e applica il tema',True);time.sleep(2);shot('63-custom-theme-applied')
+assert json.loads(json.dumps(adb('exec-out','run-as',package,'sh','-c','cat shared_prefs/*.xml').decode(errors='replace'))).count('customPalette')>=1, 'Custom theme not saved'
+print('Theme editor completed.')
