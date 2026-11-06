@@ -24,9 +24,15 @@ public final class MainActivity extends Activity {
     private int visibleBooks = 60;
     private final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
     private final ExecutorService coverWorker = Executors.newSingleThreadExecutor();
+    /** Grid thumbnails are decoded off the UI thread, separately from network cover downloads. */
+    private final ExecutorService thumbWorker = Executors.newFixedThreadPool(2);
+    private volatile int thumbGeneration;
+    private ScrollView libraryScroll;
+    private LinearLayout gridHost;
+    private List<Book> shownBooks;
     private static final int IMPORT = 101, EXPORT = 102, COVER = 103;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final LruCache<String, Bitmap> covers = new LruCache<String, Bitmap>(8192) {
+    private final LruCache<String, Bitmap> covers = new LruCache<String, Bitmap>((int) Math.min(64 * 1024, Runtime.getRuntime().maxMemory() / 1024 / 8)) {
         @Override protected int sizeOf(String key, Bitmap value) { return value.getByteCount() / 1024; }
     };
     private LibraryStore store;
@@ -282,7 +288,11 @@ public final class MainActivity extends Activity {
         }), new LinearLayout.LayoutParams(dp(100), dp(48)));
         header.addView(actions); gap(header, 8);
         rule(root);
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); libraryScroll = scroll;
+        // Continuous scrolling: append the next books shortly before the end of the list.
+        scroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
+            if (content != null && y + v.getHeight() >= content.getHeight() - dp(900)) appendBooks();
+        });
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         content = column(); content.setPadding(dp(14), dp(16), dp(14), dp(28)); scroll.addView(content);
         notice = text("", 12, MUTED, false); notice.setPadding(dp(20), dp(10), dp(20), dp(10));
@@ -341,7 +351,7 @@ public final class MainActivity extends Activity {
 
     private void renderContent() {
         if (content == null) return;
-        content.removeAllViews();
+        content.removeAllViews(); thumbGeneration++; gridHost = null; shownBooks = null;
         ArrayList<Book> list = filtered();
         notice.setText(busy ? "Importazione in corso…" : list.size() + " di " + store.snapshot().size() + " libri · Sul dispositivo · Lettura offline");
         if (list.isEmpty()) {
@@ -358,8 +368,28 @@ public final class MainActivity extends Activity {
         if (tab.equals("Autori") || tab.equals("Saghe")) { showIndex(list, tab.equals("Autori")); return; }
         content.addView(text(tab.equals("Tutti i libri") ? "I tuoi libri" : tab, 28, INK, true)); gap(content, 5);
         content.addView(text(list.size() + " titoli · Libri importati e schede dal catalogo online", 13, MUTED, false));
-        gap(content, 16); grid(content, list.subList(0, Math.min(visibleBooks, list.size())));
-        if (list.size() > visibleBooks) { gap(content, 12); content.addView(button("Mostra altri libri", false, () -> { visibleBooks += 60; renderContent(); })); }
+        gap(content, 16);
+        gridHost = column(); content.addView(gridHost); shownBooks = list;
+        int shown = Math.min(Math.max(PAGE_SIZE, visibleBooks), list.size()); visibleBooks = shown;
+        grid(gridHost, list.subList(0, shown));
+        // Short lists may not fill the screen and never scroll: fill it once laid out.
+        fillScreen();
+    }
+
+    private static final int PAGE_SIZE = 60; // divisible by every column count, so batches fill whole rows
+
+    private void fillScreen() {
+        LinearLayout target = content;
+        target.post(() -> {
+            if (target != content || libraryScroll == null || target.getHeight() > libraryScroll.getHeight() + dp(900)) return;
+            int before = visibleBooks; appendBooks(); if (visibleBooks > before) fillScreen();
+        });
+    }
+
+    private void appendBooks() {
+        if (gridHost == null || shownBooks == null || visibleBooks >= shownBooks.size()) return;
+        int end = Math.min(visibleBooks + PAGE_SIZE, shownBooks.size());
+        grid(gridHost, shownBooks.subList(visibleBooks, end)); visibleBooks = end;
     }
 
     private void grid(LinearLayout parent, List<Book> books) {
@@ -376,16 +406,12 @@ public final class MainActivity extends Activity {
             FrameLayout art = new FrameLayout(this); art.setBackground(background(PAPER, Color.TRANSPARENT)); art.setClipToOutline(true);
             art.setPadding(dp(7), dp(7), dp(7), dp(7));
             card.addView(art, new LinearLayout.LayoutParams(-1, dp(coverHeight)));
-            Bitmap cover = cover(b);
-            if (cover != null) {
-                ImageView image = new ImageView(this); image.setImageBitmap(cover);
-                image.setContentDescription("Copertina di " + b.title); image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                art.addView(image, new FrameLayout.LayoutParams(-1, -1));
-            } else {
-                TextView fallback = text(b.author + "\n\n" + b.title, 18, SAGE, true);
-                fallback.setBackground(background(PAPER, LINE)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
-                art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
-            }
+            TextView fallback = text(b.author + "\n\n" + b.title, 18, SAGE, true);
+            fallback.setBackground(background(PAPER, LINE)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
+            art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
+            ImageView image = new ImageView(this); image.setContentDescription("Copertina di " + b.title);
+            image.setScaleType(ImageView.ScaleType.FIT_CENTER); art.addView(image, new FrameLayout.LayoutParams(-1, -1));
+            loadThumbnail(b, image, fallback, dp(coverHeight));
             TextView format = text(b.format.equals("CATALOGO") ? "DESIDERIO" : b.format, 10, INK, false); format.setTypeface(Typeface.DEFAULT_BOLD);
             format.setPadding(dp(5), dp(3), dp(5), dp(3)); format.setBackground(background(WHITE, Color.TRANSPARENT));
             art.addView(format, new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START));
@@ -407,6 +433,35 @@ public final class MainActivity extends Activity {
 
     static String order(Book b) { return b.number > 0 ? " · n. " + number(b.number) : ""; }
     static String number(double number) { return number == (long)number ? Long.toString((long)number) : Double.toString(number); }
+    /** Shows a cached thumbnail at once, otherwise decodes it in the background at card size. */
+    private void loadThumbnail(Book b, ImageView image, TextView fallback, int size) {
+        String key = "t:" + b.id;
+        Bitmap cached = covers.get(key);
+        if (cached != null) { image.setImageBitmap(cached); fallback.setVisibility(View.INVISIBLE); return; }
+        fallback.setVisibility(View.INVISIBLE); image.setTag(key);
+        File file = store.cover(b); int generation = thumbGeneration;
+        thumbWorker.execute(() -> {
+            if (generation != thumbGeneration) return; // the grid was rebuilt meanwhile
+            Bitmap bitmap = null;
+            try { if (file.isFile()) bitmap = decodeThumbnail(file.getPath(), size); } catch (Exception | OutOfMemoryError ignored) { }
+            if (bitmap != null) covers.put(key, bitmap);
+            final Bitmap result = bitmap;
+            uiHandler.post(() -> {
+                if (!key.equals(image.getTag())) return;
+                if (result != null) image.setImageBitmap(result); else fallback.setVisibility(View.VISIBLE);
+            });
+        });
+    }
+    static Bitmap decodeThumbnail(String file, int max) {
+        BitmapFactory.Options options = new BitmapFactory.Options(); options.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(file, options);
+        if (options.outWidth <= 0 || options.outHeight <= 0) return null;
+        options.inSampleSize = 1;
+        while (options.outWidth / (options.inSampleSize * 2) >= max || options.outHeight / (options.inSampleSize * 2) >= max) options.inSampleSize *= 2;
+        options.inJustDecodeBounds = false; options.inPreferredConfig = Bitmap.Config.RGB_565;
+        return BitmapFactory.decodeFile(file, options);
+    }
+    private void forgetCover(String id) { covers.remove(id); covers.remove("t:" + id); }
     private Bitmap cover(Book b) {
         Bitmap cached = covers.get(b.id); if (cached != null) return cached;
         File file = store.cover(b); if (!file.exists()) return null;
@@ -531,7 +586,7 @@ public final class MainActivity extends Activity {
         panel.addView(button("Rimuovi dalla libreria", false, () -> dialogBuilder().setTitle("Rimuovere il libro?")
             .setMessage("La copia in Atlante e il punto di lettura verranno rimossi. Il file da cui hai importato il libro resta al suo posto.")
             .setNegativeButton("Annulla", null).setPositiveButton("Rimuovi", (d, w) -> {
-                try { store.remove(b); covers.remove(b.id); dialog.dismiss(); renderContent(); } catch (Exception e) { error(e); }
+                try { store.remove(b); forgetCover(b.id); dialog.dismiss(); renderContent(); } catch (Exception e) { error(e); }
             }).show()));
         dialog.show();
     }
@@ -580,7 +635,7 @@ public final class MainActivity extends Activity {
             try { store.saveDownloadedCover(b,bytes); } catch (Exception ignored) { }
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
-                covers.remove(b.id);
+                forgetCover(b.id);
                 if (dialog.isShowing()) previewCover.setImageBitmap(decode(null,bytes,700));
                 else if (reading == null && store.find(b.id) != null) renderContent();
             });
@@ -775,7 +830,7 @@ public final class MainActivity extends Activity {
                     ByteArrayOutputStream out = new ByteArrayOutputStream();
                     image.compress(Bitmap.CompressFormat.JPEG, 85, out); image.recycle();
                     store.saveDownloadedCover(target, out.toByteArray());
-                    runOnUiThread(() -> { covers.remove(target.id); renderContent(); details(target); });
+                    runOnUiThread(() -> { forgetCover(target.id); renderContent(); details(target); });
                 } catch (Exception e) { runOnUiThread(() -> error(e)); }
             });
             return;
@@ -923,6 +978,6 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onStop() { if (reading != null) rememberPage(); super.onStop(); }
     @Override protected void onDestroy() {
-        uiHandler.removeCallbacksAndMessages(null); worker.shutdown(); catalogWorker.shutdown(); coverWorker.shutdown(); super.onDestroy();
+        uiHandler.removeCallbacksAndMessages(null); worker.shutdown(); catalogWorker.shutdown(); coverWorker.shutdown(); thumbWorker.shutdownNow(); super.onDestroy();
     }
 }
