@@ -22,6 +22,12 @@ public final class Book {
     }
 
     public JSONObject journal = new JSONObject();
+    /**
+     * Extended bibliographic data (original title, translators, publisher's series, identifiers,
+     * subjects, first publication…), the source of every field and the fields edited by hand.
+     * Kept apart from the reading journal so that metadata updates never touch personal data.
+     */
+    public JSONObject meta = new JSONObject();
     private JSONObject retained = new JSONObject();
 
     public String id, title = "", author = "Autore sconosciuto", series = "", genre = "";
@@ -66,8 +72,11 @@ public final class Book {
         }
     }
 
+    /** 2.0 → "2", 2.5 → "2.5". */
+    public static String formatNumber(double n) { return n == (long) n ? Long.toString((long) n) : Double.toString(n); }
+
     public JSONObject json() throws JSONException {
-        return new JSONObject(retained.toString()).put("journal", journal).put("id", id).put("title", title).put("author", author)
+        return new JSONObject(retained.toString()).put("journal", journal).put("meta", meta).put("id", id).put("title", title).put("author", author)
             .put("subtitle", subtitle).put("tags", tags).put("location", location).put("medium", medium)
             .put("started", started).put("finished", finished).put("rating", rating).put("addedAt", addedAt)
             .put("series", series).put("genre", genre).put("description", description)
@@ -86,6 +95,8 @@ public final class Book {
         b.retained = new JSONObject(j.toString());
         JSONObject journal = j.optJSONObject("journal");
         if (journal != null) b.journal = new JSONObject(journal.toString());
+        JSONObject meta = j.optJSONObject("meta");
+        if (meta != null) b.meta = new JSONObject(meta.toString());
         b.id = j.getString("id");
         if (!b.id.matches("[0-9a-f]{64}")) throw new JSONException("Identificatore non valido");
         b.subtitle = j.optString("subtitle"); b.tags = j.optString("tags"); b.location = j.optString("location");

@@ -159,3 +159,15 @@ tap('Configura KOReader');shot('31-koreader-settings');tap('Annulla',exact=True)
 tap('Impostazioni');shot('32-settings-page')
 assert any('La tua biblioteca, come piace a te.' in n.get('text','') for n in dump().iter('node')), 'Settings is not a dedicated page'
 back();assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'Back did not restore Sync'
+
+# Multi-source metadata: the review page opens and lists the catalogs consulted (nothing is applied automatically).
+tap('Biblioteca',exact=True);tap('Tutti',exact=True);tap('Il sentiero di casa')
+tap('Completa i dati online',True)
+for _ in range(60):
+    if any('Fonti consultate' in n.get('text','') for n in dump().iter('node')): break
+    time.sleep(1)
+shot('40-metadata-review')
+assert any('Fonti consultate' in n.get('text','') for n in dump().iter('node')), 'Metadata review did not open'
+tap('Annulla',True,exact=True);back()
+print('Metadata review completed.')
+

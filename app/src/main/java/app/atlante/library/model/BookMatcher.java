@@ -84,6 +84,7 @@ public final class BookMatcher {
     public static Set<String> titles(String title, Set<String> authorWords) {
         Set<String> out = new LinkedHashSet<>();
         if (title == null) return out;
+        out.addAll(whole(title));   // the whole title always counts, even "1984"
         for (String t : new String[]{title, clean(title)}) {
             prefixes(out, t, authorWords);
             for (String piece : t.split("\\s+[-–—]\\s+")) prefixes(out, piece, authorWords);

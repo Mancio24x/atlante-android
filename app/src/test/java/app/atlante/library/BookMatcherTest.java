@@ -17,6 +17,7 @@ public class BookMatcherTest {
         assertTrue(BookMatcher.same(b("Qualsiasi", "X", "88-452-9261-X"), b("Altro titolo", "Y", "9788845292613")));   // ISBN-10 = ISBN-13
         assertTrue(BookMatcher.same(b("A", "B", "9788806219352, 9788806241513"), b("C", "D", "9788806241513"))); // several ISBNs in a field
         assertTrue(BookMatcher.same(b("Il nome della rosa", "Autore sconosciuto", ""), b("Il nome della rosa", "Umberto Eco", "")));
+        assertTrue(BookMatcher.same(b("1984", "George Orwell", ""), b("1984", "Orwell, George", "")));                    // a title made of digits
         assertTrue(BookMatcher.same(b("Ballata dell'usignolo e del serpente", "Suzanne Collins", ""), b("Hunger Games - Ballata dell'usignolo e del serpente: Un romanzo della saga di Hunger Games (Italian Edition)", "Suzanne Collins", "")));
         assertTrue(BookMatcher.same(b("Manuale di Sopravvivenza Bushcraft e Tecniche", "David J. Harvey", ""), b("Manuale di Sopravvivenza: Bushcraft e Tecniche (Italian Edition)", "David J. Harvey", "")));
         assertTrue(BookMatcher.same(b("Chess Patterns", "Rodolfo Pardi, Evelyne Nicod", ""), b("Chess Patterns, una scelta di schemi fondamentali di scacchi", "Pardi, Rodolfo", "")));

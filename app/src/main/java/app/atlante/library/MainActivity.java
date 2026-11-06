@@ -766,6 +766,7 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(expander("Dettagli della scheda", info, false));
         gap(panel, 12);
 
+        panel.addView(button("Completa i dati online", R.style.Atlante_Button_Tonal, () -> completeMetadata(b)), new LinearLayout.LayoutParams(-1, -2));
         panel.addView(button("Modifica scheda", R.style.Atlante_Button_Tonal, () -> { sheet.dismiss(); edit(b); }), new LinearLayout.LayoutParams(-1, -2));
         panel.addView(button("Scegli copertina dalla galleria", R.style.Atlante_Button_Tonal, () -> {
             coverBookId = b.id; sheet.dismiss();
@@ -963,6 +964,14 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(text("Editore: " + available(b.publisher) + "\nAnno: " + available(b.year)
             + "\nLingua: " + available(b.language) + "\nISBN / identificatore: " + available(b.isbn)
             + "\nGenere: " + available(b.genre), 13, MUTED, false));
+        // Extended data from the bibliographic engine, each with its source.
+        String[][] extra = {{"originalTitle","Titolo originale"},{"translators","Traduzione"},{"editors","Curatela"},{"illustrators","Illustrazioni"},
+            {"collection","Collana"},{"firstPublished","Prima pubblicazione"},{"format","Formato"},{"dewey","Classificazione Dewey"},{"subjects","Argomenti"}};
+        org.json.JSONObject sources = b.meta.optJSONObject("sources");
+        StringBuilder more = new StringBuilder();
+        for (String[] e : extra) { String v = b.meta.optString(e[0]); if (v.isEmpty()) continue;
+            more.append(more.length() > 0 ? "\n" : "").append(e[1]).append(": ").append(v).append(sources != null && !sources.optString(e[0]).isEmpty() ? "  · " + sources.optString(e[0]) : ""); }
+        if (more.length() > 0) { gap(panel, 4); panel.addView(text(more.toString(), 13, MUTED, false)); }
     }
     private static String available(String value) { return value.isEmpty() ? "Non disponibile" : value; }
 
@@ -1192,7 +1201,7 @@ public final class MainActivity extends AppCompatActivity {
             b.year = year.getText().toString().trim(); b.language = language.getText().toString().trim(); b.isbn = isbn.getText().toString().trim();
             try {
                 if (creating) store.addCatalog(b);
-                else store.replace(b);
+                else { app.atlante.library.online.MetadataEngine.markManual(original, b); store.replace(b); }
             } catch (Exception e) { error(e); return; }
             if (creating) { destination = "Biblioteca"; tab = "Tutti i libri"; query = ""; filterGenre = ""; filterFormat = ""; showLibrary(); }
             dialog.dismiss(); renderContent(); details(b);
@@ -1379,6 +1388,10 @@ public final class MainActivity extends AppCompatActivity {
         kin.addView(text("Collega il Kindle al computer o al telefono e scegli il file documents/My Clippings.txt. Evidenziazioni e note entrano nel taccuino del libro. Amazon non condivide stato e pagina con altre app.",14,MUTED,false)); gap(kin,8);
         kin.addView(button("Importa My Clippings.txt",false,()->clippingsLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"))),new LinearLayout.LayoutParams(-1,-2));
 
+        LinearLayout src=surface(p,"FONTI DEI DATI BIBLIOGRAFICI");
+        src.addView(text("Sempre attive: catalogo SBN, Open Library, Internet Archive. Facoltative con la tua chiave: Google Books (gratuita), ISBNdb (a pagamento) e Hardcover (la chiave di Sync).",14,MUTED,false)); gap(src,8);
+        src.addView(text("Google Books: "+(prefs.getString("googleBooksKey","").isEmpty()?"non configurato":"chiave inserita")+" · ISBNdb: "+(prefs.getString("isbndbKey","").isEmpty()?"non configurato":"chiave inserita"),13,INK,false));
+        src.addView(button("Chiavi delle fonti",R.style.Atlante_Button_Text,this::sourceKeys),new LinearLayout.LayoutParams(-1,-2));
         LinearLayout files=surface(p,"FILE E ALTRE APP");
         files.addView(text("Backup di Atlante, elenchi CSV (Goodreads, StoryGraph, Bookshelf), cataloghi HTML e librerie Calibre in ZIP.",14,MUTED,false)); gap(files,8);
         files.addView(button("Importa catalogo o backup",false,this::chooseBackup),new LinearLayout.LayoutParams(-1,-2));
@@ -1588,6 +1601,134 @@ public final class MainActivity extends AppCompatActivity {
         final int notes=added, created=sheets; showLibrary();
         dialogBuilder().setTitle("Importazione completata").setMessage(notes+" note aggiunte ai taccuini"+(created>0?"\n"+created+" nuove schede create":"")+".").setPositiveButton("OK",null).show();
         if(created>0) fetchMissingCovers(store.snapshot(),false);
+    }
+
+    // ---- multi-source bibliographic engine ------------------------------------------------------
+
+    private void sourceKeys() {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        LinearLayout panel=column(); panel.setPadding(dp(24),dp(8),dp(24),dp(4));
+        panel.addView(text("Google Books: crea gratuitamente una chiave API in Google Cloud Console (API «Books API»). Senza chiave il servizio pubblico è quasi sempre esaurito.",13,MUTED,false));
+        panel.addView(button("Istruzioni Google Books ↗",R.style.Atlante_Button_Text,()->openLink("https://developers.google.com/books/docs/v1/using#APIKey")));
+        EditText google=field(panel,"Chiave Google Books",prefs.getString("googleBooksKey",""));
+        google.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        panel.addView(text("ISBNdb è un servizio a pagamento: usalo solo se hai già un abbonamento.",13,MUTED,false));
+        EditText isbndb=field(panel,"Chiave ISBNdb (facoltativa)",prefs.getString("isbndbKey",""));
+        isbndb.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        dialogBuilder().setTitle("Chiavi delle fonti").setView(scrolled(panel)).setNegativeButton("Annulla",null)
+            .setPositiveButton("Salva",(d,w)->{prefs.edit().putString("googleBooksKey",google.getText().toString().trim()).putString("isbndbKey",isbndb.getText().toString().trim()).apply(); showLibrary();}).show();
+    }
+
+    private app.atlante.library.online.MetadataEngine.Settings metadataSettings() {
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        app.atlante.library.online.MetadataEngine.Settings s=new app.atlante.library.online.MetadataEngine.Settings();
+        s.keys.google=prefs.getString("googleBooksKey",""); s.keys.isbndb=prefs.getString("isbndbKey",""); s.keys.hardcover=prefs.getString("hardcoverToken","");
+        String lang=prefs.getString("bookLanguage","ita"); s.language=lang.isEmpty()?"ita":lang;
+        return s;
+    }
+
+    /** Asks every catalog about the book, then shows a review page: nothing changes until the user applies. */
+    private void completeMetadata(Book b) { completeMetadata(b, null); }
+    private void completeMetadata(Book b, app.atlante.library.online.Candidate chosen) {
+        if(busy) return; busy=true;
+        app.atlante.library.online.MetadataEngine.Settings s=metadataSettings();
+        AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Completa i dati",dialog);
+        worker.execute(()->{
+            app.atlante.library.online.MetadataEngine.Result r=null; Exception failure=null;
+            try { r=app.atlante.library.online.MetadataEngine.lookup(b,s,app.atlante.library.online.MetadataEngine.live(s,m->runOnUiThread(()->label.setText(m))),chosen); } catch(Exception e){ failure=e; }
+            final app.atlante.library.online.MetadataEngine.Result result=r; final Exception error=failure;
+            runOnUiThread(()->{ dialog[0].dismiss(); busy=false; if(isFinishing()||isDestroyed()) return;
+                if(error!=null){ error(error); return; }
+                if(!result.ambiguous.isEmpty()) { chooseEdition(b,result.ambiguous); return; }
+                metadataReview(b,result); });
+        });
+    }
+
+    /** Several editions match and the book has no ISBN: the user says which one is theirs. */
+    private void chooseEdition(Book b, List<app.atlante.library.online.Candidate> editions) {
+        String[] labels=new String[editions.size()];
+        for(int i=0;i<labels.length;i++){ app.atlante.library.online.Candidate c=editions.get(i);
+            labels[i]=c.title+(c.publisher.isEmpty()?"":" · "+c.publisher)+(c.year.isEmpty()?"":" · "+c.year)+(c.language.isEmpty()?"":" · "+c.language)+(c.isbns.isEmpty()?"":" · ISBN "+c.isbns.iterator().next())+"  ("+c.source+")"; }
+        dialogBuilder().setTitle("Quale edizione hai?").setItems(labels,(d,w)->completeMetadata(b,editions.get(w))).setNegativeButton("Annulla",null).show();
+    }
+
+    private void metadataReview(Book b, app.atlante.library.online.MetadataEngine.Result r) {
+        LinearLayout p=editorPage("Completa i dati",b);
+        p.addView(text(b.title,22,INK,true));
+        p.addView(text("Fonti consultate: "+(r.sources.isEmpty()?"nessun risultato":String.join(", ",r.sources))+(r.edition==null?"":"\nEdizione: "+r.edition.publisher+" "+r.edition.year+" ("+r.edition.source+")"),13,MUTED,false));
+        for(String n:r.notes) p.addView(text("• "+n,12,COPPER,false));
+        gap(p,12);
+        // Covers of this edition: kept as they are unless one is chosen; the old one stays restorable.
+        final byte[][] coverChoice=new byte[1][];
+        if(!r.covers.isEmpty()) {
+            p.addView(sectionLabel("COPERTINA")); gap(p,6);
+            HorizontalScrollView strip=new HorizontalScrollView(this); LinearLayout row=row(); strip.addView(row); p.addView(strip);
+            List<View> tiles=new ArrayList<>();
+            boolean hasCover=store.cover(b).isFile();
+            View keep=coverTile(row,tiles,hasCover?cover(b):null,hasCover?"Attuale":"Nessuna",()->coverChoice[0]=null); keep.setSelected(true); keep.setAlpha(1f);
+            for(app.atlante.library.online.Candidate.Cover c:r.covers.subList(0,Math.min(6,r.covers.size()))) {
+                View tile=coverTile(row,tiles,null,c.source+(c.width>0?" · "+c.width+"px":""),null);
+                coverWorker.execute(()->{ byte[] bytes=null; try { bytes=OnlineCatalog.request(c.url,4*1024*1024); } catch(Exception ignored){}
+                    Bitmap bmp=bytes==null?null:decode(null,bytes,400); final byte[] data=bytes;
+                    runOnUiThread(()->{ if(bmp==null||bmp.getWidth()<120) { tile.setVisibility(View.GONE); return; }   // placeholders and thumbnails are dropped
+                        ((ImageView)((ViewGroup)tile).getChildAt(0)).setImageBitmap(bmp);
+                        tile.setOnClickListener(v->{ for(View t:tiles){t.setAlpha(.45f);} tile.setAlpha(1f); coverChoice[0]=data; });
+                        if(!hasCover && coverChoice[0]==null) { for(View t:tiles){t.setAlpha(.45f);} tile.setAlpha(1f); coverChoice[0]=data; } }); });
+            }
+            gap(p,14);
+        }
+        // Plot alternatives: the engine's choice first; the user can pick another or keep the current one.
+        app.atlante.library.online.MetadataEngine.Field plot=null;
+        for(app.atlante.library.online.MetadataEngine.Field f:r.fields) if(f.key.equals("description")) plot=f;
+        final app.atlante.library.online.MetadataEngine.Field plotField=plot;
+        if(plotField!=null && r.descriptions.size()>1) {
+            p.addView(sectionLabel("TRAMA")); gap(p,6);
+            RadioGroup group=new RadioGroup(this); p.addView(group);
+            if(!b.description.isEmpty()) { RadioButton current=new RadioButton(this); current.setText("Mantieni la trama attuale"); current.setId(View.generateViewId()); group.addView(current); current.setOnClickListener(v->plotField.accept=false); if(plotField.manual) current.setChecked(true); }
+            int i=0; for(app.atlante.library.online.Candidate.Description d:r.descriptions) { if(i++>=4) break;
+                RadioButton rb=new RadioButton(this); rb.setId(View.generateViewId());
+                rb.setText(d.source+" · "+(d.language.isEmpty()?"lingua ?":d.language)+" · "+d.text.length()+" caratteri\n"+(d.text.length()>260?d.text.substring(0,260)+"…":d.text));
+                group.addView(rb); rb.setOnClickListener(v->{ plotField.accept=true; setProposed(plotField,d.text); });
+                if(i==1 && !plotField.manual && (b.description.isEmpty()||plotField.accept)) rb.setChecked(true); }
+            gap(p,14);
+        }
+        p.addView(sectionLabel("DATI DELLA SCHEDA")); gap(p,6);
+        if(r.fields.isEmpty()) p.addView(text("Nessun dato nuovo: la scheda è già completa rispetto alle fonti consultate.",14,MUTED,false));
+        for(app.atlante.library.online.MetadataEngine.Field f:r.fields) {
+            if(f==plotField && r.descriptions.size()>1) continue;
+            LinearLayout box=column(); box.setPadding(0,dp(6),0,dp(6));
+            MaterialSwitch sw=new MaterialSwitch(this); sw.setText(f.label+"  ·  "+f.source+(f.manual?"  · modificato da te":"")); sw.setChecked(f.accept);
+            sw.setOnCheckedChangeListener((v,on)->f.accept=on); box.addView(sw);
+            if(!f.current.isEmpty()) box.addView(text("Ora: "+shortText(f.current),13,MUTED,false));
+            box.addView(text("Nuovo: "+shortText(f.proposed),14,INK,false));
+            p.addView(box);
+        }
+        gap(p,16);
+        p.addView(button("Applica le modifiche scelte",true,()->{
+            try {
+                Book c=Book.from(b.json()); app.atlante.library.online.MetadataEngine.apply(c,r.fields);
+                if(coverChoice[0]!=null) {
+                    java.io.File current=store.cover(b), original=new java.io.File(current.getPath()+".orig");
+                    if(current.isFile() && !original.exists()) java.nio.file.Files.copy(current.toPath(),original.toPath());   // "Ripristina copertina originale"
+                    store.saveDownloadedCover(c,coverChoice[0]); forgetCover(c.id);
+                }
+                store.replace(c); renderContent(); details(c);
+            } catch(Exception e){ error(e); }
+        }),new LinearLayout.LayoutParams(-1,-2));
+        p.addView(button("Annulla",R.style.Atlante_Button_Text,()->details(b)),new LinearLayout.LayoutParams(-1,-2));
+    }
+
+    private static void setProposed(app.atlante.library.online.MetadataEngine.Field f, String text) { f.choose(text); }
+    private static String shortText(String v) { return v.length()>220?v.substring(0,220)+"…":v; }
+
+    private View coverTile(LinearLayout row, List<View> tiles, Bitmap image, String label, Runnable onPick) {
+        LinearLayout tile=column(); tile.setPadding(dp(4),dp(4),dp(4),dp(4)); tile.setGravity(Gravity.CENTER_HORIZONTAL);
+        ImageView img=new ImageView(this); img.setScaleType(ImageView.ScaleType.FIT_CENTER); img.setBackground(background(PAPER,LINE)); if(image!=null) img.setImageBitmap(image);
+        tile.addView(img,new LinearLayout.LayoutParams(dp(96),dp(144)));
+        TextView t=text(label,11,MUTED,false); t.setMaxWidth(dp(100)); tile.addView(t);
+        tile.setAlpha(.45f); tiles.add(tile); row.addView(tile);
+        if(onPick!=null) tile.setOnClickListener(v->{ for(View x:tiles) x.setAlpha(.45f); tile.setAlpha(1f); onPick.run(); });
+        return tile;
     }
 
     private void chooseBooks() {
@@ -1954,16 +2095,17 @@ public final class MainActivity extends AppCompatActivity {
         return card(p);
     }
     private void bookActions(Book b) {
-        String[] actions={"Modifica scheda","Preferito: "+(b.journal.optBoolean("favorite")?"sì":"no"),"Collezioni","Inizia una rilettura","Apri con KOReader"};
+        String[] actions={"Modifica scheda","Completa i dati online","Preferito: "+(b.journal.optBoolean("favorite")?"sì":"no"),"Collezioni","Inizia una rilettura","Apri con KOReader"};
         dialogBuilder().setTitle("Il tuo libro").setItems(actions,(d,w)->{
             if(w==0) edit(b);
-            if(w==1) journalEdit(b,c->ReadingJournal.put(c,"favorite",!c.journal.optBoolean("favorite")));
-            if(w==2) editCollections(b);
-            if(w==3 && b.id.equals(timerBook)) { dialogBuilder().setTitle("Sessione in corso").setMessage("Concludi o scarta la sessione prima di iniziare una rilettura.").setPositiveButton("Apri sessione",(dd,ww)->timerScreen(b)).setNegativeButton("Annulla",null).show(); return; }
-            if(w==3) dialogBuilder().setTitle("Iniziare una nuova lettura?").setMessage("Sessioni e recensione precedenti vengono conservate. Il nuovo tentativo riparte da pagina zero.").setNegativeButton("Annulla",null).setPositiveButton("Inizia",(dd,ww)->journalEdit(b,c->{
+            if(w==1) { completeMetadata(b); return; }
+            if(w==2) journalEdit(b,c->ReadingJournal.put(c,"favorite",!c.journal.optBoolean("favorite")));
+            if(w==3) editCollections(b);
+            if(w==4 && b.id.equals(timerBook)) { dialogBuilder().setTitle("Sessione in corso").setMessage("Concludi o scarta la sessione prima di iniziare una rilettura.").setPositiveButton("Apri sessione",(dd,ww)->timerScreen(b)).setNegativeButton("Annulla",null).show(); return; }
+            if(w==4) dialogBuilder().setTitle("Iniziare una nuova lettura?").setMessage("Sessioni e recensione precedenti vengono conservate. Il nuovo tentativo riparte da pagina zero.").setNegativeButton("Annulla",null).setPositiveButton("Inizia",(dd,ww)->journalEdit(b,c->{
                 org.json.JSONArray a=ReadingJournal.array(c,"attempts"); a.put(new org.json.JSONObject().put("number",ReadingJournal.attempt(c)).put("started",c.started).put("finished",c.finished).put("page",c.currentPage).put("percent",c.percent)); ReadingJournal.put(c,"attempts",a); ReadingJournal.put(c,"attempt",ReadingJournal.attempt(c)+1); c.currentPage=0;c.percent=0;c.page=0;c.started=java.time.LocalDate.now().toString();c.finished="";c.status=Book.READING;
             })).show();
-            if(w==4) openKoreader(b);
+            if(w==5) openKoreader(b);
         }).setNegativeButton("Chiudi",null).show();
     }
     private interface BookMutation { void apply(Book b) throws Exception; }

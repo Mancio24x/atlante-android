@@ -93,7 +93,7 @@ public final class SyncCore {
 
     // ---- HTTP -------------------------------------------------------------------------------------
 
-    public static final class Response { public int status; String body; Map<String, List<String>> headers; }
+    public static final class Response { public int status; public String body; public Map<String, List<String>> headers; }
 
     /** GET/POST with optional Basic or Digest credentials (Calibre) or extra headers (Hardcover). */
     public static Response http(String method, String address, String body, Map<String, String> headers, String user, String password, int limit) throws IOException {

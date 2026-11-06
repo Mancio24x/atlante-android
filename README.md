@@ -72,6 +72,28 @@ conserva note e avanzamento: reimportando lo stesso file da **☰ › Importa eb
 viene ricollegato alla sua scheda. Durante la lettura, la posizione viene salvata
 poco dopo l’ultima pagina girata e all’uscita dal lettore.
 
+## Dati bibliografici da più fonti
+
+**Completa i dati online** (pagina del libro o menu ⋮) interroga insieme più cataloghi:
+catalogo **SBN** (ICCU), **Open Library** (edizione e opera), **Internet Archive** e, se
+inserisci la tua chiave in *Sync › Fonti dei dati bibliografici*, **Google Books** (chiave
+gratuita), **Hardcover** (la chiave di Sync) e **ISBNdb** (servizio a pagamento, facoltativo).
+
+Cerca prima per ISBN; senza ISBN cerca per titolo e autore e, se trova edizioni diverse,
+chiede quale possiedi invece di sceglierne una. I dati dell’**edizione** (titolo, editore,
+collana, anno, pagine, lingua, traduttore, curatore, illustratore, ISBN, copertina) vengono
+solo dai record di quell’edizione; quelli dell’**opera** (titolo originale, prima
+pubblicazione, saga, argomenti, classificazione Dewey) anche dalle altre edizioni. Per i
+libri italiani l’edizione viene presa prima da SBN. Il genere viene dalla classificazione
+Dewey o dalle categorie dell’editore, mai da parole chiave libere. Le trame nella lingua
+scelta vengono prima; quelle in altre lingue sono indicate come tali.
+
+Nulla cambia da solo: una pagina mostra, campo per campo, il valore attuale, quello nuovo
+e la fonte. I campi vuoti sono proposti già selezionati; quelli che hai modificato a mano
+restano deselezionati. Le copertine dell’edizione si scelgono tra quelle trovate (miniature
+e segnaposto vengono scartati) e la precedente viene conservata. Ogni dato accettato
+ricorda la sua fonte, visibile in *Dettagli della scheda*.
+
 ## Importare un catalogo da altre app
 
 **☰ › Importa catalogo o backup** (oppure **Impostazioni › Backup › Ripristina o importa
