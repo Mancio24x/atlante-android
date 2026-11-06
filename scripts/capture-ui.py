@@ -77,8 +77,15 @@ tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
 tap('Impostazioni')
 state=dump()
-prefs=adb('exec-out','run-as',package,'cat','shared_prefs/MainActivity.xml').decode()
-assert '<string name="theme">amoled</string>' in prefs, 'Theme preference was not restored'
+def visible(fragment, scroll=False):
+    for _ in range(8 if scroll else 1):
+        if any(fragment in n.get('text','') for n in dump().iter('node')): return True
+        if scroll: adb('shell','input','swipe','540','1250','540','550','350'); time.sleep(.4)
+    return False
+# After the restart the settings page must mark AMOLED as the chosen theme.
+if not visible('AMOLED nero  ✓', True):
+    (out/'failure-prefs.xml').write_bytes(adb('exec-out','run-as',package,'cat','shared_prefs/MainActivity.xml'))
+    raise AssertionError('Theme preference was not restored')
 shot('11-settings-restored')
 adb('shell','input','keyevent','4');time.sleep(.5);shot('12-theme-restored')
 # Manual cataloging must save only after confirmation, without requiring an ISBN.
