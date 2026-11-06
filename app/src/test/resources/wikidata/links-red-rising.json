@@ -1,0 +1,119 @@
+{
+  "head" : {
+    "vars" : [ "w", "wLabel", "s", "sLabel", "ord", "skind", "parent", "parentLabel", "uni", "uniLabel", "prev", "next" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q18393778"
+      },
+      "s" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q137598364"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "skind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q13593966"
+      },
+      "parent" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q79053462"
+      },
+      "next" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q28841950"
+      },
+      "wLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising"
+      },
+      "sLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Trilogy"
+      },
+      "parentLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Saga"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q18393778"
+      },
+      "s" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q137598364"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "skind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1667921"
+      },
+      "parent" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q79053462"
+      },
+      "next" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q28841950"
+      },
+      "wLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising"
+      },
+      "sLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Trilogy"
+      },
+      "parentLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Saga"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q18393778"
+      },
+      "s" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q79053462"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "skind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1667921"
+      },
+      "next" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q28841950"
+      },
+      "wLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising"
+      },
+      "sLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Saga"
+      }
+    } ]
+  }
+}

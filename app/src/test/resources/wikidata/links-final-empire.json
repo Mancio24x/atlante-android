@@ -1,0 +1,90 @@
+{
+  "head" : {
+    "vars" : [ "w", "wLabel", "s", "sLabel", "ord", "skind", "parent", "parentLabel", "uni", "uniLabel", "prev", "next" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2778373"
+      },
+      "s" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q18535364"
+      },
+      "skind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q559618"
+      },
+      "wLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: L'Ultimo Impero"
+      },
+      "sLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Cosmere"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2778373"
+      },
+      "s" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q18535364"
+      },
+      "skind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q277759"
+      },
+      "wLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: L'Ultimo Impero"
+      },
+      "sLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Cosmere"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2778373"
+      },
+      "s" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q268100"
+      },
+      "skind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1667921"
+      },
+      "wLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: L'Ultimo Impero"
+      },
+      "sLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "uni" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q18535364"
+      },
+      "uniLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Cosmere"
+      }
+    } ]
+  }
+}

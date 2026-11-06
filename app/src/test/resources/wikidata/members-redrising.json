@@ -1,0 +1,397 @@
+{
+  "head" : {
+    "vars" : [ "w", "itLabel", "enLabel", "label", "ord", "ol", "date", "kind", "author", "authorLabel" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q18393778"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL17076473W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2014-01-28T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19263643"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "2"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL19340986W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2015-01-01T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Golden Son"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Golden Son"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q22907050"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "3"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL19650409W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2016-02-09T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Morning Star"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Morning Star"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q30324122"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "4"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL19726995W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2018-01-16T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Iron Gold"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Iron Gold"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q55609029"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "5"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL20072759W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2019-07-30T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dark Age"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dark Age"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q127162192"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "6"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL31211701W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2023-07-25T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Light Bringer"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Light Bringer"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q137598197"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "7"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red God"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red God"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q137598364"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2014-01-28T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1667921"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Trilogy"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Trilogy"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q137598364"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2014-01-28T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q13593966"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Trilogy"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Rising Trilogy"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q137598400"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "2"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2018-01-16T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1667921"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19665989"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Iron Gold Tetralogy"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Iron Gold Tetralogy"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Pierce Brown"
+      }
+    } ]
+  }
+}

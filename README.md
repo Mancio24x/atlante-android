@@ -94,6 +94,19 @@ restano deselezionati. Le copertine dell’edizione si scelgono tra quelle trova
 e segnaposto vengono scartati) e la precedente viene conservata. Ogni dato accettato
 ricorda la sua fonte, visibile in *Dettagli della scheda*.
 
+## Saghe: opere, edizioni e riconoscimento (in sviluppo)
+
+Le saghe vengono ricostruite da **Wikidata** (serie P179, numero P1545, autore P50, titolo P1476, precedente/successivo P155/P156) e **Open Library** (opere ed edizioni), solo con le API pubbliche e gratuite.
+
+- **Opera ed edizione sono distinte**: *L'ultimo impero* (edizione italiana) e *The Final Empire* sono la stessa opera, *Mistborn #1*.
+- **Il punteggio decide cosa fare**: dall'85 in su l'opera viene collegata da sola; tra 60 e 84 l'app chiede conferma; sotto il 60 non collega nulla. Le soglie sono configurabili (`SagaRecognizer.reliable` e `uncertain`). Due prove dalla stessa fonte non contano come indipendenti.
+- **Se l'opera è nota ma la saga no**, il libro risulta *Saga non identificata* e non viene considerato autoconclusivo.
+- **Le voci della saga stessa e le singole edizioni** (per esempio un ebook o un audiolibro) non vengono scambiate per l'opera.
+- **Gli universi** (Cosmere) non sono saghe; le sotto-serie (Wax and Wayne dentro Mistborn, la trilogia dentro Red Rising Saga) restano annidate.
+- **Il grafo bibliografico** è salvato in un database Room separato (`atlante-bibliography.db`, migrazioni versionate e non distruttive). La libreria personale resta in `library.json` ed è collegata per id del libro. Le correzioni manuali non vengono mai sovrascritte.
+
+I test (`SagaRecognizerTest`, `SagaDatabaseTest`) usano risposte reali di Wikidata salvate in `app/src/test/resources/wikidata`.
+
 ## Importare un catalogo da altre app
 
 **☰ › Importa catalogo o backup** (oppure **Impostazioni › Backup › Ripristina o importa

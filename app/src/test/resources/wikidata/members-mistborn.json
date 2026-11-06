@@ -1,0 +1,375 @@
+{
+  "head" : {
+    "vars" : [ "w", "itLabel", "enLabel", "label", "ord", "ol", "date", "kind", "author", "authorLabel" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2062781"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "2"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL5738150W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2007-08-21T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "itLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: Il Pozzo dell'Ascensione"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Well of Ascension"
+      },
+      "label" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: Il Pozzo dell'Ascensione"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2778373"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL5738148W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2006-07-17T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "itLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: L'Ultimo Impero"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Final Empire"
+      },
+      "label" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: L'Ultimo Impero"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3859308"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "3"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL5738154W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2008-10-14T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "itLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: Il Campione delle Ere"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Hero of Ages"
+      },
+      "label" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Mistborn: Il Campione delle Ere"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6880077"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "4"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL16597059W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2011-11-08T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Alloy of Law"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Alloy of Law"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q16387049"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "5"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL17349393W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2015-10-06T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: Shadows of Self"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: Shadows of Self"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q21707281"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "6"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL17349394W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2016-01-26T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Bands of Mourning"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Bands of Mourning"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q22911769"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL19913857W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2016-01-30T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: Secret History"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: Secret History"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q111635058"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "7"
+      },
+      "ol" : {
+        "type" : "literal",
+        "value" : "OL26769924W"
+      },
+      "date" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "2022-11-15T00:00:00Z"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7725634"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Lost Metal"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mistborn: The Lost Metal"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    }, {
+      "w" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q133505261"
+      },
+      "kind" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1667921"
+      },
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457608"
+      },
+      "enLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Wax and Wayne"
+      },
+      "label" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Wax and Wayne"
+      },
+      "authorLabel" : {
+        "xml:lang" : "it",
+        "type" : "literal",
+        "value" : "Brandon Sanderson"
+      }
+    } ]
+  }
+}
