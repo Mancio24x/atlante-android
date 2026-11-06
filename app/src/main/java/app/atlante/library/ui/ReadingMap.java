@@ -1,7 +1,6 @@
 package app.atlante.library.ui;
 
 import app.atlante.library.model.Book;
-import app.atlante.library.online.SeriesCatalog;
 import app.atlante.library.MainActivity;
 
 import android.graphics.*;
@@ -18,7 +17,8 @@ public final class ReadingMap extends View {
     public interface OpenBook { void open(Book book); }
     private final MainActivity activity;
     private final String author;
-    private final LinkedHashMap<String, ArrayList<Book>> groups = new LinkedHashMap<>();
+    private final List<MapGroups.Group> groups;
+    private final Map<String, MapGroups.Known> known;
     private final ArrayList<Hit> hits = new ArrayList<>();
     private final OpenBook open;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -34,17 +34,12 @@ public final class ReadingMap extends View {
         public Hit(RectF rect, Book book) { this.rect = rect; this.book = book; }
     }
 
-    public ReadingMap(MainActivity activity, String author, ArrayList<Book> books, OpenBook open) {
-        super(activity); this.activity = activity; this.author = author; this.open = open; bookCount = books.size();
-        books.sort((a, b) -> {
-            if (a.series.isEmpty() != b.series.isEmpty()) return a.series.isEmpty() ? 1 : -1; // single books last
-            int c = a.series.compareToIgnoreCase(b.series);
-            if (c == 0) c = SeriesCatalog.compareNumber(a.number, b.number);
-            if (c == 0) c = a.title.compareToIgnoreCase(b.title);
-            return c;
-        });
-        for (Book b : books) groups.computeIfAbsent(b.series.isEmpty() ? "Libri singoli" : b.series, k -> new ArrayList<>()).add(b);
-        mapHeight = height(groups.values());
+    /** {@code known}: sagas recognized by the saga engine, by book id (see {@link MapGroups}). */
+    public ReadingMap(MainActivity activity, String author, ArrayList<Book> books, Map<String, MapGroups.Known> known, OpenBook open) {
+        super(activity); this.activity = activity; this.author = author; this.open = open; bookCount = books.size(); this.known = known;
+        groups = MapGroups.group(books, known);
+        ArrayList<List<Book>> sizes = new ArrayList<>(); for (MapGroups.Group g : groups) sizes.add(g.books);
+        mapHeight = height(sizes);
         setContentDescription("Mappa di " + author + ": " + books.size() + " libri in " + groups.size() + " gruppi. Tocca un libro per aprire la scheda.");
         setFocusable(true); setClickable(true);
     }
@@ -104,24 +99,26 @@ public final class ReadingMap extends View {
         label(c, bookCount + " titoli · " + groups.size() + (groups.size() == 1 ? " gruppo" : " gruppi"), textX, PAD + 88, 12, activity.ON_ACCENT, false, textWidth);
 
         float y = PAD + AUTHOR_H, lastSagaMid = y;
-        for (Map.Entry<String, ArrayList<Book>> group : groups.entrySet()) {
+        for (MapGroups.Group group : groups) {
             y += GROUP_GAP;
             float sagaMid = y + SAGA_H / 2f; lastSagaMid = sagaMid;
             branch(c, SPINE, SAGA_X, sagaMid);
             RectF saga = new RectF(d(SAGA_X), d(y), d(right), d(y + SAGA_H)); box(c, saga, activity.WHITE, activity.LINE);
-            String count = group.getValue().size() + (group.getValue().size() == 1 ? " titolo" : " titoli");
+            String count = group.books.size() + (group.books.size() == 1 ? " titolo" : " titoli");
             paint.setTextSize(d(12)); float countWidth = paint.measureText(count) / getResources().getDisplayMetrics().density;
-            label(c, group.getKey().equals("Libri singoli") ? "SENZA SAGA" : "SAGA", SAGA_X + 16, y + 22, 10, activity.SAGE, false, 0);
-            label(c, group.getKey(), SAGA_X + 16, y + 48, 19, activity.INK, true, d(right - SAGA_X - 40 - countWidth));
+            boolean single = group.name.equals(MapGroups.SINGLE);
+            label(c, single ? "SENZA SAGA" : "SAGA", SAGA_X + 16, y + 22, 10, activity.SAGE, false, 0);
+            label(c, group.name, SAGA_X + 16, y + 48, 19, activity.INK, true, d(right - SAGA_X - 40 - countWidth));
             label(c, count, right - 14 - countWidth, y + 48, 12, activity.SAGE, false, 0);
             y += SAGA_H + BOOK_GAP;
 
             float bookTop = y, lastBookMid = y;
-            for (Book b : group.getValue()) {
+            for (Book b : group.books) {
+                double n = single ? 0 : MapGroups.number(b, known.get(b.id));
                 float mid = y + BOOK_H / 2f; lastBookMid = mid;
                 branch(c, BOOK_SPINE, BOOK_X, mid);
                 RectF rect = new RectF(d(BOOK_X), d(y), d(right), d(y + BOOK_H)); box(c, rect, activity.WHITE, activity.LINE);
-                label(c, b.number > 0 ? MainActivity.number(b.number) : "·", BOOK_X + 14, y + 36, 20, activity.COPPER, true, 0);
+                label(c, n > 0 ? MainActivity.number(n) : "·", BOOK_X + 14, y + 36, 20, activity.COPPER, true, 0);
                 boolean done = b.status.equals("Letto");
                 label(c, b.title, BOOK_X + 52, y + (done || !b.status.equals("Da leggere") ? 25 : 34), 15, activity.INK, false, d(right - BOOK_X - 52 - 30));
                 if (!b.status.equals("Da leggere")) label(c, b.status, BOOK_X + 52, y + 44, 11, done ? activity.SAGE : activity.COPPER, false, d(right - BOOK_X - 82));

@@ -13,14 +13,14 @@ import org.json.JSONObject;
 
 /**
  * One function per catalog. Each returns Candidates built only from what the catalog actually says.
- * Public sources: Open Library, SBN (ICCU), Internet Archive. With the user's own key: Google Books,
+ * Public sources: Open Library, SBN (ICCU), Internet Archive. With the user’s own key:
  * Hardcover, ISBNdb. No scraping, no private endpoints.
  */
 public final class MetadataSources {
     private MetadataSources() { }
 
     /** Keys entered by the user; empty means the source is skipped. */
-    public static final class Keys { public String google = "", hardcover = "", isbndb = ""; }
+    public static final class Keys { public String hardcover = "", isbndb = ""; }
 
     // ---- languages -----------------------------------------------------------------------------
 
@@ -145,38 +145,6 @@ public final class MetadataSources {
         if (first == null) return null;
         JSONObject full = new JSONObject(new String(OnlineCatalog.request(SbnCatalog.BASE + "full.json?bid=" + URLEncoder.encode(first.optString("codiceIdentificativo"), "UTF-8"), 1024 * 1024), StandardCharsets.UTF_8));
         Candidate c = sbn(full); c.byIsbn = true; if (c.isbns.isEmpty()) c.isbns.add(isbn); return c;
-    }
-
-    // ---- Google Books (user key) -----------------------------------------------------------------
-
-    public static Candidate googleBooks(JSONObject item) {
-        Candidate c = new Candidate("Google Books");
-        JSONObject v = item.optJSONObject("volumeInfo"); if (v == null) return c;
-        c.title = str(v, "title"); c.subtitle = str(v, "subtitle"); c.authors.addAll(list(v.optJSONArray("authors")));
-        c.publisher = str(v, "publisher"); c.editionDate = str(v, "publishedDate"); c.year = year(c.editionDate);
-        c.pages = Math.max(0, v.optInt("pageCount", 0)); c.language = language(str(v, "language"));
-        for (String s : list(v.optJSONArray("categories"))) for (String part : s.split("\\s*/\\s*")) if (!c.subjects.contains(part)) c.subjects.add(part);
-        JSONArray ids = v.optJSONArray("industryIdentifiers");
-        for (int i = 0; ids != null && i < ids.length(); i++) { JSONObject id = ids.optJSONObject(i); if (id != null) c.isbns.addAll(BookMatcher.isbns(id.optString("identifier"))); }
-        String text = clean(str(v, "description"));
-        if (!text.isEmpty()) c.descriptions.add(new Candidate.Description(text, c.language.isEmpty() ? textLanguage(text) : c.language, "Google Books"));
-        JSONObject img = v.optJSONObject("imageLinks");
-        if (img != null) for (String size : new String[]{"extraLarge", "large", "medium", "small", "thumbnail"}) {
-            String u = str(img, size); if (u.isEmpty()) continue;
-            int width = size.equals("extraLarge") ? 1280 : size.equals("large") ? 800 : size.equals("medium") ? 575 : size.equals("small") ? 300 : 128;
-            c.covers.add(new Candidate.Cover(u.replace("http://", "https://").replace("&edge=curl", ""), "Google Books", width, 0)); break;
-        }
-        String id = str(item, "id"); if (!id.isEmpty()) { c.ids.put("google_books", id); c.url = "https://books.google.com/books?id=" + id; }
-        return c;
-    }
-
-    public static List<Candidate> googleBooksQuery(String query, String key, String lang) throws Exception {
-        String url = "https://www.googleapis.com/books/v1/volumes?q=" + URLEncoder.encode(query, "UTF-8") + "&maxResults=10&printType=books"
-            + (lang.isEmpty() ? "" : "&langRestrict=" + iso2(lang)) + "&key=" + URLEncoder.encode(key, "UTF-8");
-        JSONArray items = new JSONObject(new String(OnlineCatalog.request(url, 2 * 1024 * 1024), StandardCharsets.UTF_8)).optJSONArray("items");
-        List<Candidate> out = new ArrayList<>();
-        for (int i = 0; items != null && i < items.length(); i++) if (items.optJSONObject(i) != null) out.add(googleBooks(items.optJSONObject(i)));
-        return out;
     }
 
     // ---- Internet Archive ------------------------------------------------------------------------

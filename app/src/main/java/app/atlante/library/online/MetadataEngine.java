@@ -102,8 +102,8 @@ public final class MetadataEngine {
 
     /** Source order for edition data: Italian catalogs first for Italian books. */
     static List<String> order(String lang) {
-        return lang.equals("ita") ? Arrays.asList("SBN", "Google Books", "ISBNdb", "Hardcover", "Open Library", "Internet Archive")
-            : Arrays.asList("Google Books", "ISBNdb", "Hardcover", "Open Library", "SBN", "Internet Archive");
+        return lang.equals("ita") ? Arrays.asList("SBN", "ISBNdb", "Hardcover", "Open Library", "Internet Archive")
+            : Arrays.asList("ISBNdb", "Hardcover", "Open Library", "SBN", "Internet Archive");
     }
 
     static void merge(Book book, Result r, String lang, Candidate chosen) {
@@ -169,7 +169,7 @@ public final class MetadataEngine {
         if (book.genre.isEmpty()) {
             String genre = "", genreSource = "";
             for (Candidate c : work) { String g = deweyGenre(c.dewey); if (!g.isEmpty()) { genre = g; genreSource = c.source + " (Dewey)"; break; } }
-            if (genre.isEmpty()) for (Candidate c : work) if ((c.source.equals("Google Books") || c.source.equals("ISBNdb")) && !c.subjects.isEmpty()) { genre = c.subjects.get(0); genreSource = c.source; break; }
+            if (genre.isEmpty()) for (Candidate c : work) if (c.source.equals("ISBNdb") && !c.subjects.isEmpty()) { genre = c.subjects.get(0); genreSource = c.source; break; }
             if (!genre.isEmpty()) add(r, manual, "genre", "Genere", "", genre, genreSource);
         }
         // Plots: in the user's language first, edition before work, then the most complete one.
@@ -272,10 +272,6 @@ public final class MetadataEngine {
                 attempt(out, notes, "SBN", progress, () -> MetadataSources.sbnByIsbn(isbn));
                 attempt(out, notes, "Open Library", progress, () -> MetadataSources.openLibraryByIsbn(isbn));
                 attempt(out, notes, "Internet Archive", progress, () -> MetadataSources.internetArchiveByIsbn(isbn));
-                if (!s.keys.google.isEmpty()) attempt(out, notes, "Google Books", progress, () -> {
-                    List<Candidate> g = MetadataSources.googleBooksQuery("isbn:" + isbn, s.keys.google, "");
-                    if (g.isEmpty()) return null; g.get(0).byIsbn = g.get(0).isbns.contains(isbn) || g.get(0).isbns.isEmpty(); return g.get(0);
-                });
                 // Hardcover is used only by Sync, not as a bibliographic source (user's choice, 2026-11-06).
                 if (!s.keys.isbndb.isEmpty()) attempt(out, notes, "ISBNdb", progress, () -> MetadataSources.isbndbByIsbn(isbn, s.keys.isbndb));
                 return out;
@@ -301,9 +297,6 @@ public final class MetadataEngine {
                         } catch (Exception ignored) { }
                     }
                 } catch (Exception e) { notes.add("Open Library: " + message(e)); }
-                if (!s.keys.google.isEmpty()) try {
-                    out.addAll(MetadataSources.googleBooksQuery("intitle:" + book.title + (author.isEmpty() ? "" : " inauthor:" + author.split(" & ")[0]), s.keys.google, s.language));
-                } catch (Exception e) { notes.add("Google Books: " + message(e)); }
                 return out;
             }
             private List<Candidate> byIsbnOnly(String raw, List<String> notes) {

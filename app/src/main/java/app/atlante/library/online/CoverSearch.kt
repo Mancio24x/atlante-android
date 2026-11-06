@@ -11,9 +11,10 @@ import java.text.Normalizer
  * Cover engine: collects candidates from several free public sources, checks that each one belongs to this
  * book (same ISBN, or same title AND author), downloads them and keeps the sharpest real cover.
  *
- * Sources, most exact first: Open Library by ISBN (10 and 13), Google Books by ISBN, Apple Books by ISBN,
- * the other editions of the same work on Open Library (Italian first), then title + author on Apple Books,
- * Google Books and Open Library. Placeholders ("image not available", 1×1 pixels) are rejected.
+ * Sources, most exact first: Open Library by ISBN (10 and 13), Apple Books by ISBN, the other editions of
+ * the same work on Open Library (Italian first), then title + author on Apple Books and Open Library.
+ * (Google Books was removed: without a personal key its public quota is always exhausted, HTTP 429.)
+ * Placeholders ("image not available", 1×1 pixels) are rejected.
  */
 object CoverSearch {
     data class Candidate(val url: String, val source: String, val exact: Boolean, val italian: Boolean = false)
@@ -56,14 +57,12 @@ object CoverSearch {
         val isbns = isbns(book)
         for (i in isbns) yield(Candidate("https://covers.openlibrary.org/b/isbn/$i-L.jpg?default=false", "Open Library", true))
         for (i in isbns.filter { it.length == 13 }.take(1)) {
-            yieldAll(google(book, "isbn:$i", get, exact = true))
             yieldAll(apple(book, i, get, exact = true))
             yieldAll(openLibraryEditions(book, "q=$i", get, exact = false))
         }
         val author = book.author.takeUnless { it == "Autore sconosciuto" }?.split(" & ", ", ")?.firstOrNull()?.trim().orEmpty()
         if (book.title.isNotBlank() && author.isNotBlank()) {
             yieldAll(apple(book, "${book.title} $author", get, exact = false))
-            yieldAll(google(book, "intitle:${book.title} inauthor:$author", get, exact = false))
             yieldAll(openLibraryEditions(book, "title=" + enc(book.title) + "&author=" + enc(author), get, exact = false))
         }
     }
@@ -93,8 +92,6 @@ object CoverSearch {
 
     fun download(c: Candidate, get: (String, Int) -> ByteArray = fetch): Cover? {
         val bytes = runCatching { get(c.url, 6 * 1024 * 1024) }.getOrNull() ?: return null
-        // Google answers an unknown cover with a PNG "image not available"; its real covers are JPEG.
-        if (c.source.startsWith("Google") && !((bytes.size > 3) && (bytes[0].toInt() and 255) == 0xFF && (bytes[1].toInt() and 255) == 0xD8)) return null
         val (w, h) = dimensions(bytes) ?: return null
         if (w < MIN || h < MIN || bytes.size < 4000) return null      // placeholders and 1×1 images
         return Cover(bytes, c.source, w, h, c.exact, c.italian)
@@ -107,19 +104,6 @@ object CoverSearch {
     }
 
     // ---- sources --------------------------------------------------------------------------------
-
-    private fun google(book: Book, query: String, get: (String, Int) -> ByteArray, exact: Boolean): List<Candidate> = runCatching {
-        val items = JSONObject(String(get("https://www.googleapis.com/books/v1/volumes?maxResults=5&q=" + enc(query), 1024 * 1024))).optJSONArray("items")
-            ?: return@runCatching emptyList()
-        (0 until items.length()).mapNotNull { items.optJSONObject(it) }.mapNotNull { item ->
-            val info = item.optJSONObject("volumeInfo") ?: return@mapNotNull null
-            if (!exact && !OnlineCatalog.googleMatches(book, info)) return@mapNotNull null
-            if (info.optJSONObject("imageLinks") == null) return@mapNotNull null
-            // The content service gives a larger image than the API thumbnail.
-            Candidate("https://books.google.com/books/content?id=${enc(item.optString("id"))}&printsec=frontcover&img=1&zoom=1&fife=w800-h1200", "Google Books", exact,
-                info.optString("language") == "it")
-        }
-    }.getOrDefault(emptyList())
 
     /** Apple Books public search (no key): artwork can be asked at 1000×1000 at most, kept proportional. */
     private fun apple(book: Book, term: String, get: (String, Int) -> ByteArray, exact: Boolean): List<Candidate> = runCatching {

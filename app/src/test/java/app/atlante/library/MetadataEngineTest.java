@@ -56,11 +56,11 @@ public class MetadataEngineTest {
 
     @Test public void italianPlotWinsOverALongerEnglishOne() throws Exception {
         Book b = new Book(); b.title = "1984"; b.author = "George Orwell"; b.isbn = "9788804668237";
-        Candidate google = new Candidate("Google Books"); google.byIsbn = true; google.title = "1984"; google.authors.add("George Orwell"); google.isbns.add("9788804668237"); google.language = "ita";
-        google.descriptions.add(new Candidate.Description("Nel mondo di Oceania il Grande Fratello controlla ogni cosa e la storia viene riscritta ogni giorno dal Ministero della Verità, dove lavora Winston Smith, che sogna di ribellarsi.", "ita", "Google Books"));
+        Candidate google = new Candidate("ISBNdb"); google.byIsbn = true; google.title = "1984"; google.authors.add("George Orwell"); google.isbns.add("9788804668237"); google.language = "ita";
+        google.descriptions.add(new Candidate.Description("Nel mondo di Oceania il Grande Fratello controlla ogni cosa e la storia viene riscritta ogni giorno dal Ministero della Verità, dove lavora Winston Smith, che sogna di ribellarsi.", "ita", "ISBNdb"));
         MetadataEngine.Result r = MetadataEngine.lookup(b, new MetadataEngine.Settings(), fixed(Arrays.asList(sbn(), ol(), google), new ArrayList<>()), null);
         MetadataEngine.Field d = byKey(r).get("description");
-        assertEquals("Google Books", d.source); assertTrue(d.proposed.startsWith("Nel mondo di Oceania")); assertEquals("Trama", d.label);
+        assertEquals("ISBNdb", d.source); assertTrue(d.proposed.startsWith("Nel mondo di Oceania")); assertEquals("Trama", d.label);
     }
 
     @Test public void differentEditionsWithoutIsbnAreAskedNotGuessed() {

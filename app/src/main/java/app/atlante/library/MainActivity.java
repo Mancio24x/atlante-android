@@ -274,7 +274,7 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(button("Salva lingua",false,()->{ prefs.edit().putString("bookLanguage",OnlineCatalog.LANGUAGES[language.position()][0]).putBoolean("onlyLanguage",only.isChecked()).apply(); Toast.makeText(this,"Lingua di ricerca salvata",Toast.LENGTH_SHORT).show(); }));
         panel.addView(text("Lingua dell’interfaccia: italiano.",12,MUTED,false));
         gap(panel,20); panel.addView(sectionLabel("ATLANTE LIBRARY")); gap(panel,8);
-        panel.addView(text("Le ricerche online (SBN, Open Library, Wikidata, Google Books, Apple Books) inviano solo titolo, autore o ISBN. Libri e note personali restano sul dispositivo.",12,MUTED,false));
+        panel.addView(text("Le ricerche online (SBN, Open Library, Wikidata, Apple Books) inviano solo titolo, autore o ISBN. Libri e note personali restano sul dispositivo.",12,MUTED,false));
         panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
     }
 
@@ -709,14 +709,16 @@ public final class MainActivity extends AppCompatActivity {
 
     /** Authors shown on the map, honouring the library filters (but not the text search). */
     private ArrayList<String> mapAuthors() {
-        TreeSet<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-        for (Book b : filtered()) names.add(b.author);
-        return new ArrayList<>(names);
+        // One entry per person ("Asimov, Isaac" = "Isaac Asimov"); co-authors each get their own entry.
+        return new ArrayList<>(app.atlante.library.ui.MapGroups.authorNames(filtered()));
     }
 
     private void mapHeader(LinearLayout header) {
         ArrayList<String> authors = mapAuthors();
-        if (!authors.isEmpty() && !authors.contains(mapAuthor)) mapAuthor = authors.get(0);
+        if (!authors.isEmpty() && !authors.contains(mapAuthor)) {
+            String key = app.atlante.library.ui.MapGroups.authorKey(mapAuthor); mapAuthor = authors.get(0);
+            for (String a : authors) if (app.atlante.library.ui.MapGroups.authorKey(a).equals(key)) { mapAuthor = a; break; }
+        }
         TextInputLayout box = new TextInputLayout(new ContextThemeWrapper(this, R.style.Atlante_Field));
         box.setHint(authors.size() + (authors.size() == 1 ? " autore" : " autori") + (hasFilters() ? " · filtri attivi" : ""));
         box.setStartIconDrawable(R.drawable.ic_search);
@@ -744,15 +746,18 @@ public final class MainActivity extends AppCompatActivity {
 
     private void showMap(ArrayList<Book> list) {
         content.setPadding(0, 0, 0, dp(24));
-        ArrayList<Book> selected = new ArrayList<>();
-        for (Book b : list) if (b.author.equals(mapAuthor) && selected.size() < 250) selected.add(b);
+        ArrayList<Book> selected = app.atlante.library.ui.MapGroups.byAuthor(list, mapAuthor, 250);
+        // Sagas recognized by the saga engine join the map; when they change the map is drawn again.
+        app.atlante.library.saga.SagaIndex.refresh(this, () -> {
+            if (!isFinishing() && !isDestroyed() && reading == null && detailId == null && destination.equals("Biblioteca") && tab.equals("Mappa")) renderContent();
+        });
         if (selected.isEmpty()) {
             content.setPadding(dp(20), dp(24), dp(20), dp(24));
             content.addView(text("Scegli un autore dalla ricerca in alto.", 18, MUTED, false)); return;
         }
         content.addView(button("Riconosci saghe e ordine",false,this::recognizeSeries));
         content.addView(text("I libri senza numero sono in fondo alla saga: assegna l’ordine dalla scheda.",12,MUTED,false));
-        content.addView(new ReadingMap(this, mapAuthor, selected, this::details), new LinearLayout.LayoutParams(-1, -2));
+        content.addView(new ReadingMap(this, mapAuthor, selected, app.atlante.library.saga.SagaIndex.known(), this::details), new LinearLayout.LayoutParams(-1, -2));
         TextView hint = text("Autore → saga → libri nell’ordine di lettura. Tocca un libro per aprire la scheda."
             + (selected.size() == 250 ? " Sono mostrate le prime 250 opere." : ""), 12, MUTED, false);
         hint.setPadding(dp(20), dp(4), dp(20), 0); content.addView(hint);
@@ -1529,7 +1534,7 @@ public final class MainActivity extends AppCompatActivity {
         if (todo.isEmpty()) { if (announce) Toast.makeText(this, "Tutte le copertine sono già presenti e nitide", Toast.LENGTH_SHORT).show(); return; }
         if (fetchingCovers) { if (announce) Toast.makeText(this, "Ricerca delle copertine già in corso", Toast.LENGTH_SHORT).show(); return; }
         fetchingCovers = true;
-        if (announce) Toast.makeText(this, "Cerco " + todo.size() + " copertine su Open Library, Google Books e Apple Books…", Toast.LENGTH_LONG).show();
+        if (announce) Toast.makeText(this, "Cerco " + todo.size() + " copertine su Open Library e Apple Books…", Toast.LENGTH_LONG).show();
         coverWorker.execute(() -> {
             int found = 0, better = 0;
             for (Book b : todo) {
@@ -1600,8 +1605,8 @@ public final class MainActivity extends AppCompatActivity {
         kin.addView(button("Importa My Clippings.txt",false,()->clippingsLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"))),new LinearLayout.LayoutParams(-1,-2));
 
         LinearLayout src=surface(p,"FONTI DEI DATI BIBLIOGRAFICI");
-        src.addView(text("Sempre attive: catalogo SBN, Open Library, Internet Archive. Facoltative con la tua chiave: Google Books (gratuita) e ISBNdb (a pagamento). Hardcover resta solo per Sync.",14,MUTED,false)); gap(src,8);
-        src.addView(text("Google Books: "+(prefs.getString("googleBooksKey","").isEmpty()?"non configurato":"chiave inserita")+" · ISBNdb: "+(prefs.getString("isbndbKey","").isEmpty()?"non configurato":"chiave inserita"),13,INK,false));
+        src.addView(text("Sempre attive: catalogo SBN, Open Library, Internet Archive. Facoltativa con la tua chiave: ISBNdb (a pagamento). Hardcover resta solo per Sync.",14,MUTED,false)); gap(src,8);
+        src.addView(text("ISBNdb: "+(prefs.getString("isbndbKey","").isEmpty()?"non configurato":"chiave inserita"),13,INK,false));
         src.addView(button("Chiavi delle fonti",R.style.Atlante_Button_Text,this::sourceKeys),new LinearLayout.LayoutParams(-1,-2));
         LinearLayout files=surface(p,"FILE E ALTRE APP");
         files.addView(text("Backup di Atlante, elenchi CSV (Goodreads, StoryGraph, Bookshelf), cataloghi HTML e librerie Calibre in ZIP.",14,MUTED,false)); gap(files,8);
@@ -1614,7 +1619,11 @@ public final class MainActivity extends AppCompatActivity {
     private void recognizeSeries() {
         ArrayList<Book> books=new ArrayList<>();ArrayList<SeriesCatalog.Proposal> proposals=new ArrayList<>();ArrayList<String> labels=new ArrayList<>();
         for(Book b:store.snapshot()){
-            SeriesCatalog.Proposal p=SeriesCatalog.suggest(b);
+            SeriesCatalog.Proposal p=null;
+            // A saga recognized by the saga engine (Wikidata / Open Library) for a book without one comes first.
+            app.atlante.library.ui.MapGroups.Known k=app.atlante.library.saga.SagaIndex.known().get(b.id);
+            if(b.series.isEmpty()&&k!=null) p=new SeriesCatalog.Proposal(k.series,app.atlante.library.ui.MapGroups.number(b,k));
+            if(p==null) p=SeriesCatalog.suggest(b);
             if(p!=null&&(!p.series.equals(b.series)||p.number!=b.number)){books.add(b);proposals.add(p);labels.add(b.title+"\n"+(b.series.isEmpty()?"Senza saga":b.series+" · "+number(b.number))+" → "+p.series+" · "+number(p.number));}
         }
         if(books.isEmpty()){Toast.makeText(this,"Nessuna nuova saga riconosciuta. Puoi indicare saga e numero nella scheda del libro.",Toast.LENGTH_LONG).show();return;}
@@ -1819,21 +1828,17 @@ public final class MainActivity extends AppCompatActivity {
     private void sourceKeys() {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         LinearLayout panel=column(); panel.setPadding(dp(24),dp(8),dp(24),dp(4));
-        panel.addView(text("Google Books: crea gratuitamente una chiave API in Google Cloud Console (API «Books API»). Senza chiave il servizio pubblico è quasi sempre esaurito.",13,MUTED,false));
-        panel.addView(button("Istruzioni Google Books ↗",R.style.Atlante_Button_Text,()->openLink("https://developers.google.com/books/docs/v1/using#APIKey")));
-        EditText google=field(panel,"Chiave Google Books",prefs.getString("googleBooksKey",""));
-        google.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
         panel.addView(text("ISBNdb è un servizio a pagamento: usalo solo se hai già un abbonamento.",13,MUTED,false));
         EditText isbndb=field(panel,"Chiave ISBNdb (facoltativa)",prefs.getString("isbndbKey",""));
         isbndb.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
         dialogBuilder().setTitle("Chiavi delle fonti").setView(scrolled(panel)).setNegativeButton("Annulla",null)
-            .setPositiveButton("Salva",(d,w)->{prefs.edit().putString("googleBooksKey",google.getText().toString().trim()).putString("isbndbKey",isbndb.getText().toString().trim()).apply(); showLibrary();}).show();
+            .setPositiveButton("Salva",(d,w)->{prefs.edit().remove("googleBooksKey").putString("isbndbKey",isbndb.getText().toString().trim()).apply(); showLibrary();}).show();
     }
 
     private app.atlante.library.online.MetadataEngine.Settings metadataSettings() {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         app.atlante.library.online.MetadataEngine.Settings s=new app.atlante.library.online.MetadataEngine.Settings();
-        s.keys.google=prefs.getString("googleBooksKey",""); s.keys.isbndb=prefs.getString("isbndbKey","");
+        s.keys.isbndb=prefs.getString("isbndbKey","");
         String lang=prefs.getString("bookLanguage","ita"); s.language=lang.isEmpty()?"ita":lang;
         return s;
     }

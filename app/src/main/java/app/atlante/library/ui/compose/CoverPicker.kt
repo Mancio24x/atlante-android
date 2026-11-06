@@ -52,7 +52,7 @@ fun CoverPicker(book: Book, onChosen: (ByteArray) -> Unit, onClose: () -> Unit) 
                 when {
                     list == null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(); Spacer(Modifier.height(12.dp))
-                        Text("Cerco su Open Library, Google Books e Apple Books…", style = MaterialTheme.typography.bodyMedium)
+                        Text("Cerco su Open Library e Apple Books…", style = MaterialTheme.typography.bodyMedium)
                     }
                     list.isEmpty() -> Text("Nessuna copertina trovata per questo titolo e autore. Controlla ISBN, titolo e autore nella scheda, oppure scegli un’immagine dalla galleria.",
                         Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)

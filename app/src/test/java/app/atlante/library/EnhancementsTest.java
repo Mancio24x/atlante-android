@@ -22,11 +22,6 @@ public class EnhancementsTest {
   assertTrue(SeriesCatalog.compareNumber(0,1)>0);
  }
  @Test public void cleansNumberInMetadata(){Book b=book("Qualunque titolo","Autore");b.series="Una saga 3";assertEquals("Una saga",SeriesCatalog.suggest(b).series);assertEquals(3,SeriesCatalog.suggest(b).number,0);}
- @Test public void googleRejectsSameTitleByDifferentAuthor() throws Exception {
-  Book b=book("Il viaggio","Autore Uno");
-  JSONObject info=new JSONObject().put("title","Il viaggio").put("authors",new JSONArray().put("Autore Due"));
-  assertFalse(OnlineCatalog.googleMatches(b,info));info.put("authors",new JSONArray().put("Autore Uno"));assertTrue(OnlineCatalog.googleMatches(b,info));
- }
  @Test public void koreaderKeepsPercentAndDoesNotFinishRounded100() throws Exception {
   Book b=book("Libro","Autore");b.totalPages=300;
   KoreaderSync.apply(new KoreaderSync.Progress(b,.5));assertEquals(150,b.currentPage);assertEquals(50,b.percent);assertEquals(Book.READING,b.status);
