@@ -63,4 +63,17 @@ class DiscoverTest {
         discover.picks(Discover.GENRES.first { it.label == "Fantasy" }, 0)
         assertTrue(java.net.URLDecoder.decode(fetched.first(), "UTF-8").contains("subject:fantasy"))
     }
+
+    /** Real subjects (Open Library, Nov 2026): a work is in a genre only when the genre is its own. */
+    @Test fun genresFollowTheBookNotItsAdaptations() {
+        val picks = Discover.parse(res("discover-subjects.json")).associateBy { it.title }
+        fun g(label: String) = Discover.GENRES.first { it.label == label }
+        fun inGenre(label: String) = picks.values.filter { Discover.fits(g(label), it.subjects) }.map { it.title }.toSet()
+        val horror = inGenre("Horror"); val comics = inGenre("Fumetti"); val fantasy = inGenre("Fantasy")
+        assertTrue(horror.toString(), "It" in horror && "Dracula" in horror)
+        assertTrue(horror.toString(), picks.keys.filter { it.startsWith("Harry Potter") || it == "The Hobbit" }.none { it in horror })
+        assertTrue(comics.toString(), picks.keys.any { it.startsWith("Maus") && it in comics })
+        assertTrue(comics.toString(), "Wuthering Heights" !in comics && "The Hobbit" !in comics)
+        assertTrue(fantasy.toString(), "The Hobbit" in fantasy && "Wuthering Heights" !in fantasy)
+    }
 }

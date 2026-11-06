@@ -96,7 +96,11 @@ class Suggestions(
         val owned = TitleIndex(library()) { it.title }
         val surnames = BookMatcher.surnames(book.author)
         val perAuthor = HashMap<String, Int>()
-        cachedSearch("subject", "$subject:$from-$to", "q=" + URLEncoder.encode("subject:$subject first_publish_year:[$from TO $to]", "UTF-8"))
+        // Only works whose own genre it is (Discover.fits): not Wuthering Heights among comics because of an adaptation.
+        val main = Genres.normalize(book.genre)
+        val genre = Discover.GENRES.firstOrNull { Genres.normalize(it.label) == main }
+        cachedSearch("subject2", "$subject:$from-$to", "q=" + URLEncoder.encode("subject:$subject first_publish_year:[$from TO $to]", "UTF-8"))
+            .filter { w -> genre == null || w.subjects.isEmpty() || Discover.fits(genre, w.subjects) }
             .filterNot { w -> w.authors.any { a -> BookMatcher.surnames(a).any { it in surnames } } }
             .filterNot { w -> bundle(w.title) || owned.contains(w.title) || listed(w, exclude) }
             .filter { w -> (perAuthor.merge(w.authors.firstOrNull() ?: "", 1, Int::plus) ?: 0) <= 2 }
@@ -111,11 +115,11 @@ class Suggestions(
         return OpenLibraryWorks.coverUrl(if (id > 0) id else 0)
     }
 
-    data class Found(val key: String, val title: String, val authors: List<String>, val year: String?, val coverId: Long)
+    data class Found(val key: String, val title: String, val authors: List<String>, val year: String?, val coverId: Long, val subjects: List<String> = emptyList())
 
     private suspend fun cachedSearch(kind: String, value: String, filter: String): List<Found> {
         val json = cached("$kind:${value.lowercase()}", kind) {
-            fetch("https://openlibrary.org/search.json?$filter&sort=editions&lang=it&limit=60&fields=key,title,author_name,cover_i,first_publish_year,editions,editions.title,editions.language")
+            fetch("https://openlibrary.org/search.json?$filter&sort=editions&lang=it&limit=60&fields=key,title,author_name,cover_i,first_publish_year,subject_key,editions,editions.title,editions.language")
         } ?: return emptyList()
         return parse(json)
     }
@@ -165,7 +169,8 @@ class Suggestions(
                 val title = italian?.substringBefore(" : ")?.replace(Regex("\\s*\\([^)]*\\)\\s*$"), "")?.trim()?.takeIf { it.length > 1 } ?: d.optString("title")
                 if (title.isBlank() || !seen.add(BookMatcher.clean(title))) return@mapNotNull null
                 val authors = d.optJSONArray("author_name")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
-                Found(key, title, authors, d.optInt("first_publish_year").takeIf { it > 0 }?.toString(), d.optLong("cover_i"))
+                val subjects = d.optJSONArray("subject_key")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+                Found(key, title, authors, d.optInt("first_publish_year").takeIf { it > 0 }?.toString(), d.optLong("cover_i"), subjects)
             }
         }
     }

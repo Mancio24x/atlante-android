@@ -22,10 +22,15 @@ class Discover(
     private val fetch: (String) -> String = { String(OnlineCatalog.request(it, 4 * 1024 * 1024), Charsets.UTF_8) },
     private val now: () -> Long = System::currentTimeMillis,
 ) {
-    /** Genre shown on the chip → Open Library subject; classics have no period limit. */
-    data class Genre(val label: String, val subject: String, val since: Int? = 1980)
+    /**
+     * Genre shown on the chip → Open Library subject; classics have no period limit. [words] recognize the genre
+     * among a work's subjects (see [fits]); [query] replaces the plain subject search when one subject is too narrow.
+     */
+    data class Genre(val label: String, val subject: String, val since: Int? = 1980, val words: List<String> = emptyList(), val query: String? = null,
+                     val minShare: Double = 0.0)
 
-    data class Pick(val workKey: String, val title: String, val author: String, val year: String?, val coverUrl: String?, val italian: Boolean) {
+    data class Pick(val workKey: String, val title: String, val author: String, val year: String?, val coverUrl: String?, val italian: Boolean,
+                    val subjects: List<String> = emptyList()) {
         val query get() = "$title $author".trim()
     }
 
@@ -70,17 +75,18 @@ class Discover(
         val year = Year.now().value
         val q = buildString {
             append("language:ita")
-            genre?.let { append(" subject:").append(it.subject) }
+            genre?.let { append(" ").append(it.query ?: "subject:${it.subject}") }
             val since = if (genre == null) 1990 else genre.since
             since?.let { append(" first_publish_year:[").append(it).append(" TO ").append(year).append("]") }
         }
         // lang=it makes Open Library put the best Italian edition first in "editions": its title and cover come
         // with the same answer, with no further request per book.
-        val json = cached("discover2:${genre?.subject ?: "popolari"}") {
-            fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode(q, "UTF-8") + "&sort=readinglog&limit=80&lang=it"
-                + "&fields=key,title,author_name,cover_i,first_publish_year,editions,editions.title,editions.language,editions.cover_i")
+        // Subjects come too: a work is shown under a genre only when that genre is really its own (see fits).
+        val json = cached("discover3:${genre?.subject ?: "popolari"}") {
+            fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode(q, "UTF-8") + "&sort=readinglog&limit=${if (genre == null) 80 else 200}&lang=it"
+                + "&fields=key,title,author_name,cover_i,first_publish_year,subject_key,editions,editions.title,editions.language,editions.cover_i")
         } ?: return emptyList()
-        return parse(json)
+        return parse(json).filter { genre == null || fits(genre, it.subjects) }
     }
 
     private suspend fun cached(key: String, load: () -> String): String? {
@@ -99,10 +105,41 @@ class Discover(
         }
 
         val GENRES = listOf(
-            Genre("Fantasy", "fantasy"), Genre("Fantascienza", "science_fiction"), Genre("Gialli", "mystery"), Genre("Thriller", "thrillers"),
-            Genre("Horror", "horror"), Genre("Romanzi storici", "historical_fiction"), Genre("Rosa", "romance"), Genre("Classici", "classic_literature", null),
-            Genre("Ragazzi", "young_adult_fiction"), Genre("Fumetti", "comics_&_graphic_novels", null), Genre("Storia", "history", null), Genre("Filosofia", "philosophy", null),
+            Genre("Fantasy", "fantasy", words = listOf("fantasy", "magic", "wizard", "dragon")),
+            Genre("Fantascienza", "science_fiction", words = listOf("science_fiction", "sci-fi", "dystopi", "space_opera", "cyberpunk")),
+            Genre("Gialli", "mystery", words = listOf("mystery", "detective", "crime", "murder", "giall", "polizies")),
+            Genre("Thriller", "thrillers", words = listOf("thriller", "suspense", "spy")),
+            Genre("Horror", "horror", words = listOf("horror", "ghost", "vampire", "zombie", "supernatural", "gothic")),
+            Genre("Romanzi storici", "historical_fiction", words = listOf("historical_fiction", "history_fiction", "romanzo_storico")),
+            Genre("Rosa", "romance", words = listOf("romance", "love_stor", "romantic")),
+            Genre("Classici", "classic_literature", null),
+            Genre("Ragazzi", "young_adult_fiction", words = listOf("young_adult", "juvenile", "children", "teen"), minShare = 0.1),
+            // A classic with a comic adaptation among its editions carries comic subjects too: comics need many of them.
+            Genre("Fumetti", "comics_&_graphic_novels", null, listOf("comic", "graphic_novel", "manga", "fumett"),
+                "(subject:comics OR subject:manga OR subject:graphic_novels OR subject:fumetti)", minShare = 0.15),
+            Genre("Storia", "history", null, listOf("history", "storia", "historical_events")),
+            Genre("Filosofia", "philosophy", null, listOf("philosophy", "filosofia", "ethics")),
         )
+
+        /** Subjects about a book rather than of the book: adaptations, study guides, criticism. */
+        private val NOT_THE_BOOK = listOf("adaptation", "adapted", "retelling", "adattament", "study_guide", "criticism", "interpretation")
+        private val NEAR = mapOf("fantasy" to "science_fiction", "science_fiction" to "fantasy", "thrillers" to "mystery", "mystery" to "thrillers")
+
+        /**
+         * Open Library gives a work the subjects of all its editions: "Wuthering Heights" is a comic because a comic
+         * adaptation exists, "The Hobbit" is horror and science fiction too. A work belongs to a genre only when that
+         * genre has at least two subjects and as many (three quarters) as any other genre it has, or a real share of
+         * all its subjects. Close genres (fantasy and science fiction, mystery and thriller) do not compete.
+         */
+        fun fits(genre: Genre, subjects: List<String>): Boolean {
+            if (genre.words.isEmpty()) return true
+            val own = subjects.map { it.lowercase() }.filter { s -> NOT_THE_BOOK.none { s.contains(it) } }
+            fun score(g: Genre) = own.count { s -> g.words.any { s.contains(it) } && (g.subject != "history" || !s.contains("fiction")) }
+            val mine = score(genre)
+            if (mine < 2 || mine < genre.minShare * own.size) return false
+            val other = GENRES.filter { it !== genre && it.words.isNotEmpty() && it.subject != "young_adult_fiction" && NEAR[genre.subject] != it.subject }.maxOfOrNull { score(it) } ?: 0
+            return if (genre.minShare > 0) mine >= other else mine >= other * 0.75 || mine >= 0.25 * own.size
+        }
 
         /** Works with a cover only: the grid is made of covers. */
         fun parse(json: String): List<Pick> {
@@ -110,8 +147,9 @@ class Discover(
             return (0 until docs.length()).mapNotNull { docs.optJSONObject(it) }.mapNotNull { d ->
                 val cover = d.optLong("cover_i").takeIf { it > 0 } ?: return@mapNotNull null
                 val author = d.optJSONArray("author_name")?.optString(0)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val subjects = d.optJSONArray("subject_key")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
                 val pick = Pick(d.optString("key").substringAfterLast('/'), d.optString("title"), author, d.optInt("first_publish_year").takeIf { it > 0 }?.toString(),
-                    OpenLibraryWorks.coverUrl(cover), false)
+                    OpenLibraryWorks.coverUrl(cover), false, subjects)
                 italianEdition(d)?.let { e ->
                     val title = e.optString("title").substringBefore(" : ").trim()
                     val italianCover = e.optLong("cover_i").takeIf { it > 0 }
