@@ -164,7 +164,11 @@ public final class MainActivity extends Activity {
         return new AlertDialog.Builder(context) {
             @Override public AlertDialog create() {
                 AlertDialog dialog = super.create();
-                if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(background(WHITE, LINE));
+                if (dialog.getWindow() != null) {
+                    dialog.getWindow().setBackgroundDrawable(background(WHITE, LINE));
+                    dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                        | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+                }
                 return dialog;
             }
         };

@@ -64,7 +64,10 @@ tap('＋ Aggiungi libro');tap('Annulla')
 assert len(catalog()) == count, 'Canceled manual entry was saved'
 tap('＋ Aggiungi libro');tap('Titolo',editable=True)
 adb('shell','input','text','AtlanteManualeProva')
-shot('13a-manual-form-filled');tap('Salva')
+shot('13a-manual-form-filled')
+# Android's keyboard may overlay floating-dialog controls even when they are in the UI tree.
+adb('shell','input','keyevent','4');time.sleep(.4)
+shot('13b-manual-ready-to-save');tap('Salva')
 for _ in range(20):
     records=catalog()
     if len(records)==count+1: break
