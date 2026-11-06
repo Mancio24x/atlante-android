@@ -25,6 +25,8 @@ if [[ -z "$sdk_path" || ! -f "$sdk_path/platforms/android-35/android.jar" ]]; th
 fi
 if [[ "$variant" == release ]]; then
     gradle --no-daemon :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease
+    # Room migration tests need the exported schemas, packaged only in debug assets.
+    gradle --no-daemon :app:testDebugUnitTest --tests 'app.atlante.library.SagaDatabaseTest'
 else
     gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 fi

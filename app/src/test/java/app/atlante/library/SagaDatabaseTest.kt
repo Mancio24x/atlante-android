@@ -64,6 +64,9 @@ class SagaDatabaseTest {
 
     /** The exported schema of version 1 opens and validates: the starting point of every future migration test. */
     @Test fun exportedSchemaVersionOneIsValid() {
+        // Schemas are packaged only in debug assets (kept out of the APK); build.sh runs this test on debug too.
+        val packaged = runCatching { InstrumentationRegistry.getInstrumentation().context.assets.open("${AtlanteDatabase::class.java.name}/1.json").close() }.isSuccess
+        org.junit.Assume.assumeTrue(packaged)
         migrations.createDatabase("migration-test", 1).close()
         migrations.runMigrationsAndValidate("migration-test", 1, true, *AtlanteDatabase.MIGRATIONS).close()
     }
