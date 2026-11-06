@@ -94,6 +94,16 @@ restano deselezionati. Le copertine dell’edizione si scelgono tra quelle trova
 e segnaposto vengono scartati) e la precedente viene conservata. Ogni dato accettato
 ricorda la sua fonte, visibile in *Dettagli della scheda*.
 
+## Scopri
+
+Scopri (in Compose) mostra una **griglia di 6 copertine**: senza filtro sono i libri più letti, cioè quelli che più lettori di Open Library vogliono leggere, scelti fra quelli che hanno un'edizione italiana. Con un genere scelto (Fantasy, Gialli, Fantascienza, Classici…) sono i 6 più letti di quel genere.
+
+- Un solo libro per autore, niente cofanetti e niente libri che hai già.
+- Titolo e copertina vengono dall'edizione italiana quando esiste davvero.
+- *Altri 6* mostra il gruppo successivo; lo stesso filtro dà sempre lo stesso elenco. I dati restano in cache per 7 giorni.
+- Toccando una copertina parte subito la ricerca online di quel libro: lo aggiungi tu, dopo l'anteprima.
+- *Cerca un libro* apre la ricerca per titolo, autore o ISBN, vuota.
+
 ## Saghe: opere, edizioni e riconoscimento (in sviluppo)
 
 Le saghe vengono ricostruite da **Wikidata** (serie P179, numero P1545, autore P50, titolo P1476, precedente/successivo P155/P156) e **Open Library** (opere ed edizioni), solo con le API pubbliche e gratuite.

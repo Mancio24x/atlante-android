@@ -44,7 +44,8 @@ def tap(label, scroll=False, editable=False, exact=False):
                 if len(bounds)==4 and bounds[3]>bounds[1] and bounds[2]>bounds[0]:
                     screen=list(map(int,re.findall(r'\d+',tree.find('node').get('bounds','0,0,1080,1920'))))
                     # A control at the bottom edge may sit under the system bar: scroll first, then tap.
-                    if scroll and (bounds[1]+bounds[3])//2 > screen[3]*0.8: break
+                    # (On the last attempt tap anyway: the page may not scroll any further.)
+                    if scroll and attempt < 15 and (bounds[1]+bounds[3])//2 > screen[3]*0.8: break
                     adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2));time.sleep(.4);return
         if scroll: adb('shell','input','swipe','540','1250','540','550','350')
         time.sleep(.3)

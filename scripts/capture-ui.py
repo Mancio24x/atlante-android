@@ -44,7 +44,7 @@ def tap(label, scroll=False, editable=False, exact=False):
                 if len(bounds)==4 and bounds[3]>bounds[1] and bounds[2]>bounds[0]:
                     screen=list(map(int,re.findall(r'\d+',tree.find('node').get('bounds','0,0,1080,1920'))))
                     # A control at the bottom edge may sit under the system bar: scroll first, then tap.
-                    if scroll and (bounds[1]+bounds[3])//2 > screen[3]*0.8: break
+                    if scroll and attempt < 6 and (bounds[1]+bounds[3])//2 > screen[3]*0.8: break
                     adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2));time.sleep(.4);return
         if scroll: adb('shell','input','swipe','540','1250','540','550','350')
         time.sleep(.3)
@@ -144,7 +144,21 @@ shot('15-manual-and-list-restored')
 # Bottom navigation: every destination draws and Home is restored.
 tap('Home',exact=True);shot('16-home')
 tap('Statistiche',exact=True);shot('17-statistics')
-tap('Scopri',exact=True);shot('18-discover')
+tap('Scopri',exact=True)
+# Scopri: a grid of six covers (most read), then six of a chosen genre; the search opens empty.
+for _ in range(40):
+    if sum(1 for n in dump().iter('node') if ' di ' in n.get('content-desc',''))>=6: break
+    time.sleep(1.5)
+shot('18-discover')
+assert sum(1 for n in dump().iter('node') if ' di ' in n.get('content-desc',''))>=6, 'Discover grid has fewer than six books'
+tap('Fantasy',exact=True)
+for _ in range(40):
+    if any(n.get('text','')=='Consigliati · Fantasy' for n in dump().iter('node')) and sum(1 for n in dump().iter('node') if ' di ' in n.get('content-desc',''))>=6: break
+    time.sleep(1.5)
+shot('18a-discover-fantasy')
+tap('Cerca un libro per titolo, autore o ISBN')
+assert not any(n.get('text','') in ('Fantasy','Fantascienza') and n.get('class','').endswith('EditText') for n in dump().iter('node')), 'Search opened with a genre written in it'
+shot('18b-discover-search');tap('Chiudi',exact=True)
 tap('Sync',exact=True);shot('19-sync');tap('Collega Calibre',True);shot('19a-calibre-settings');tap('Annulla',exact=True)
 tap('Home',exact=True);shot('20-home-restored')
 print('Navigation, themes, reading states, progress wheels, chapters, manual entry, list view, bottom navigation and Sync completed.')

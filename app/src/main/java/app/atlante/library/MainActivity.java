@@ -749,7 +749,7 @@ public final class MainActivity extends AppCompatActivity {
     /** Saga section of the book page: opens owned books, searches the others, writes a saga the user picked. */
     private final app.atlante.library.ui.compose.SagaHost sagaHost = new app.atlante.library.ui.compose.SagaHost() {
         @Override public void openBook(String id) { Book x = store.find(id); if (x != null) details(x); }
-        @Override public void searchOnline(String q) { lastOnlineQuery = q; onlineSearch(); }
+        @Override public void searchOnline(String q) { searchFor(q); }
         @Override public void applySeries(String id, String name, String ordinal, boolean chosen) {
             Book x = store.find(id); if (x == null || (!chosen && !x.series.isEmpty())) return;
             double n = 0; try { if (ordinal != null) n = Double.parseDouble(ordinal.replace(',', '.')); } catch (NumberFormatException ignored) { }
@@ -1172,11 +1172,19 @@ public final class MainActivity extends AppCompatActivity {
         return b.currentPage > 0 ? "Pagina " + b.currentPage : "Posizione da impostare";
     }
 
+    /** Opens the online search with this text and runs it at once; an empty text opens an empty search. */
+    private void searchFor(String query) {
+        lastOnlineQuery = query == null ? "" : query.trim(); autoSearch = !lastOnlineQuery.isEmpty(); clearSearch = lastOnlineQuery.isEmpty();
+        onlineSearch();
+    }
+    private boolean autoSearch, clearSearch;
+
     private void onlineSearch() {
         LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
         panel.addView(text("Cerca per titolo, autore o ISBN nel catalogo delle biblioteche italiane (SBN, per l’italiano) e su Open Library. Si aggiunge una scheda personale, anche se non possiedi il file. La ricerca invia al servizio solo il testo inserito.", 14, MUTED, false));
         gap(panel, 8);
-        EditText input = field(panel, "Titolo, autore o ISBN", lastOnlineQuery.isEmpty() ? getPreferences(MODE_PRIVATE).getString("onlineQuery", "") : lastOnlineQuery);
+        EditText input = field(panel, "Titolo, autore o ISBN", clearSearch ? "" : lastOnlineQuery.isEmpty() ? getPreferences(MODE_PRIVATE).getString("onlineQuery", "") : lastOnlineQuery);
+        boolean runNow = autoSearch; autoSearch = false; clearSearch = false;
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         // Preferred language: its editions come first, with their own title and cover. Remembered.
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
@@ -1250,6 +1258,7 @@ public final class MainActivity extends AppCompatActivity {
         input.setOnEditorActionListener((view,action,event) -> {
             if (action == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) { if (search.isEnabled()) search.performClick(); return true; } return false;
         }); dialog.show();
+        if (runNow) search.performClick();
     }
 
     /** Outlined Material text field with a floating label. */
@@ -2165,11 +2174,15 @@ public final class MainActivity extends AppCompatActivity {
             composePage(app.atlante.library.ui.compose.StatisticsView.create(this,palette,store.snapshot(),g.getYearOn()?g.getYearBooks():0,g.getMonthOn()?g.getMonthBooks():0,motion(),this::goals,g));
             return;
         }
+        if(destination.equals("Scopri")) {
+            composePage(app.atlante.library.ui.compose.DiscoverView.create(this,palette,sagaHost,this::openLink,this::collections));
+            return;
+        }
         if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("La tua biblioteca, come piace a te.","Aspetto, lettura e gestione dei dati."); settingsPage(p); updateBack(); return; }
         boolean sync=destination.equals("Sync");
         LinearLayout panel=companionPage(sync?"Invia e ricevi.":destination.equals("Statistiche")?"Ogni pagina conta.":destination.equals("Scopri")?"La prossima storia.":"Il tempo per un libro.",
             sync?"Stato, pagina e capitolo condivisi con i tuoi servizi di lettura.":destination.equals("Statistiche")?"Le tue letture, un giorno alla volta.":destination.equals("Scopri")?"Nuove idee da esplorare. La scelta è tua.":"Un piccolo spazio per le tue grandi storie.");
-        if(sync) syncPage(panel); else if(destination.equals("Scopri")) discover(panel); else home(panel);
+        if(sync) syncPage(panel); else home(panel);
         addBottomNav(); updateBack(); animateIn(panel);
         int y=pagePositions.getOrDefault(destination,0); companionScroll.post(() -> { if(companionScroll!=null) companionScroll.scrollTo(0,y); });
     }
@@ -2250,18 +2263,6 @@ public final class MainActivity extends AppCompatActivity {
     /** Goals are edited in the settings ("Obiettivi di lettura"); this opens them. */
     private void goals() { settings(); }
 
-    private void discover(LinearLayout p) {
-        LinearLayout search=surface(p,"CERCA UNA STORIA"); search.addView(text("Titolo, autore o ISBN",24,INK,true)); gap(search,8); search.addView(text("Cerca su Open Library e, per l’italiano, sul catalogo SBN. Controlla i metadati prima di aggiungere.",14,MUTED,false)); search.addView(button("Cerca libri online",true,this::onlineSearch));
-        headline(p,"Esplora per genere");
-        ChipGroup genres=new ChipGroup(this); genres.setChipSpacingHorizontal(dp(8)); p.addView(genres,new LinearLayout.LayoutParams(-1,-2));
-        for(String genre:new String[]{"Fantasy","Fantascienza","Classici","Gialli","Thriller","Romanzi storici","Storia","Filosofia","Poesia","Fumetti","Saggi","Ragazzi"}) {
-            Chip chip=new Chip(this); chip.setText(genre); chip.setCheckable(false); chip.setOnClickListener(v->{lastOnlineQuery=genre;onlineSearch();}); genres.addView(chip); }
-        headline(p,"Classifiche italiane");
-        LinearLayout ranks=surface(p,"FONTI DI VENDITA"); ranks.addView(text("Apri le classifiche aggiornate delle librerie. Fonte e data sono quelle del sito: Atlante non inventa posizioni né le mescola ai suggerimenti personali.",14,MUTED,false));
-        ranks.addView(button("Classifica IBS ↗",false,()->openLink("https://www.ibs.it/classifica/libri")));
-        ranks.addView(button("Classifica laFeltrinelli ↗",false,()->openLink("https://www.lafeltrinelli.it/classifica/libri")));
-        headline(p,"Le tue collezioni"); p.addView(button("Crea o apri una collezione",false,this::collections));
-    }
     private void openLink(String url) { try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url))); } catch(ActivityNotFoundException e) { error(new IOException("Nessuna app disponibile per aprire il collegamento.")); } }
     private void collections() {
         TreeSet<String> names=new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
@@ -2385,7 +2386,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout p=editorPage(timed?"Concludi la sessione":"Dove sei arrivato?",b);
         p.addView(text(b.title,24,INK,true)); p.addView(text(progressLabel(b),14,MUTED,false)); gap(p,16);
         // Horizontal wheels (Compose): Pagine, Percentuale, Pagine lette; synced when the total is known.
-        app.atlante.library.ui.compose.ProgressWheelState wheels=new app.atlante.library.ui.compose.ProgressWheelState(b.currentPage,b.totalPages,progress(b),b.currentPage,prefs.getInt("progressMode",0));
+        app.atlante.library.ui.compose.ProgressWheelState wheels=new app.atlante.library.ui.compose.ProgressWheelState(b.currentPage,b.totalPages,progress(b),b.currentPage,prefs.getInt("progressMode",0),(int)Math.min(1440,seconds/60),timed);
         p.addView(app.atlante.library.ui.compose.ProgressWheelsView.create(this,palette,wheels,prefs),new LinearLayout.LayoutParams(-1,-2)); gap(p,16);
 
         // Chapter reached: a wheel with the book's chapter titles (shared with Calibre).
@@ -2399,9 +2400,6 @@ public final class MainActivity extends AppCompatActivity {
             LinearLayout chapterRow=row(); chapterRow.setGravity(Gravity.CENTER); chapterRow.addView(chapter,new LinearLayout.LayoutParams(-1,-2)); p.addView(chapterRow,new LinearLayout.LayoutParams(-1,-2)); gap(p,16);
         }
         final NumberPicker chapterWheel=chapter;
-        p.addView(sectionLabel(timed?"TEMPO DELLA SESSIONE":"MINUTI DI LETTURA (FACOLTATIVO)"));
-        NumberPicker minutes=wheel(0,1440,(int)Math.min(1440,seconds/60)); minutes.setFormatter(v->v+" min");
-        LinearLayout minuteRow=row(); minuteRow.setGravity(Gravity.CENTER); minuteRow.addView(minutes); p.addView(minuteRow,new LinearLayout.LayoutParams(-1,-2)); gap(p,16);
 
         p.addView(button(timed?"Salva la sessione":"Salva",true,()->{
             try {
@@ -2416,7 +2414,7 @@ public final class MainActivity extends AppCompatActivity {
                 boolean moved=c.currentPage>0||c.percent>0;
                 if(done) c.status=Book.READ; else if(moved&&!c.status.equals(Book.READ)) c.status=Book.READING;
                 Book.applyStatusEffects(c,java.time.LocalDate.now().toString());
-                long duration=timed&&minutes.getValue()==seconds/60?seconds:minutes.getValue()*60L;
+                long duration=timed&&wheels.getMinutes()==seconds/60?seconds:wheels.getMinutes()*60L;
                 if(chapterWheel!=null) { if(chapterWheel.getValue()==0) c.journal.remove("chapter"); else ReadingJournal.put(c,"chapter",b.chapters.get(chapterWheel.getValue()-1).title); }
                 if(timed) ReadingJournal.sessionOnce(c,timerFrom,c.currentPage,duration,java.time.LocalDate.now(),b.id+":"+timerWall);
                 else if(duration>0||c.currentPage!=b.currentPage) ReadingJournal.session(c,b.currentPage,c.currentPage,duration,java.time.LocalDate.now());

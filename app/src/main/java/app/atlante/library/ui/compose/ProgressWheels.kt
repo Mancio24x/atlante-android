@@ -45,7 +45,9 @@ object ProgressMath {
 }
 
 /** Values chosen on the wheels, read by the book editor when you confirm. 0 = Pagina, 1 = %, 2 = Pagine lette. */
-class ProgressWheelState(page: Int, total: Int, percent: Int, val startPage: Int, mode: Int) {
+class ProgressWheelState @JvmOverloads constructor(page: Int, total: Int, percent: Int, val startPage: Int, mode: Int, minutes: Int = 0, val timed: Boolean = false) {
+    /** Reading time of this update, in minutes (from the timer, or optional). */
+    var minutes by mutableIntStateOf(minutes.coerceIn(0, 1440))
     var mode by mutableIntStateOf(mode.coerceIn(0, 2))
     var total by mutableIntStateOf(total.coerceAtLeast(0))
     var page by mutableIntStateOf(ProgressMath.clampPage(page, total))
@@ -92,6 +94,11 @@ fun ProgressWheels(state: ProgressWheelState, prefs: SharedPreferences) {
                 HorizontalWheel(state.read, 0..state.maxRead, haptics, "Pagine lette", { "+$it" }) { state.read = it.coerceIn(0, state.maxRead) }
             }
         }
+        Spacer(Modifier.height(12.dp))
+        Text(if (state.timed) "Tempo della sessione" else "Minuti di lettura (facoltativo)", Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        BigValue("${state.minutes} min", if (state.timed) "dal timer, puoi correggerlo" else "quanto hai letto") { typing = "minutes" }
+        HorizontalWheel(state.minutes, 0..1440, haptics, "Minuti di lettura", { "$it" }) { state.minutes = it.coerceIn(0, 1440) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Vibrazione", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Switch(haptics, { haptics = it; prefs.edit().putBoolean("wheelHaptics", it).apply() }, Modifier.scale(0.8f))
@@ -104,6 +111,7 @@ fun ProgressWheels(state: ProgressWheelState, prefs: SharedPreferences) {
             "page" -> Triple("Pagina", ProgressMath.maxPage(state.total), state.page)
             "percent" -> Triple("Percentuale", 100, state.percent)
             "total" -> Triple("Totale pagine (0 se non lo sai)", ProgressMath.UNKNOWN_MAX_PAGES, state.total)
+            "minutes" -> Triple("Minuti di lettura", 1440, state.minutes)
             else -> Triple("Pagine lette", state.maxRead, state.read)
         }
         // The current number is selected and focused: typing replaces it.
@@ -116,7 +124,7 @@ fun ProgressWheels(state: ProgressWheelState, prefs: SharedPreferences) {
             text = { OutlinedTextField(field_, { v -> field_ = v.copy(text = v.text.filter(Char::isDigit).take(5)) }, Modifier.focusRequester(focus), singleLine = true, isError = n == null || n > max,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), supportingText = { Text("Da 0 a $max") }) },
             confirmButton = { TextButton(enabled = n != null && n <= max, onClick = {
-                when (field) { "page" -> state.choosePage(n!!); "percent" -> state.choosePercent(n!!); "total" -> state.chooseTotal(n!!); else -> state.read = n!! }
+                when (field) { "page" -> state.choosePage(n!!); "percent" -> state.choosePercent(n!!); "total" -> state.chooseTotal(n!!); "minutes" -> state.minutes = n!!; else -> state.read = n!! }
                 typing = null }) { Text("OK") } },
             dismissButton = { TextButton(onClick = { typing = null }) { Text("Annulla") } })
     }
