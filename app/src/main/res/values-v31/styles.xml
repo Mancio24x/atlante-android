@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AtlanteTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="AtlanteTheme" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowSplashScreenBackground">#000000</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_atlante</item>
         <item name="android:windowSplashScreenIconBackgroundColor">#000000</item>
-        <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#C45E35</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">#F2F0E7</item>
         <item name="android:navigationBarColor">#F2F0E7</item>

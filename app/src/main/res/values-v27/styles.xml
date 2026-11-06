@@ -1,21 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AtlanteTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#C45E35</item>
+    <style name="AtlanteTheme" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">#F2F0E7</item>
         <item name="android:navigationBarColor">#F2F0E7</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowBackground">#000000</item>
-    </style>
-    <style name="AtlanteDialogLight" parent="android:style/Theme.Material.Light.Dialog.Alert">
-        <item name="android:windowBackground">@drawable/dialog_surface</item>
-        <item name="android:colorAccent">#326359</item>
-    </style>
-    <style name="AtlanteDialogDark" parent="android:style/Theme.Material.Dialog.Alert">
-        <item name="android:windowBackground">@drawable/dialog_surface</item>
-        <item name="android:colorAccent">#D3B6FF</item>
     </style>
 </resources>

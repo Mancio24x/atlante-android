@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 themes: one per palette of ThemePalette.java (keep the two in sync). -->
+<resources>
+    <style name="Atlante.Palette.atlante" parent="Atlante.Base">
+        <item name="android:colorBackground">#F4F1EA</item>
+        <item name="colorPrimary">#326359</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#E2E4DB</item>
+        <item name="colorOnPrimaryContainer">#203637</item>
+        <item name="colorSecondary">#326359</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#E2E4DB</item>
+        <item name="colorOnSecondaryContainer">#203637</item>
+        <item name="colorTertiary">#9B482E</item>
+        <item name="colorSurface">#F4F1EA</item>
+        <item name="colorOnSurface">#203637</item>
+        <item name="colorOnSurfaceVariant">#626C69</item>
+        <item name="colorOutline">#626C69</item>
+        <item name="colorOutlineVariant">#E2E4DB</item>
+        <item name="colorSurfaceContainerLowest">#FFFDFA</item>
+        <item name="colorSurfaceContainerLow">#FFFDFA</item>
+        <item name="colorSurfaceContainer">#FFFDFA</item>
+        <item name="colorSurfaceContainerHigh">#FFFDFA</item>
+        <item name="colorSurfaceContainerHighest">#E2E4DB</item>
+    </style>
+    <style name="Atlante.Palette.rose" parent="Atlante.Base">
+        <item name="android:colorBackground">#FFF3F5</item>
+        <item name="colorPrimary">#99496C</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#F0D9E2</item>
+        <item name="colorOnPrimaryContainer">#4C2939</item>
+        <item name="colorSecondary">#99496C</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#F0D9E2</item>
+        <item name="colorOnSecondaryContainer">#4C2939</item>
+        <item name="colorTertiary">#99496C</item>
+        <item name="colorSurface">#FFF3F5</item>
+        <item name="colorOnSurface">#4C2939</item>
+        <item name="colorOnSurfaceVariant">#775662</item>
+        <item name="colorOutline">#775662</item>
+        <item name="colorOutlineVariant">#F0D9E2</item>
+        <item name="colorSurfaceContainerLowest">#FFFCFD</item>
+        <item name="colorSurfaceContainerLow">#FFFCFD</item>
+        <item name="colorSurfaceContainer">#FFFCFD</item>
+        <item name="colorSurfaceContainerHigh">#FFFCFD</item>
+        <item name="colorSurfaceContainerHighest">#F0D9E2</item>
+    </style>
+    <style name="Atlante.Palette.lavender" parent="Atlante.Base">
+        <item name="android:colorBackground">#F5F1FC</item>
+        <item name="colorPrimary">#76539C</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#E4DCEF</item>
+        <item name="colorOnPrimaryContainer">#362C50</item>
+        <item name="colorSecondary">#76539C</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#E4DCEF</item>
+        <item name="colorOnSecondaryContainer">#362C50</item>
+        <item name="colorTertiary">#80548B</item>
+        <item name="colorSurface">#F5F1FC</item>
+        <item name="colorOnSurface">#362C50</item>
+        <item name="colorOnSurfaceVariant">#6F6182</item>
+        <item name="colorOutline">#6F6182</item>
+        <item name="colorOutlineVariant">#E4DCEF</item>
+        <item name="colorSurfaceContainerLowest">#FDFCFF</item>
+        <item name="colorSurfaceContainerLow">#FDFCFF</item>
+        <item name="colorSurfaceContainer">#FDFCFF</item>
+        <item name="colorSurfaceContainerHigh">#FDFCFF</item>
+        <item name="colorSurfaceContainerHighest">#E4DCEF</item>
+    </style>
+    <style name="Atlante.Palette.sage" parent="Atlante.Base">
+        <item name="android:colorBackground">#EFF5EF</item>
+        <item name="colorPrimary">#416D53</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#D7E4D9</item>
+        <item name="colorOnPrimaryContainer">#2B4439</item>
+        <item name="colorSecondary">#416D53</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#D7E4D9</item>
+        <item name="colorOnSecondaryContainer">#2B4439</item>
+        <item name="colorTertiary">#8B583C</item>
+        <item name="colorSurface">#EFF5EF</item>
+        <item name="colorOnSurface">#2B4439</item>
+        <item name="colorOnSurfaceVariant">#5B7065</item>
+        <item name="colorOutline">#5B7065</item>
+        <item name="colorOutlineVariant">#D7E4D9</item>
+        <item name="colorSurfaceContainerLowest">#FBFEFA</item>
+        <item name="colorSurfaceContainerLow">#FBFEFA</item>
+        <item name="colorSurfaceContainer">#FBFEFA</item>
+        <item name="colorSurfaceContainerHigh">#FBFEFA</item>
+        <item name="colorSurfaceContainerHighest">#D7E4D9</item>
+    </style>
+    <style name="Atlante.Palette.blue" parent="Atlante.Base">
+        <item name="android:colorBackground">#EDF3F9</item>
+        <item name="colorPrimary">#365F8C</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#D5E1EE</item>
+        <item name="colorOnPrimaryContainer">#24394F</item>
+        <item name="colorSecondary">#365F8C</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#D5E1EE</item>
+        <item name="colorOnSecondaryContainer">#24394F</item>
+        <item name="colorTertiary">#6C538D</item>
+        <item name="colorSurface">#EDF3F9</item>
+        <item name="colorOnSurface">#24394F</item>
+        <item name="colorOnSurfaceVariant">#5D6E80</item>
+        <item name="colorOutline">#5D6E80</item>
+        <item name="colorOutlineVariant">#D5E1EE</item>
+        <item name="colorSurfaceContainerLowest">#FBFDFF</item>
+        <item name="colorSurfaceContainerLow">#FBFDFF</item>
+        <item name="colorSurfaceContainer">#FBFDFF</item>
+        <item name="colorSurfaceContainerHigh">#FBFDFF</item>
+        <item name="colorSurfaceContainerHighest">#D5E1EE</item>
+    </style>
+    <style name="Atlante.Palette.sand" parent="Atlante.Base">
+        <item name="android:colorBackground">#F8F0E5</item>
+        <item name="colorPrimary">#8A5035</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#E8DBCA</item>
+        <item name="colorOnPrimaryContainer">#4B382A</item>
+        <item name="colorSecondary">#8A5035</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#E8DBCA</item>
+        <item name="colorOnSecondaryContainer">#4B382A</item>
+        <item name="colorTertiary">#8A5035</item>
+        <item name="colorSurface">#F8F0E5</item>
+        <item name="colorOnSurface">#4B382A</item>
+        <item name="colorOnSurfaceVariant">#786451</item>
+        <item name="colorOutline">#786451</item>
+        <item name="colorOutlineVariant">#E8DBCA</item>
+        <item name="colorSurfaceContainerLowest">#FFFCF6</item>
+        <item name="colorSurfaceContainerLow">#FFFCF6</item>
+        <item name="colorSurfaceContainer">#FFFCF6</item>
+        <item name="colorSurfaceContainerHigh">#FFFCF6</item>
+        <item name="colorSurfaceContainerHighest">#E8DBCA</item>
+    </style>
+    <style name="Atlante.Palette.graphite" parent="Atlante.Base.Dark">
+        <item name="android:colorBackground">#171C24</item>
+        <item name="colorPrimary">#ADCFFF</item>
+        <item name="colorOnPrimary">#142A43</item>
+        <item name="colorPrimaryContainer">#3A485A</item>
+        <item name="colorOnPrimaryContainer">#EDF3FA</item>
+        <item name="colorSecondary">#ADCFFF</item>
+        <item name="colorOnSecondary">#142A43</item>
+        <item name="colorSecondaryContainer">#3A485A</item>
+        <item name="colorOnSecondaryContainer">#EDF3FA</item>
+        <item name="colorTertiary">#F3BB97</item>
+        <item name="colorSurface">#171C24</item>
+        <item name="colorOnSurface">#EDF3FA</item>
+        <item name="colorOnSurfaceVariant">#B0BFD0</item>
+        <item name="colorOutline">#B0BFD0</item>
+        <item name="colorOutlineVariant">#3A485A</item>
+        <item name="colorSurfaceContainerLowest">#232C38</item>
+        <item name="colorSurfaceContainerLow">#232C38</item>
+        <item name="colorSurfaceContainer">#232C38</item>
+        <item name="colorSurfaceContainerHigh">#232C38</item>
+        <item name="colorSurfaceContainerHighest">#3A485A</item>
+    </style>
+    <style name="Atlante.Palette.midnight" parent="Atlante.Base.Dark">
+        <item name="android:colorBackground">#191724</item>
+        <item name="colorPrimary">#D3B6FF</item>
+        <item name="colorOnPrimary">#2E164A</item>
+        <item name="colorPrimaryContainer">#493D5B</item>
+        <item name="colorOnPrimaryContainer">#F3ECFF</item>
+        <item name="colorSecondary">#D3B6FF</item>
+        <item name="colorOnSecondary">#2E164A</item>
+        <item name="colorSecondaryContainer">#493D5B</item>
+        <item name="colorOnSecondaryContainer">#F3ECFF</item>
+        <item name="colorTertiary">#F4B5CB</item>
+        <item name="colorSurface">#191724</item>
+        <item name="colorOnSurface">#F3ECFF</item>
+        <item name="colorOnSurfaceVariant">#BFB1D2</item>
+        <item name="colorOutline">#BFB1D2</item>
+        <item name="colorOutlineVariant">#493D5B</item>
+        <item name="colorSurfaceContainerLowest">#282337</item>
+        <item name="colorSurfaceContainerLow">#282337</item>
+        <item name="colorSurfaceContainer">#282337</item>
+        <item name="colorSurfaceContainerHigh">#282337</item>
+        <item name="colorSurfaceContainerHighest">#493D5B</item>
+    </style>
+    <style name="Atlante.Palette.amoled" parent="Atlante.Base.Dark">
+        <item name="android:colorBackground">#000000</item>
+        <item name="colorPrimary">#FFB4B4</item>
+        <item name="colorOnPrimary">#480A14</item>
+        <item name="colorPrimaryContainer">#303036</item>
+        <item name="colorOnPrimaryContainer">#F6F6F8</item>
+        <item name="colorSecondary">#FFB4B4</item>
+        <item name="colorOnSecondary">#480A14</item>
+        <item name="colorSecondaryContainer">#303036</item>
+        <item name="colorOnSecondaryContainer">#F6F6F8</item>
+        <item name="colorTertiary">#FFC894</item>
+        <item name="colorSurface">#000000</item>
+        <item name="colorOnSurface">#F6F6F8</item>
+        <item name="colorOnSurfaceVariant">#B7B7C0</item>
+        <item name="colorOutline">#B7B7C0</item>
+        <item name="colorOutlineVariant">#303036</item>
+        <item name="colorSurfaceContainerLowest">#101012</item>
+        <item name="colorSurfaceContainerLow">#101012</item>
+        <item name="colorSurfaceContainer">#101012</item>
+        <item name="colorSurfaceContainerHigh">#101012</item>
+        <item name="colorSurfaceContainerHighest">#303036</item>
+    </style>
+</resources>

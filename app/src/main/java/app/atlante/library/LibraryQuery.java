@@ -7,17 +7,17 @@ import java.util.Locale;
 
 /** Local catalog views; never alters the catalog or the reader's position. */
 final class LibraryQuery {
+    /** Tabs: "Tutti i libri", one per reading state ("Da leggere", "In lettura", "Letti"), or a view such as "Mappa". */
     static ArrayList<Book> select(List<Book> books, String query, String tab,
-            String status, String genre, String format, String order) {
+            String genre, String format, String order) {
         ArrayList<Book> result = new ArrayList<>();
         String needle = query.toLowerCase(Locale.ROOT).trim();
         for (Book b : books) {
             if (!(b.title + " " + b.author + " " + b.series + " " + b.genre + " " + b.isbn + " " + b.tags + " " + b.subtitle)
                     .toLowerCase(Locale.ROOT).contains(needle)) continue;
-            if (tab.equals("Desideri") && !b.format.equals("CATALOGO")) continue;
-            if (tab.equals("In lettura") && !b.status.equals("In lettura")) continue;
-            if (tab.equals("Letti") && !b.status.equals("Letto")) continue;
-            if (!status.isEmpty() && !status.equals(b.status)) continue;
+            if (tab.equals("Da leggere") && !b.status.equals(Book.TO_READ)) continue;
+            if (tab.equals("In lettura") && !b.status.equals(Book.READING)) continue;
+            if (tab.equals("Letti") && !b.status.equals(Book.READ)) continue;
             if (!genre.isEmpty() && !genre.equalsIgnoreCase(b.genre)) continue;
             if (!format.isEmpty() && !format.equals(b.format)) continue;
             result.add(b);

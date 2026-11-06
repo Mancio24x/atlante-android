@@ -66,7 +66,7 @@ for theme,name in [('Lavanda','06-lavender'),('Blu polvere','07-blue'),('AMOLED 
     tap('Impostazioni');tap('◐ Temi');tap(theme,True);shot(name)
 tap('Apri menu laterale');tap('Mappa');shot('09-map-amoled')
 # The map is full screen with an author search on top.
-tap('Anna Costa',editable=True);time.sleep(.6);shot('09a-map-authors');tap('Luca Moretti');shot('09b-map-author')
+tap('Anna Costa');time.sleep(.6);shot('09a-map-authors');tap('Luca Moretti');shot('09b-map-author')
 tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 # The persisted theme must survive a process restart.
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
@@ -77,10 +77,18 @@ shot('11-settings-restored')
 tap('Chiudi');shot('12-theme-restored')
 # Manual cataloging must save only after confirmation, without requiring an ISBN.
 def catalog(): return json.loads(adb('exec-out','run-as',package,'cat','files/library.json'))
+# Reading states: chips filter the library; the book sheet changes state with one tap.
+tap('In lettura');shot('12a-chip-reading')
+tap('Il giardino delle storie');shot('12b-sheet')
+tap('Letto');time.sleep(.8)
+book=next(b for b in catalog() if b['title']=='Il giardino delle storie')
+assert book['status']=='Letto' and book.get('finished'), 'State change not saved'
+shot('12c-sheet-read');tap('Aggiorna pagina');shot('12d-reading-dialog');tap('Annulla')
+tap('Tutti')
 count=len(catalog())
-tap('＋ Aggiungi libro');tap('Annulla')
+tap('Aggiungi libro');tap('Annulla')
 assert len(catalog()) == count, 'Canceled manual entry was saved'
-tap('＋ Aggiungi libro');tap('Titolo',editable=True)
+tap('Aggiungi libro');tap('Titolo',editable=True)
 adb('shell','input','text','AtlanteManualeProva')
 shot('13a-manual-form-filled')
 # Android's keyboard may overlay floating-dialog controls even when they are in the UI tree.
@@ -100,7 +108,7 @@ assert manual.get('isbn','')=='', 'Manual book unexpectedly requires ISBN'
 shot('13-manual-book');tap('Chiudi');tap('Elenco');shot('14-list-view')
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity')
 tap('Impostazioni');tap('Chiudi')
-assert any(n.get('text','')=='Griglia' for n in dump().iter('node')), 'List preference was not restored'
+assert any('Griglia' in (n.get('text',''),n.get('content-desc','')) for n in dump().iter('node')), 'List preference was not restored'
 assert any(b['title']=='AtlanteManualeProva' for b in catalog()), 'Manual book lost after restart'
 shot('15-manual-and-list-restored')
 print('Navigation, themes, canceled/confirmed manual entry and list persistence completed.')

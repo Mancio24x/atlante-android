@@ -42,6 +42,20 @@ public class CatalogTest {
         assertEquals(b.medium, copy.medium); assertEquals(4, copy.rating);
         assertEquals(b.started, copy.started); assertEquals(b.finished, copy.finished);
         assertEquals(b.addedAt, copy.addedAt); assertEquals(9, copy.page);
-        assertEquals(1, LibraryQuery.select(java.util.Arrays.asList(copy), "viaggio", "Tutti i libri", "", "", "", "Titolo").size());
+        assertEquals(1, LibraryQuery.select(java.util.Arrays.asList(copy), "viaggio", "Tutti i libri", "", "", "Titolo").size());
+    }
+    @Test public void olderStatesMigrateToTheThreeReadingStates() throws Exception {
+        String id = new String(new char[64]).replace('\0', 'd');
+        String[][] cases = {{"In pausa", "In lettura"}, {"Abbandonato", "Da leggere"}, {"Letto", "Letto"}, {"qualcosa", "Da leggere"}};
+        for (String[] c : cases)
+            assertEquals(c[1], Book.from(new JSONObject().put("id", id).put("format", "EPUB").put("status", c[0])).status);
+    }
+    @Test public void stateChangesFillDatesAndPagesWithoutOverwriting() {
+        Book b = new Book(); b.totalPages = 300; b.currentPage = 40;
+        b.status = Book.READING; Book.applyStatusEffects(b, "2026-11-06");
+        assertEquals("2026-11-06", b.started); assertEquals("", b.finished); assertEquals(40, b.currentPage);
+        b.status = Book.READ; Book.applyStatusEffects(b, "2026-12-01");
+        assertEquals("2026-11-06", b.started); assertEquals("2026-12-01", b.finished); assertEquals(300, b.currentPage);
+        Book.applyStatusEffects(b, "2027-01-01"); assertEquals("2026-12-01", b.finished);
     }
 }

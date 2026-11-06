@@ -14,15 +14,32 @@ import android.widget.*;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
-import androidx.activity.ComponentActivity;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.button.MaterialButtonToggleGroup;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.color.DynamicColors;
+import com.google.android.material.datepicker.MaterialDatePicker;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.progressindicator.CircularProgressIndicator;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
+import com.google.android.material.slider.Slider;
+import com.google.android.material.textfield.MaterialAutoCompleteTextView;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-/** Android edition: platform widgets plus AndroidX Activity and RecyclerView, private storage and the system document picker. */
-public final class MainActivity extends ComponentActivity {
+/** Android edition: Material 3 components, private storage and the system document picker. */
+public final class MainActivity extends AppCompatActivity {
     int INK, PAPER, WHITE, SAGE, COPPER, GOLD, MUTED, LINE, ON_ACCENT;
     private ThemePalette palette = ThemePalette.ALL[0];
     private final android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -55,7 +72,9 @@ public final class MainActivity extends ComponentActivity {
     private int insetTop, insetBottom;
     private String lastOnlineQuery = "";
     private String tab = "Tutti i libri", query = "", mapAuthor = "", exportId;
-    private String filterStatus = "", filterGenre = "", filterFormat = "", sortOrder = "Titolo";
+    private String filterGenre = "", filterFormat = "", sortOrder = "Titolo";
+    /** Library tabs shown as chips; each one but the first is a reading state. */
+    private static final String[] STATUS_TABS = {"Tutti i libri", "Da leggere", "In lettura", "Letti"};
     private String coverBookId;
     private Book reading;
     private List<String> pages;
@@ -65,16 +84,17 @@ public final class MainActivity extends ComponentActivity {
     private TextView notice;
 
     @Override public void onCreate(Bundle state) {
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        // The Material theme must be set before the activity creates its views.
+        applyTheme(prefs.getString("theme", DynamicColors.isDynamicColorAvailable() ? "dynamic" : "atlante"));
         super.onCreate(state);
         getOnBackPressedDispatcher().addCallback(this, back);
         if (state != null) {
-            tab = state.getString("tab", tab); query = state.getString("query", "");
+            tab = state.getString("tab", tab); if (tab.equals("Desideri")) tab = "Tutti i libri"; query = state.getString("query", "");
             mapAuthor = state.getString("author", ""); exportId = state.getString("export"); coverBookId = state.getString("coverBook");
             backupFiles = state.getBoolean("backupFiles", true);
         }
-        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
-        applyPalette(ThemePalette.find(prefs.getString("theme", "atlante")));
-        filterStatus = prefs.getString("filterStatus", ""); filterGenre = prefs.getString("filterGenre", "");
+        filterGenre = prefs.getString("filterGenre", "");
         filterFormat = prefs.getString("filterFormat", ""); sortOrder = prefs.getString("sortOrder", "Titolo");
         listView = prefs.getBoolean("listView", false);
         OnlineCatalog.configure(new File(getCacheDir(), "catalog"));
@@ -112,28 +132,36 @@ public final class MainActivity extends ComponentActivity {
         drawer = new FrameLayout(this); FrameLayout overlay = drawer;
         View scrim = new View(this); scrim.setBackgroundColor(0x99000000);
         overlay.addView(scrim, new FrameLayout.LayoutParams(-1,-1)); scrim.setOnClickListener(v -> closeDrawer());
-        int width = Math.min(dp(340), Math.round(getResources().getDisplayMetrics().widthPixels * .88f));
-        ScrollView scroll = new ScrollView(this); scroll.setBackground(background(WHITE, LINE)); scroll.setClipToOutline(true);
-        FrameLayout.LayoutParams size = new FrameLayout.LayoutParams(width,-1,Gravity.START); overlay.addView(scroll,size);
-        LinearLayout menu = column(); menu.setPadding(dp(18), Math.max(dp(18),insetTop),dp(18),Math.max(dp(24),insetBottom)); scroll.addView(menu);
+        int width = Math.min(dp(320), Math.round(getResources().getDisplayMetrics().widthPixels * .86f));
+        ScrollView scroll = new ScrollView(this);
+        GradientDrawable sheet = new GradientDrawable(); sheet.setColor(WHITE);
+        sheet.setCornerRadii(new float[]{0, 0, dp(28), dp(28), dp(28), dp(28), 0, 0}); scroll.setBackground(sheet); scroll.setClipToOutline(true);
+        overlay.addView(scroll, new FrameLayout.LayoutParams(width, -1, Gravity.START));
+        LinearLayout menu = column(); menu.setPadding(dp(12), Math.max(dp(12), insetTop), dp(12), Math.max(dp(24), insetBottom)); scroll.addView(menu);
         LinearLayout top = row(); menu.addView(top);
-        Button close = button("☰", false, this::closeDrawer); close.setContentDescription("Chiudi menu laterale");
-        top.addView(close,new LinearLayout.LayoutParams(dp(52),dp(48)));
-        TextView brand = text("  Atlante",28,INK,true); top.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        menu.addView(text("LA TUA BIBLIOTECA",11,SAGE,false)); gap(menu,18);
-        for (String name : new String[]{"Tutti i libri","Desideri","In lettura","Letti","Mappa","Autori","Saghe"}) {
-            Button item = button((tab.equals(name) ? "•  " : "") + name,tab.equals(name),() -> {
-                closeDrawer(); tab = name; showLibrary();
-            }); item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL); menu.addView(item); gap(menu,8);
+        Button close = iconButton(R.drawable.ic_menu, "Chiudi menu laterale", this::closeDrawer); top.addView(close);
+        top.addView(text("Atlante", 24, INK, true), new LinearLayout.LayoutParams(0, -2, 1)); gap(menu, 12);
+        menu.addView(sectionLabel("  BIBLIOTECA")); gap(menu, 4);
+        boolean libraryTab = Arrays.asList(STATUS_TABS).contains(tab);
+        for (String name : new String[]{"Tutti i libri", "Mappa", "Autori", "Saghe"}) {
+            boolean selected = name.equals("Tutti i libri") ? libraryTab : tab.equals(name);
+            menu.addView(drawerItem(name, selected, () -> { closeDrawer(); tab = name; showLibrary(); }));
         }
-        gap(menu,12); rule(menu); gap(menu,16);
-        menu.addView(button("⌕ Cerca libri online",false,() -> { closeDrawer(); onlineSearch(); })); gap(menu,8);
-        Button add = button("+ Importa file",false,() -> { closeDrawer(); chooseBooks(); }); add.setEnabled(!busy); menu.addView(add); gap(menu,8);
-        menu.addView(button("⚙ Impostazioni",false,() -> { closeDrawer(); settings(); }));
+        gap(menu, 8); rule(menu); gap(menu, 8);
+        menu.addView(drawerItem("Cerca libri online", false, () -> { closeDrawer(); onlineSearch(); }));
+        Button add = drawerItem("Importa file", false, () -> { closeDrawer(); chooseBooks(); }); add.setEnabled(!busy); menu.addView(add);
+        menu.addView(drawerItem("Impostazioni", false, () -> { closeDrawer(); settings(); }));
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         screen.addView(overlay,new FrameLayout.LayoutParams(-1,-1)); close.requestFocus();
         scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(220).start();
         updateBack();
+    }
+    /** Navigation drawer row: a full-width pill, filled with the secondary container when selected. */
+    private Button drawerItem(String label, boolean selected, Runnable action) {
+        MaterialButton item = button(label, selected ? R.style.Atlante_Button_Tonal : R.style.Atlante_Button_Text, action);
+        item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL); item.setMinHeight(dp(56)); item.setTextSize(15);
+        item.setTextColor(INK); item.setPadding(dp(20), 0, dp(20), 0);
+        return item;
     }
     private void closeDrawer() {
         if (drawer == null) return;
@@ -147,55 +175,80 @@ public final class MainActivity extends ComponentActivity {
         LinearLayout panel = column(); panel.setPadding(dp(20),dp(12),dp(20),dp(22));
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
         AlertDialog dialog = dialogBuilder().setTitle("Impostazioni").setView(scroll).setNegativeButton("Chiudi",null).create();
-        panel.addView(text("ASPETTO",11,SAGE,false)); gap(panel,8);
+        panel.addView(sectionLabel("ASPETTO")); gap(panel,8);
         panel.addView(button("◐ Temi · " + palette.name,false,() -> { dialog.dismiss(); chooseTheme(); })); gap(panel,20);
-        panel.addView(text("LETTURA",11,SAGE,false)); gap(panel,10);
-        Switch dark = new Switch(this); dark.setText("Lettore scuro"); dark.setTextColor(INK); dark.setChecked(readerDark); dark.setMinHeight(dp(48));
-        dark.setThumbTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{SAGE,MUTED}));
-        dark.setTrackTintList(android.content.res.ColorStateList.valueOf(LINE)); panel.addView(dark);
+        panel.addView(sectionLabel("LETTURA")); gap(panel,10);
+        MaterialSwitch dark = new MaterialSwitch(this); dark.setText("Lettore scuro"); dark.setTextSize(16); dark.setChecked(readerDark); dark.setMinHeight(dp(48));
+        panel.addView(dark);
         dark.setOnCheckedChangeListener((v, checked) -> { readerDark=checked; getPreferences(MODE_PRIVATE).edit().putBoolean("dark",checked).apply(); });
         TextView label = text("Dimensione del testo · " + Math.round(fontSize),15,INK,false); panel.addView(label);
-        SeekBar font = new SeekBar(this); font.setMax(72); font.setProgress(Math.round(fontSize)-8); font.setContentDescription("Dimensione del testo del lettore");
-        font.setProgressTintList(android.content.res.ColorStateList.valueOf(SAGE)); font.setThumbTintList(android.content.res.ColorStateList.valueOf(SAGE));
-        font.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE)); panel.addView(font);
-        font.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar bar,int value,boolean fromUser) { if(fromUser) { fontSize=value+8; label.setText("Dimensione del testo · "+Math.round(fontSize)); getPreferences(MODE_PRIVATE).edit().putFloat("fontSize",fontSize).apply(); } }
-            public void onStartTrackingTouch(SeekBar bar) { }
-            public void onStopTrackingTouch(SeekBar bar) { }
-        });
-        gap(panel,20); panel.addView(text("RICERCA ONLINE",11,SAGE,false)); gap(panel,8);
+        Slider font = new Slider(this); font.setValueFrom(8); font.setValueTo(80); font.setStepSize(1); font.setValue(Math.round(fontSize));
+        font.setContentDescription("Dimensione del testo del lettore"); panel.addView(font);
+        font.addOnChangeListener((slider, value, fromUser) -> { if (fromUser) { fontSize = value; label.setText("Dimensione del testo · " + Math.round(fontSize)); getPreferences(MODE_PRIVATE).edit().putFloat("fontSize", fontSize).apply(); } });
+        gap(panel,20); panel.addView(sectionLabel("RICERCA ONLINE")); gap(panel,8);
         panel.addView(text("Open Library · Le ricerche recenti e le schede vengono riutilizzate dalla cache. I libri e le note personali restano sul dispositivo.",14,MUTED,false));
-        gap(panel,20); panel.addView(text("BACKUP",11,SAGE,false)); gap(panel,8);
+        gap(panel,20); panel.addView(sectionLabel("BACKUP")); gap(panel,8);
         panel.addView(text("Salva catalogo, note, avanzamento e copertine in un file ZIP da conservare fuori dall’app. Disinstallando Atlante i dati interni vengono cancellati.",14,MUTED,false)); gap(panel,8);
         panel.addView(button("Esporta backup",false,() -> { dialog.dismiss(); exportBackup(); })); gap(panel,8);
         Button restore = button("Ripristina da backup",false,() -> { dialog.dismiss(); chooseBackup(); }); restore.setEnabled(!busy); panel.addView(restore);
-        gap(panel,20); panel.addView(text("ATLANTE LIBRARY",11,SAGE,false)); gap(panel,8);
+        gap(panel,20); panel.addView(sectionLabel("ATLANTE LIBRARY")); gap(panel,8);
         panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
         dialog.show();
     }
 
+    /** Applies the Material theme of a palette; "dynamic" takes Material You colors from the wallpaper (Android 12+). */
+    private void applyTheme(String id) {
+        if (id.equals("dynamic") && DynamicColors.isDynamicColorAvailable()) {
+            boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+            setTheme(night ? R.style.Atlante_Base_Dark : R.style.Atlante_Base);
+            DynamicColors.applyToActivityIfAvailable(this);
+            applyPalette(fromTheme(getTheme(), night));
+            return;
+        }
+        ThemePalette p = ThemePalette.find(id);
+        setTheme(paletteStyle(p.id)); applyPalette(p);
+    }
+    private static int paletteStyle(String id) {
+        switch (id) {
+            case "rose": return R.style.Atlante_Palette_rose;
+            case "lavender": return R.style.Atlante_Palette_lavender;
+            case "sage": return R.style.Atlante_Palette_sage;
+            case "blue": return R.style.Atlante_Palette_blue;
+            case "sand": return R.style.Atlante_Palette_sand;
+            case "graphite": return R.style.Atlante_Palette_graphite;
+            case "midnight": return R.style.Atlante_Palette_midnight;
+            case "amoled": return R.style.Atlante_Palette_amoled;
+            default: return R.style.Atlante_Palette_atlante;
+        }
+    }
+    /** Palette for the hand-drawn parts (map, covers, reader) read from the Material You theme. */
+    private static ThemePalette fromTheme(android.content.res.Resources.Theme theme, boolean night) {
+        return new ThemePalette("dynamic", "Colori del telefono", "Material You · segue lo sfondo e il tema del telefono", night,
+            attr(theme, com.google.android.material.R.attr.colorSurface), attr(theme, com.google.android.material.R.attr.colorSurfaceContainerLow),
+            attr(theme, com.google.android.material.R.attr.colorOnSurface), attr(theme, com.google.android.material.R.attr.colorOnSurfaceVariant),
+            attr(theme, androidx.appcompat.R.attr.colorPrimary), attr(theme, com.google.android.material.R.attr.colorOnPrimary),
+            attr(theme, com.google.android.material.R.attr.colorOutlineVariant), attr(theme, com.google.android.material.R.attr.colorTertiary));
+    }
+    private static int attr(android.content.res.Resources.Theme theme, int id) {
+        android.util.TypedValue value = new android.util.TypedValue(); theme.resolveAttribute(id, value, true); return value.data;
+    }
     private void applyPalette(ThemePalette p) {
         palette = p; PAPER = p.paper; WHITE = p.surface; INK = p.ink; MUTED = p.muted;
         SAGE = p.accent; ON_ACCENT = p.onAccent; COPPER = p.warm; GOLD = p.onAccent; LINE = p.line;
     }
     private AlertDialog loading(String title, String message) {
-        LinearLayout panel = row(); panel.setPadding(dp(24),dp(24),dp(24),dp(24));
-        ProgressBar spinner = new ProgressBar(this); spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(SAGE));
-        panel.addView(spinner,new LinearLayout.LayoutParams(dp(36),dp(36)));
+        LinearLayout panel = row(); panel.setPadding(dp(24),dp(16),dp(24),dp(16));
+        CircularProgressIndicator spinner = new CircularProgressIndicator(this); spinner.setIndeterminate(true);
+        panel.addView(spinner);
         TextView label = text(message,15,INK,false); label.setPadding(dp(16),0,0,0); panel.addView(label);
         AlertDialog dialog = dialogBuilder().setTitle(title).setView(panel).setCancelable(false).create(); dialog.show(); return dialog;
     }
-    private AlertDialog.Builder dialogBuilder() {
-        android.view.ContextThemeWrapper context = new android.view.ContextThemeWrapper(this,
-            palette.dark ? R.style.AtlanteDialogDark : R.style.AtlanteDialogLight);
-        return new AlertDialog.Builder(context) {
+    private MaterialAlertDialogBuilder dialogBuilder() {
+        return new MaterialAlertDialogBuilder(this) {
             @Override public AlertDialog create() {
                 AlertDialog dialog = super.create();
-                if (dialog.getWindow() != null) {
-                    dialog.getWindow().setBackgroundDrawable(background(WHITE, LINE));
-                    dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-                        | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
-                }
+                if (dialog.getWindow() != null) dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                    | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
                 return dialog;
             }
         };
@@ -205,7 +258,14 @@ public final class MainActivity extends ComponentActivity {
         panel.addView(text("Scegli l’atmosfera della tua biblioteca. Il tema viene ricordato sul dispositivo.", 14, MUTED, false)); gap(panel, 16);
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
         AlertDialog dialog = dialogBuilder().setTitle("Aspetto e temi").setView(scroll).setNegativeButton("Chiudi", null).create();
-        for (ThemePalette option : ThemePalette.ALL) {
+        ArrayList<ThemePalette> options = new ArrayList<>();
+        if (DynamicColors.isDynamicColorAvailable()) {
+            boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+            Context preview = DynamicColors.wrapContextIfAvailable(new ContextThemeWrapper(this, night ? R.style.Atlante_Base_Dark : R.style.Atlante_Base));
+            options.add(fromTheme(preview.getTheme(), night));
+        }
+        options.addAll(Arrays.asList(ThemePalette.ALL));
+        for (ThemePalette option : options) {
             LinearLayout tile = row(); tile.setPadding(dp(16), dp(14), dp(16), dp(14));
             tile.setBackground(background(option.surface, option.id.equals(palette.id) ? option.accent : option.line));
             LinearLayout label = column(); tile.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
@@ -216,7 +276,8 @@ public final class MainActivity extends ComponentActivity {
                 LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(dp(18), dp(30)); size.setMargins(dp(4),0,0,0); tile.addView(swatch,size);
             }
             tile.setContentDescription(option.name + ", " + option.description); tile.setMinimumHeight(dp(64));
-            tile.setOnClickListener(v -> { applyPalette(option); getPreferences(MODE_PRIVATE).edit().putString("theme", option.id).apply(); dialog.dismiss(); showLibrary(); });
+            // Material themes apply when the activity is created: save and recreate.
+            tile.setOnClickListener(v -> { getPreferences(MODE_PRIVATE).edit().putString("theme", option.id).commit(); dialog.dismiss(); recreate(); });
             panel.addView(tile); gap(panel, 10);
         }
         dialog.show();
@@ -238,13 +299,27 @@ public final class MainActivity extends ComponentActivity {
     void gap(LinearLayout v, int height) { View s = new View(this); v.addView(s, new LinearLayout.LayoutParams(1, dp(height))); }
     void rule(LinearLayout v) { View s = new View(this); s.setBackgroundColor(LINE); v.addView(s, new LinearLayout.LayoutParams(-1, dp(1))); }
     Button button(String label, boolean primary, Runnable action) {
-        Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(14);
-        b.setTextColor(primary ? ON_ACCENT : INK); b.setMinHeight(dp(48));
-        b.setPadding(dp(14), dp(8), dp(14), dp(8));
-        android.graphics.drawable.RippleDrawable ripple = new android.graphics.drawable.RippleDrawable(
-            android.content.res.ColorStateList.valueOf(0x224C7880), background(primary ? SAGE : WHITE, primary ? SAGE : LINE), null);
-        b.setBackground(ripple); b.setStateListAnimator(null);
-        b.setOnClickListener(v -> action.run()); return b;
+        return button(label, primary ? 0 : R.style.Atlante_Button_Tonal, action);
+    }
+    /** Material 3 button; {@code overlay} picks the style (0 = filled, or Atlante.Button.*). */
+    MaterialButton button(String label, int overlay, Runnable action) {
+        MaterialButton b = new MaterialButton(overlay == 0 ? this : new ContextThemeWrapper(this, overlay));
+        b.setText(label); b.setMinHeight(dp(48)); b.setOnClickListener(v -> action.run());
+        return b;
+    }
+    MaterialButton iconButton(int icon, String description, Runnable action) {
+        MaterialButton b = button("", R.style.Atlante_Button_Icon, action);
+        b.setIconResource(icon); b.setIconTint(android.content.res.ColorStateList.valueOf(INK)); b.setIconSize(dp(24));
+        b.setContentDescription(description); b.setTooltipText(description);
+        return b;
+    }
+    TextView sectionLabel(String value) {
+        TextView label = text(value, 12, SAGE, false); label.setLetterSpacing(.08f); label.setTypeface(Typeface.DEFAULT_BOLD); return label;
+    }
+    MaterialCardView card(LinearLayout content) {
+        MaterialCardView card = new MaterialCardView(this);
+        card.setCardBackgroundColor(WHITE); card.setStrokeColor(LINE); card.setStrokeWidth(dp(1));
+        card.setCardElevation(0); card.setRadius(dp(16)); card.addView(content); return card;
     }
     void base(int color) {
         boolean light = (((color >> 16) & 255) * 299 + ((color >> 8) & 255) * 587 + (color & 255) * 114) > 150000;
@@ -272,35 +347,44 @@ public final class MainActivity extends ComponentActivity {
     private void showLibrary() {
         reading = null; pages = null;
         base(PAPER);
-        LinearLayout header = column(); header.setPadding(dp(20), dp(18), dp(20), dp(18));
+        boolean map = tab.equals("Mappa");
+        LinearLayout header = column(); header.setPadding(dp(8), dp(4), dp(8), dp(8));
         root.addView(header);
         LinearLayout masthead = row(); header.addView(masthead);
-        Button hamburger = button("☰", false, this::openDrawer); hamburger.setContentDescription("Apri menu laterale");
-        masthead.addView(hamburger, new LinearLayout.LayoutParams(dp(52), dp(48)));
-        TextView brand = text("  ATLANTE LIBRARY", 12, SAGE, false);
-        brand.setLetterSpacing(.12f); masthead.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
-        Button settings = button("", false, this::settings); settings.setContentDescription("Impostazioni");
-        android.graphics.drawable.Drawable gear = getResources().getDrawable(R.drawable.ic_settings, getTheme()); gear.setTint(INK);
-        settings.setCompoundDrawablesWithIntrinsicBounds(gear,null,null,null); masthead.addView(settings, new LinearLayout.LayoutParams(dp(52), dp(48)));
-        if (tab.equals("Mappa")) {
-            // The map uses the whole screen: only the author search stays above it.
-            header.setPadding(dp(16), dp(10), dp(16), dp(12)); gap(header, 10); mapHeader(header);
-            body = new FrameLayout(this); grid = null; adapter = null; content = null;
-            root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
-            notice = text("", 12, MUTED, false); renderContent(); updateBack();
-            return;
+        masthead.addView(iconButton(R.drawable.ic_menu, "Apri menu laterale", this::openDrawer));
+        TextView brand = text(map ? "Mappa delle letture" : tab.equals("Autori") ? "Autori" : tab.equals("Saghe") ? "Saghe" : "Atlante", 22, INK, true);
+        brand.setPadding(dp(8), 0, 0, 0); brand.setMaxLines(1); brand.setEllipsize(TextUtils.TruncateAt.END);
+        masthead.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
+        if (!map) masthead.addView(iconButton(listView ? R.drawable.ic_grid : R.drawable.ic_list, listView ? "Griglia" : "Elenco", () -> {
+            listView = !listView; getPreferences(MODE_PRIVATE).edit().putBoolean("listView", listView).apply(); showLibrary();
+        }));
+        masthead.addView(iconButton(R.drawable.ic_settings, "Impostazioni", this::settings));
+        LinearLayout controls = column(); controls.setPadding(dp(8), dp(4), dp(8), 0); header.addView(controls);
+        if (map) mapHeader(controls); else libraryHeader(controls);
+        FrameLayout stage = new FrameLayout(this);
+        root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
+        body = new FrameLayout(this); grid = null; adapter = null; content = null;
+        stage.addView(body, new FrameLayout.LayoutParams(-1, -1));
+        if (!map) {
+            ExtendedFloatingActionButton add = new ExtendedFloatingActionButton(this);
+            add.setText("Aggiungi libro"); add.setIconResource(R.drawable.ic_add); add.setOnClickListener(v -> manualBook());
+            FrameLayout.LayoutParams corner = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
+            corner.setMargins(dp(16), dp(16), dp(16), dp(16)); stage.addView(add, corner);
         }
-        gap(header, 12);
-        LinearLayout titleRow = row();
-        TextView title = text("La tua biblioteca", 29, INK, true);
-        titleRow.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        header.addView(titleRow); gap(header, 8);
-        header.addView(text("Libri, autori e connessioni. Sempre con te.", 14, MUTED, false));
-        gap(header, 10);
-        EditText search = new EditText(this); search.setSingleLine(true); search.setTextSize(15);
-        search.setTextColor(INK); search.setHintTextColor(MUTED); search.setHint("Cerca un titolo, un autore, una saga…");
-        search.setContentDescription("Cerca nella biblioteca"); search.setPadding(dp(14), dp(10), dp(14), dp(10));
-        search.setBackground(background(WHITE, LINE)); search.setText(query); header.addView(search);
+        notice = text("", 12, MUTED, false);
+        renderContent(); updateBack();
+    }
+
+    /** Search bar, reading-state chips and the filter chip above the library. */
+    private void libraryHeader(LinearLayout header) {
+        TextInputLayout box = new TextInputLayout(new ContextThemeWrapper(this, R.style.Atlante_Field));
+        box.setHintEnabled(false); box.setStartIconDrawable(R.drawable.ic_search);
+        box.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
+        float round = dp(28); box.setBoxCornerRadii(round, round, round, round);
+        TextInputEditText search = new TextInputEditText(box.getContext()); search.setSingleLine(true);
+        search.setHint("Cerca titolo, autore, saga, ISBN"); search.setContentDescription("Cerca nella biblioteca");
+        search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH); search.setText(query);
+        box.addView(search, new LinearLayout.LayoutParams(-1, -2)); header.addView(box);
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int c, int f) { }
             public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString(); updateBack();
@@ -308,68 +392,48 @@ public final class MainActivity extends ComponentActivity {
                 filterTask = () -> { if (reading == null) renderContent(); }; uiHandler.postDelayed(filterTask, 180); }
             public void afterTextChanged(Editable e) { }
         });
-        gap(header, 8);
-        header.addView(button("Filtri e ordine" + (hasFilters() ? " · attivi" : "") + " · " + sortOrder, false, this::libraryFilters));
-        gap(header, 8);
-        LinearLayout actions = row();
-        actions.addView(button("＋ Aggiungi libro", true, this::manualBook), new LinearLayout.LayoutParams(0, dp(48), 1));
-        actions.addView(button(listView ? "Griglia" : "Elenco", false, () -> {
-            listView = !listView; getPreferences(MODE_PRIVATE).edit().putBoolean("listView", listView).apply(); showLibrary();
-        }), new LinearLayout.LayoutParams(dp(100), dp(48)));
-        header.addView(actions); gap(header, 8);
-        rule(root);
-        body = new FrameLayout(this); grid = null; adapter = null; content = null;
-        root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
-        notice = text("", 12, MUTED, false); notice.setPadding(dp(20), dp(10), dp(20), dp(10));
-        rule(root); root.addView(notice); renderContent(); updateBack();
+        search.setOnEditorActionListener((v, action, event) -> { hideKeyboard(v); return true; });
+        HorizontalScrollView strip = new HorizontalScrollView(this); strip.setHorizontalScrollBarEnabled(false);
+        ChipGroup chips = new ChipGroup(this); chips.setSingleLine(true); chips.setSingleSelection(true); chips.setSelectionRequired(true);
+        strip.addView(chips); header.addView(strip);
+        for (String name : STATUS_TABS) {
+            Chip chip = new Chip(this); chip.setText(name.equals("Tutti i libri") ? "Tutti" : name);
+            chip.setCheckable(true); chip.setId(View.generateViewId());
+            chips.addView(chip); if (name.equals(tab) || (name.equals("Tutti i libri") && !Arrays.asList(STATUS_TABS).contains(tab))) chips.check(chip.getId());
+            chip.setOnClickListener(v -> { if (!tab.equals(name)) { tab = name; updateBack(); renderContent(); } });
+        }
+        Chip filters = new Chip(this); filters.setCheckable(false); filters.setChipIconResource(R.drawable.ic_tune); filters.setChipIconVisible(true);
+        filters.setText(hasFilters() ? "Filtri attivi" : "Filtri e ordine"); filters.setOnClickListener(v -> libraryFilters());
+        chips.addView(filters);
     }
 
     private ArrayList<Book> filtered() {
-        return LibraryQuery.select(store.snapshot(), tab.equals("Mappa") ? "" : query, tab, filterStatus, filterGenre, filterFormat, sortOrder);
+        return LibraryQuery.select(store.snapshot(), tab.equals("Mappa") ? "" : query, tab, filterGenre, filterFormat, sortOrder);
     }
 
-    private boolean hasFilters() { return !filterStatus.isEmpty() || !filterGenre.isEmpty() || !filterFormat.isEmpty(); }
-
-    private Spinner filterPicker(LinearLayout panel, String label, List<String> options, String selected) {
-        panel.addView(text(label, 14, INK, false));
-        Spinner picker = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, options) {
-            @Override public View getView(int position, View convertView, ViewGroup parent) {
-                TextView view = (TextView) super.getView(position, convertView, parent); view.setTextColor(INK); return view;
-            }
-            @Override public View getDropDownView(int position, View convertView, ViewGroup parent) {
-                TextView view = (TextView) super.getDropDownView(position, convertView, parent);
-                view.setTextColor(INK); view.setBackgroundColor(WHITE); return view;
-            }
-        };
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        picker.setAdapter(adapter); picker.setSelection(Math.max(0, options.indexOf(selected)));
-        panel.addView(picker, new LinearLayout.LayoutParams(-1, dp(48))); gap(panel, 10); return picker;
-    }
+    private boolean hasFilters() { return !filterGenre.isEmpty() || !filterFormat.isEmpty(); }
 
     private void libraryFilters() {
-        LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(4));
         TreeSet<String> genres = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         for (Book book : store.snapshot()) if (!book.genre.isEmpty()) genres.add(book.genre);
         if (!filterGenre.isEmpty()) genres.add(filterGenre);
         ArrayList<String> genreOptions = new ArrayList<>(); genreOptions.add("Tutti i generi"); genreOptions.addAll(genres);
-        Spinner status = filterPicker(panel, "Stato di lettura", Arrays.asList("Tutti gli stati", "Da leggere", "In lettura", "Letto", "In pausa", "Abbandonato"), filterStatus);
-        Spinner genre = filterPicker(panel, "Genere", genreOptions, filterGenre);
-        Spinner format = filterPicker(panel, "Formato", Arrays.asList("Tutti i formati", "EPUB", "TXT", "CBZ", "CATALOGO"), filterFormat);
-        Spinner order = filterPicker(panel, "Ordina per", Arrays.asList("Titolo", "Autore", "Saga"), sortOrder);
+        Picker genre = new Picker(panel, "Genere", genreOptions, filterGenre);
+        Picker format = new Picker(panel, "Formato", Arrays.asList("Tutti i formati", "EPUB", "TXT", "CBZ", "CATALOGO"), filterFormat);
+        Picker order = new Picker(panel, "Ordina per", Arrays.asList("Titolo", "Autore", "Saga"), sortOrder);
         dialogBuilder().setTitle("Filtri e ordine").setView(panel)
             .setNegativeButton("Annulla", null)
-            .setNeutralButton("Azzera filtri", (d, w) -> { filterStatus = ""; filterGenre = ""; filterFormat = ""; applyLibraryFilters(); })
+            .setNeutralButton("Azzera", (d, w) -> { filterGenre = ""; filterFormat = ""; applyLibraryFilters(); })
             .setPositiveButton("Applica", (d, w) -> {
-                filterStatus = status.getSelectedItemPosition() == 0 ? "" : status.getSelectedItem().toString();
-                filterGenre = genre.getSelectedItemPosition() == 0 ? "" : genre.getSelectedItem().toString();
-                filterFormat = format.getSelectedItemPosition() == 0 ? "" : format.getSelectedItem().toString();
-                sortOrder = order.getSelectedItem().toString(); applyLibraryFilters();
+                filterGenre = genre.position() == 0 ? "" : genre.value();
+                filterFormat = format.position() == 0 ? "" : format.value();
+                sortOrder = order.value(); applyLibraryFilters();
             }).show();
     }
 
     private void applyLibraryFilters() {
-        getPreferences(MODE_PRIVATE).edit().putString("filterStatus", filterStatus).putString("filterGenre", filterGenre)
+        getPreferences(MODE_PRIVATE).edit().putString("filterGenre", filterGenre)
             .putString("filterFormat", filterFormat).putString("sortOrder", sortOrder).apply();
         showLibrary();
     }
@@ -389,7 +453,7 @@ public final class MainActivity extends ComponentActivity {
             gap(content, 16);
             content.addView(text(store.snapshot().isEmpty() ? "Apri il menu ☰ per cercare nuovi titoli online o importare EPUB, TXT e CBZ. Tutte le tue letture, anche su carta, trovano posto qui." : "Prova un altro titolo, autore o nome di saga.", 16, MUTED, false));
             gap(content, 24);
-            if (hasFilters()) content.addView(button("Azzera filtri", false, () -> { filterStatus = ""; filterGenre = ""; filterFormat = ""; applyLibraryFilters(); }));
+            if (hasFilters()) content.addView(button("Azzera filtri", false, () -> { filterGenre = ""; filterFormat = ""; applyLibraryFilters(); }));
             if (store.snapshot().isEmpty()) content.addView(button("Cerca il tuo primo libro", true, this::onlineSearch));
             return;
         }
@@ -424,26 +488,35 @@ public final class MainActivity extends ComponentActivity {
         }
         shownCount = count;
         // A new tab, search or filter starts from the top; edits to a book keep the scroll position.
-        String key = tab + "\n" + query + "\n" + filterStatus + "\n" + filterGenre + "\n" + filterFormat + "\n" + sortOrder;
+        String key = tab + "\n" + query + "\n" + filterGenre + "\n" + filterFormat + "\n" + sortOrder;
         boolean changed = !key.equals(gridKey); gridKey = key;
         adapter.submit(list);
         if (changed) grid.scrollToPosition(0);
     }
     private int shownCount;
 
+    private LinearProgressIndicator progressBar(Book b) {
+        LinearProgressIndicator bar = new LinearProgressIndicator(this);
+        bar.setMax(Math.max(1, b.totalPages)); bar.setProgressCompat(Math.min(b.currentPage, b.totalPages), false);
+        bar.setTrackCornerRadius(dp(4)); bar.setTrackThickness(dp(6));
+        return bar;
+    }
+
     private View gridHeader() {
         LinearLayout header = column(); header.setPadding(dp(5), 0, dp(5), dp(16));
-        header.addView(text(tab.equals("Tutti i libri") ? "I tuoi libri" : tab, 28, INK, true)); gap(header, 5);
-        header.addView(text(shownCount + " titoli · Libri importati e schede dal catalogo online", 13, MUTED, false));
+        int total = store.snapshot().size();
+        header.addView(text(busy ? "Importazione in corso…" : (shownCount == total ? total + (total == 1 ? " libro" : " libri")
+            : shownCount + " di " + total + " libri") + " · ordinati per " + sortOrder.toLowerCase(Locale.ROOT), 13, MUTED, false));
         return header;
     }
 
     private View bookCard(Book b) {
         int coverHeight = coverHeight();
         FrameLayout cell = new FrameLayout(this);
-        LinearLayout card = column(); card.setPadding(dp(10), dp(10), dp(10), dp(14)); card.setBackground(background(WHITE, LINE));
+        LinearLayout card = column(); card.setPadding(dp(10), dp(10), dp(10), dp(14));
+        MaterialCardView frame = card(card);
         FrameLayout.LayoutParams cardSize = new FrameLayout.LayoutParams(-1, -2);
-        cardSize.setMargins(dp(5), 0, dp(5), dp(12)); cell.addView(card, cardSize);
+        cardSize.setMargins(dp(5), 0, dp(5), dp(12)); cell.addView(frame, cardSize);
         FrameLayout art = new FrameLayout(this); art.setBackground(background(PAPER, Color.TRANSPARENT)); art.setClipToOutline(true);
         art.setPadding(dp(7), dp(7), dp(7), dp(7));
         card.addView(art, new LinearLayout.LayoutParams(-1, dp(coverHeight)));
@@ -453,7 +526,7 @@ public final class MainActivity extends ComponentActivity {
         ImageView image = new ImageView(this); image.setContentDescription("Copertina di " + b.title);
         image.setScaleType(ImageView.ScaleType.FIT_CENTER); art.addView(image, new FrameLayout.LayoutParams(-1, -1));
         covers.thumbnail(b.id, store.cover(b), dp(coverHeight), image, fallback);
-        TextView format = text(b.format.equals("CATALOGO") ? "DESIDERIO" : b.format, 10, INK, false); format.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView format = text(b.format.equals("CATALOGO") ? (b.medium.isEmpty() ? "SCHEDA" : b.medium.toUpperCase(Locale.ROOT)) : b.format, 10, INK, false); format.setTypeface(Typeface.DEFAULT_BOLD);
         format.setPadding(dp(5), dp(3), dp(5), dp(3)); format.setBackground(background(WHITE, Color.TRANSPARENT));
         art.addView(format, new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START));
         gap(card, 10); TextView bookTitle = text(b.title, 18, INK, true); bookTitle.setMaxLines(2); bookTitle.setEllipsize(TextUtils.TruncateAt.END); card.addView(bookTitle); gap(card, 4);
@@ -461,12 +534,8 @@ public final class MainActivity extends ComponentActivity {
         if (!b.series.isEmpty()) { gap(card, 5); card.addView(text("↳ " + b.series + order(b), 12, SAGE, false)); }
         if (!b.status.equals("Da leggere")) { gap(card, 5); card.addView(text(b.status, 11, COPPER, false)); }
         gap(card, 6); card.addView(text(progressLabel(b), 11, SAGE, false));
-        if (b.totalPages > 0) {
-            ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-            bar.setMax(b.totalPages); bar.setProgress(b.currentPage); bar.setProgressTintList(android.content.res.ColorStateList.valueOf(SAGE));
-            bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE)); card.addView(bar, new LinearLayout.LayoutParams(-1, dp(8)));
-        }
-        card.setOnClickListener(v -> details(b)); art.setOnClickListener(v -> details(b));
+        if (b.totalPages > 0) { gap(card, 4); card.addView(progressBar(b), new LinearLayout.LayoutParams(-1, -2)); }
+        frame.setOnClickListener(v -> details(b)); art.setOnClickListener(v -> details(b));
         return cell;
     }
 
@@ -508,22 +577,13 @@ public final class MainActivity extends ComponentActivity {
     private void mapHeader(LinearLayout header) {
         ArrayList<String> authors = mapAuthors();
         if (!authors.isEmpty() && !authors.contains(mapAuthor)) mapAuthor = authors.get(0);
-        LinearLayout titleRow = row(); header.addView(titleRow);
-        titleRow.addView(text("Mappa delle letture", 24, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
-        if (hasFilters()) titleRow.addView(text("filtri attivi", 12, COPPER, false));
-        gap(header, 10);
-        AutoCompleteTextView field = new AutoCompleteTextView(this);
-        field.setSingleLine(true); field.setTextSize(16); field.setTextColor(INK); field.setHintTextColor(MUTED);
-        field.setHint(authors.size() + (authors.size() == 1 ? " autore" : " autori") + " · cerca per nome…");
-        field.setContentDescription("Cerca l’autore della mappa"); field.setPadding(dp(14), dp(10), dp(14), dp(10));
-        field.setBackground(background(WHITE, LINE)); field.setThreshold(1);
-        field.setDropDownBackgroundDrawable(background(WHITE, LINE)); field.setDropDownVerticalOffset(dp(6));
-        field.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_dropdown_item_1line, authors) {
-            @Override public View getView(int position, View view, ViewGroup parent) {
-                TextView value = text(getItem(position), 16, INK, false); value.setPadding(dp(16), dp(12), dp(16), dp(12));
-                value.setMinHeight(dp(48)); return value;
-            }
-        });
+        TextInputLayout box = new TextInputLayout(new ContextThemeWrapper(this, R.style.Atlante_Field));
+        box.setHint(authors.size() + (authors.size() == 1 ? " autore" : " autori") + (hasFilters() ? " · filtri attivi" : ""));
+        box.setStartIconDrawable(R.drawable.ic_search);
+        float round = dp(28); box.setBoxCornerRadii(round, round, round, round);
+        MaterialAutoCompleteTextView field = new MaterialAutoCompleteTextView(box.getContext());
+        field.setSingleLine(true); field.setThreshold(1); field.setContentDescription("Cerca l’autore della mappa");
+        field.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, authors));
         field.setText(mapAuthor, false); field.setSelectAllOnFocus(true);
         // Tapping the field lists every author; typing narrows the list.
         field.setOnClickListener(v -> { if (!authors.isEmpty()) field.showDropDown(); });
@@ -531,7 +591,8 @@ public final class MainActivity extends ComponentActivity {
             mapAuthor = parent.getItemAtPosition(position).toString();
             field.clearFocus(); hideKeyboard(field); renderContent();
         });
-        header.addView(field, new LinearLayout.LayoutParams(-1, dp(52)));
+        box.addView(field, new LinearLayout.LayoutParams(-1, -2));
+        header.addView(box, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void hideKeyboard(View view) {
@@ -554,59 +615,147 @@ public final class MainActivity extends ComponentActivity {
     }
 
     private void details(Book b) {
-        LinearLayout panel = column(); panel.setPadding(dp(24), dp(14), dp(24), dp(20));
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(16), dp(24), dp(8));
         Bitmap art = cover(b);
         if (art != null) {
             ImageView image = new ImageView(this); image.setImageBitmap(art); image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            image.setContentDescription("Copertina di " + b.title);
             panel.addView(image, new LinearLayout.LayoutParams(-1, dp(220))); gap(panel, 16);
         }
-        panel.addView(text(b.title, 28, INK, true)); gap(panel, 6);
-        if (!b.subtitle.isEmpty()) panel.addView(text(b.subtitle, 18, MUTED, true));
+        panel.addView(text(b.title, 26, INK, true)); gap(panel, 4);
+        if (!b.subtitle.isEmpty()) panel.addView(text(b.subtitle, 17, MUTED, true));
         panel.addView(text(b.author, 16, SAGE, false));
-        if (!b.tags.isEmpty()) panel.addView(text("Tag: " + b.tags, 14, SAGE, false));
-        if (!b.location.isEmpty()) panel.addView(text("Posizione: " + b.location, 14, MUTED, false));
-        if (!b.medium.isEmpty()) panel.addView(text(b.medium, 14, MUTED, false));
-        if (b.rating > 0) panel.addView(text("Valutazione: " + b.rating + "/5", 14, COPPER, false));
-        if (!b.started.isEmpty() || !b.finished.isEmpty()) panel.addView(text("Inizio: " + available(b.started) + " · Fine: " + available(b.finished), 13, MUTED, false)); gap(panel, 12);
-        bibliographic(panel, b);
-        if (!b.series.isEmpty()) panel.addView(text(b.series + order(b), 14, SAGE, false));
-        if (!b.genre.isEmpty()) panel.addView(text(b.genre, 13, MUTED, false));
-        panel.addView(text((b.format.equals("CATALOGO") ? "Scheda senza file" : b.format) + " · " + b.status, 13, MUTED, false));
-        panel.addView(text(progressLabel(b), 14, SAGE, false));
-        if (!b.notes.isEmpty()) panel.addView(text(b.notes, 15, INK, false));
-        if (!b.source.isEmpty()) panel.addView(button("Scheda su Open Library", false, () -> {
-            if (b.source.matches("/works/OL[0-9]+W")) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://openlibrary.org" + b.source)));
-        }));
-        if (!b.description.isEmpty()) { gap(panel, 14); panel.addView(text(b.description, 15, INK, false)); }
-        gap(panel, 18);
+        if (!b.series.isEmpty()) panel.addView(text(b.series + order(b), 14, MUTED, false));
+        gap(panel, 16);
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
         AlertDialog dialog = dialogBuilder().setView(scroll).setNegativeButton("Chiudi", null).create();
-        if (!b.format.equals("CATALOGO")) panel.addView(button(b.page > 0 ? "Riprendi la lettura" : "Leggi", true, () -> { dialog.dismiss(); openReader(b); })); gap(panel, 8);
-        panel.addView(button("Stato di lettura", false, () -> {
-            String[] values = {"Da leggere", "In lettura", "Letto", "In pausa", "Abbandonato"};
-            dialogBuilder().setTitle("Stato di lettura").setItems(values, (d, w) -> {
-                b.status = values[w]; if (b.status.equals("Letto") && b.totalPages > 0) b.currentPage = b.totalPages; save(); dialog.dismiss(); renderContent(); details(b);
-            }).show();
-        })); gap(panel, 8);
-        panel.addView(button("Aggiorna avanzamento e note", false, () -> { dialog.dismiss(); progress(b); })); gap(panel, 8);
-        panel.addView(button("Modifica scheda", false, () -> { dialog.dismiss(); edit(b); })); gap(panel, 8);
-        panel.addView(button("Scegli copertina dalla galleria", false, () -> {
+        if (!b.format.equals("CATALOGO")) {
+            panel.addView(button(b.page > 0 ? "Riprendi la lettura" : "Leggi", 0, () -> { dialog.dismiss(); openReader(b); }), new LinearLayout.LayoutParams(-1, -2));
+            gap(panel, 12);
+        }
+        panel.addView(readingCard(b, dialog)); gap(panel, 20);
+
+        panel.addView(sectionLabel("SCHEDA")); gap(panel, 6);
+        if (!b.tags.isEmpty()) panel.addView(text("Tag: " + b.tags, 14, INK, false));
+        if (!b.location.isEmpty()) panel.addView(text("Posizione: " + b.location, 14, INK, false));
+        panel.addView(text((b.format.equals("CATALOGO") ? "Scheda senza file" : "File " + b.format) + (b.medium.isEmpty() ? "" : " · " + b.medium)
+            + (b.totalPages > 0 ? " · " + b.totalPages + " pagine" : ""), 14, INK, false));
+        gap(panel, 4); bibliographic(panel, b);
+        if (!b.description.isEmpty()) { gap(panel, 14); panel.addView(text(b.description, 15, INK, false)); }
+        if (!b.source.isEmpty()) panel.addView(button("Apri su Open Library", R.style.Atlante_Button_Text, () -> {
+            if (b.source.matches("/works/OL[0-9]+W")) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://openlibrary.org" + b.source)));
+        }));
+        gap(panel, 16);
+        panel.addView(button("Modifica scheda", R.style.Atlante_Button_Tonal, () -> { dialog.dismiss(); edit(b); }), new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(button("Scegli copertina dalla galleria", R.style.Atlante_Button_Tonal, () -> {
             coverBookId = b.id; dialog.dismiss();
             coverLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"));
-        })); gap(panel, 8);
-        if (!b.format.equals("CATALOGO")) panel.addView(button("Esporta il file originale", false, () -> {
+        }), new LinearLayout.LayoutParams(-1, -2));
+        if (!b.format.equals("CATALOGO")) panel.addView(button("Esporta il file originale", R.style.Atlante_Button_Tonal, () -> {
             exportId = b.id;
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType(b.format.equals("EPUB") ? "application/epub+zip" : b.format.equals("TXT") ? "text/plain" : "application/vnd.comicbook+zip")
                 .putExtra(Intent.EXTRA_TITLE, b.title.replaceAll("[\\/:*?\"<>|]", "_") + "." + b.format.toLowerCase(Locale.ROOT));
             exportLauncher.launch(intent);
-        })); gap(panel, 8);
-        panel.addView(button("Rimuovi dalla libreria", false, () -> dialogBuilder().setTitle("Rimuovere il libro?")
+        }), new LinearLayout.LayoutParams(-1, -2));
+        MaterialButton remove = button("Rimuovi dalla libreria", R.style.Atlante_Button_Text, () -> dialogBuilder().setTitle("Rimuovere il libro?")
             .setMessage("La copia in Atlante e il punto di lettura verranno rimossi. Il file da cui hai importato il libro resta al suo posto.")
             .setNegativeButton("Annulla", null).setPositiveButton("Rimuovi", (d, w) -> {
                 try { store.remove(b); forgetCover(b.id); dialog.dismiss(); renderContent(); } catch (Exception e) { error(e); }
-            }).show()));
+            }).show());
+        remove.setTextColor(attr(getTheme(), androidx.appcompat.R.attr.colorError)); panel.addView(remove, new LinearLayout.LayoutParams(-1, -2));
         dialog.show();
+    }
+
+    /** Reading state at a glance: the state can be changed with one tap; pages, dates, rating and notes in one window. */
+    private View readingCard(Book b, AlertDialog sheet) {
+        LinearLayout box = column(); box.setPadding(dp(16), dp(14), dp(16), dp(8));
+        MaterialCardView card = card(box);
+        box.addView(sectionLabel("LETTURA")); gap(box, 8);
+        MaterialButtonToggleGroup states = statusToggle(b.status);
+        box.addView(states, new LinearLayout.LayoutParams(-1, -2));
+        states.addOnButtonCheckedListener((group, id, checked) -> {
+            if (!checked) return;
+            String status = Book.STATES[group.indexOfChild(group.findViewById(id))];
+            if (status.equals(b.status)) return;
+            changeStatus(b, status); renderContent(); sheet.dismiss(); details(b);
+        });
+        gap(box, 12);
+        box.addView(text(progressLabel(b), 15, INK, false));
+        if (b.totalPages > 0) { gap(box, 6); box.addView(progressBar(b), new LinearLayout.LayoutParams(-1, -2)); }
+        if (!b.started.isEmpty() || !b.finished.isEmpty()) { gap(box, 6);
+            box.addView(text((b.started.isEmpty() ? "" : "Iniziato il " + italianDate(b.started)) + (!b.started.isEmpty() && !b.finished.isEmpty() ? " · " : "")
+                + (b.finished.isEmpty() ? "" : "Finito il " + italianDate(b.finished)), 13, MUTED, false)); }
+        if (b.rating > 0) { gap(box, 4); box.addView(text(stars(b.rating), 18, COPPER, false)); }
+        if (!b.notes.isEmpty()) { gap(box, 6); box.addView(text(b.notes, 14, INK, false)); }
+        gap(box, 4);
+        box.addView(button("Aggiorna pagina, date e voto", R.style.Atlante_Button_Text, () -> { sheet.dismiss(); readingDialog(b); }));
+        return card;
+    }
+
+    private MaterialButtonToggleGroup statusToggle(String selected) {
+        MaterialButtonToggleGroup group = new MaterialButtonToggleGroup(this);
+        group.setSingleSelection(true); group.setSelectionRequired(true);
+        for (String state : Book.STATES) {
+            MaterialButton option = button(state, R.style.Atlante_Button_Outlined, () -> { });
+            option.setId(View.generateViewId()); option.setTextSize(13); option.setPadding(dp(4), 0, dp(4), 0);
+            group.addView(option, new LinearLayout.LayoutParams(0, -2, 1));
+            if (state.equals(selected)) group.check(option.getId());
+        }
+        return group;
+    }
+
+    /** Changes the state with the obvious side effects on dates and pages. */
+    private void changeStatus(Book b, String status) {
+        b.status = status; Book.applyStatusEffects(b, java.time.LocalDate.now().toString()); save();
+    }
+    static String stars(int rating) { StringBuilder s = new StringBuilder(); for (int i = 1; i <= 5; i++) s.append(i <= rating ? '★' : '☆'); return s.toString(); }
+    static String italianDate(String iso) {
+        try { return java.time.LocalDate.parse(iso).format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ITALIAN)); }
+        catch (Exception e) { return iso; }
+    }
+
+    /** One window for everything about reading: state, pages, dates, rating and notes. Saved only with "Salva". */
+    private void readingDialog(Book original) {
+        final Book b;
+        try { b = Book.from(original.json()); } catch (Exception e) { error(e); return; }
+        LinearLayout panel = column(); panel.setPadding(dp(24), dp(8), dp(24), dp(4));
+        panel.addView(sectionLabel("STATO")); gap(panel, 6);
+        MaterialButtonToggleGroup states = statusToggle(b.status); panel.addView(states, new LinearLayout.LayoutParams(-1, -2)); gap(panel, 14);
+        EditText current = field(panel, "Pagina attuale", b.currentPage > 0 ? Integer.toString(b.currentPage) : "");
+        EditText total = field(panel, "Pagine totali", b.totalPages > 0 ? Integer.toString(b.totalPages) : "");
+        current.setInputType(android.text.InputType.TYPE_CLASS_NUMBER); total.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText started = dateField(panel, "Iniziato il", b.started), finished = dateField(panel, "Finito il", b.finished);
+        TextView ratingLabel = sectionLabel("VALUTAZIONE · " + (b.rating == 0 ? "nessuna" : stars(b.rating))); panel.addView(ratingLabel);
+        Slider rating = new Slider(this); rating.setValueFrom(0); rating.setValueTo(5); rating.setStepSize(1); rating.setValue(b.rating);
+        rating.setContentDescription("Valutazione da 0 a 5"); rating.setLabelFormatter(v -> v == 0 ? "Nessuna" : stars(Math.round(v)));
+        rating.addOnChangeListener((slider, value, fromUser) -> ratingLabel.setText("VALUTAZIONE · " + (value == 0 ? "nessuna" : stars(Math.round(value)))));
+        panel.addView(rating); gap(panel, 6);
+        EditText notes = field(panel, "Note personali", b.notes); notes.setSingleLine(false); notes.setMinLines(3);
+        panel.addView(text("Le pagine sono quelle dell’edizione cartacea; il segno del lettore digitale resta separato.", 12, MUTED, false));
+        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
+        AlertDialog dialog = dialogBuilder().setTitle("Lettura").setView(scroll)
+            .setNegativeButton("Annulla", null).setPositiveButton("Salva", null).create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            int c, t;
+            try {
+                c = current.getText().toString().trim().isEmpty() ? 0 : Integer.parseInt(current.getText().toString().trim());
+                t = total.getText().toString().trim().isEmpty() ? 0 : Integer.parseInt(total.getText().toString().trim());
+            } catch (NumberFormatException e) { current.setError("Inserisci numeri interi validi"); return; }
+            if (c < 0 || t < 0 || (t > 0 && c > t)) { current.setError("La pagina attuale deve essere tra 0 e il totale"); return; }
+            String start = started.getText().toString().trim(), end = finished.getText().toString().trim();
+            if (!start.isEmpty() && !end.isEmpty() && start.compareTo(end) > 0) { finished.setError("La fine precede l’inizio"); return; }
+            String status = Book.STATES[states.indexOfChild(states.findViewById(states.getCheckedButtonId()))];
+            // Pages can imply the state: last page read means finished, a started book is being read.
+            if (!status.equals(original.status)) { /* the explicit choice wins */ }
+            else if (t > 0 && c == t) status = Book.READ;
+            else if (c > 0 && status.equals(Book.TO_READ)) status = Book.READING;
+            b.status = status; b.currentPage = c; b.totalPages = t; b.started = start; b.finished = end;
+            b.rating = Math.round(rating.getValue()); b.notes = notes.getText().toString();
+            Book.applyStatusEffects(b, java.time.LocalDate.now().toString());
+            try { store.replace(b); } catch (Exception e) { error(e); return; }
+            dialog.dismiss(); renderContent(); details(b);
+        })); dialog.show();
     }
 
     private void bibliographic(LinearLayout panel, Book b) {
@@ -665,30 +814,6 @@ public final class MainActivity extends ComponentActivity {
         return b.currentPage > 0 ? "Pagina " + b.currentPage : "Avanzamento da impostare";
     }
 
-    private void progress(Book b) {
-        LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(12));
-        panel.addView(text("Registra dove sei arrivato, anche per un libro cartaceo. Queste pagine sono separate dalla posizione del lettore digitale.", 14, MUTED, false));
-        EditText current = field(panel, "Pagina attuale", Integer.toString(b.currentPage));
-        EditText total = field(panel, "Pagine totali (0 se sconosciute)", Integer.toString(b.totalPages));
-        current.setInputType(android.text.InputType.TYPE_CLASS_NUMBER); total.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        EditText notes = field(panel, "Note personali", b.notes); notes.setSingleLine(false); notes.setMinLines(3);
-        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
-        AlertDialog dialog = dialogBuilder().setTitle("Avanzamento di lettura").setView(scroll)
-            .setNegativeButton("Annulla", null).setPositiveButton("Salva", null).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            int c, t;
-            try { c = Integer.parseInt(current.getText().toString()); t = Integer.parseInt(total.getText().toString()); }
-            catch (NumberFormatException e) { current.setError("Inserisci numeri interi validi"); return; }
-            if (c < 0 || t < 0 || (t > 0 && c > t)) { current.setError("La pagina attuale deve essere tra 0 e il totale"); return; }
-            int oldC = b.currentPage, oldT = b.totalPages; String oldNotes = b.notes, oldStatus = b.status;
-            b.currentPage = c; b.totalPages = t; b.notes = notes.getText().toString();
-            if (t > 0 && c == t) b.status = "Letto";
-            else if (c > 0 && (b.status.equals("Da leggere") || b.status.equals("Letto"))) b.status = "In lettura";
-            try { store.save(); } catch (Exception e) { b.currentPage = oldC; b.totalPages = oldT; b.notes = oldNotes; b.status = oldStatus; error(e); return; }
-            dialog.dismiss(); renderContent(); details(b);
-        })); dialog.show();
-    }
-
     private void onlineSearch() {
         LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
         panel.addView(text("Cerca su Open Library per titolo, autore o ISBN. Si aggiunge una scheda personale, anche se non possiedi il file. La ricerca invia al servizio solo il testo inserito.", 14, MUTED, false));
@@ -743,12 +868,51 @@ public final class MainActivity extends ComponentActivity {
         }); dialog.show();
     }
 
+    /** Outlined Material text field with a floating label. */
     private EditText field(LinearLayout panel, String label, String value) {
-        panel.addView(text(label, 12, SAGE, false));
-        EditText input = new EditText(this); input.setText(value); input.setTextSize(16); input.setSingleLine(true);
-        input.setTextColor(INK); input.setHintTextColor(MUTED); input.setBackground(background(PAPER, LINE));
-        input.setPadding(dp(16), dp(12), dp(16), dp(12));
-        input.setContentDescription(label); panel.addView(input); gap(panel, 10); return input;
+        TextInputLayout box = new TextInputLayout(new ContextThemeWrapper(this, R.style.Atlante_Field)); box.setHint(label);
+        TextInputEditText input = new TextInputEditText(box.getContext()); input.setText(value); input.setSingleLine(true);
+        input.setContentDescription(label);
+        box.addView(input, new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(box, new LinearLayout.LayoutParams(-1, -2)); gap(panel, 8); return input;
+    }
+    /** Date field: opens the Material date picker; the end icon clears it. Stored as AAAA-MM-GG. */
+    private EditText dateField(LinearLayout panel, String label, String value) {
+        TextInputLayout box = new TextInputLayout(new ContextThemeWrapper(this, R.style.Atlante_Field)); box.setHint(label);
+        TextInputEditText input = new TextInputEditText(box.getContext()); input.setText(value); input.setSingleLine(true);
+        input.setFocusable(false); input.setContentDescription(label);
+        input.setOnClickListener(v -> {
+            long selection;
+            try { selection = java.time.LocalDate.parse(input.getText().toString()).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(); }
+            catch (Exception e) { selection = MaterialDatePicker.todayInUtcMilliseconds(); }
+            MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker().setTitleText(label).setSelection(selection).build();
+            picker.addOnPositiveButtonClickListener(day -> input.setText(java.time.Instant.ofEpochMilli(day).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()));
+            picker.show(getSupportFragmentManager(), "date");
+        });
+        box.setEndIconMode(TextInputLayout.END_ICON_CUSTOM); box.setEndIconDrawable(R.drawable.ic_close);
+        box.setEndIconContentDescription("Cancella " + label); box.setEndIconOnClickListener(v -> input.setText(""));
+        box.addView(input, new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(box, new LinearLayout.LayoutParams(-1, -2)); gap(panel, 8); return input;
+    }
+    /** Material exposed dropdown menu; keeps the chosen index. */
+    private final class Picker {
+        final List<String> options; int index;
+        Picker(LinearLayout panel, String label, List<String> options, String selected) {
+            this.options = options; index = Math.max(0, options.indexOf(selected));
+            TextInputLayout box = new TextInputLayout(new ContextThemeWrapper(MainActivity.this, R.style.Atlante_Field_Dropdown)); box.setHint(label);
+            MaterialAutoCompleteTextView menu = new MaterialAutoCompleteTextView(box.getContext()); menu.setInputType(android.text.InputType.TYPE_NULL);
+            String[] labels = new String[options.size()];
+            for (int i = 0; i < labels.length; i++) labels[i] = display(options.get(i));
+            menu.setSimpleItems(labels); menu.setText(labels[index], false);
+            menu.setOnItemClickListener((parent, view, position, id) -> index = position);
+            box.addView(menu, new LinearLayout.LayoutParams(-1, -2));
+            panel.addView(box, new LinearLayout.LayoutParams(-1, -2)); gap(panel, 8);
+        }
+        int position() { return index; }
+        String value() { return options.get(index); }
+    }
+    private static String display(String option) {
+        return option.isEmpty() ? "Non indicato" : option.equals("CATALOGO") ? "Senza file (cartaceo o da cercare)" : option;
     }
     private void manualBook() {
         Book b = new Book();
@@ -763,18 +927,12 @@ public final class MainActivity extends ComponentActivity {
         final boolean creating = store.find(original.id) == null;
         LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(12));
         EditText title = field(panel, "Titolo", b.title), author = field(panel, "Autore", b.author);
-        EditText currentPage = field(panel, "Pagina attuale (facoltativa)", b.currentPage > 0 ? Integer.toString(b.currentPage) : "");
         EditText totalPages = field(panel, "Numero di pagine (facoltativo)", b.totalPages > 0 ? Integer.toString(b.totalPages) : "");
-        currentPage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER); totalPages.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        totalPages.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         EditText subtitle = field(panel, "Sottotitolo", b.subtitle);
         EditText tags = field(panel, "Tag (separati da virgola)", b.tags);
         EditText location = field(panel, "Posizione nella libreria", b.location);
-        Spinner medium = filterPicker(panel, "Formato del libro", Arrays.asList("", "Cartaceo", "Ebook", "Audiolibro"), b.medium);
-        Spinner status = filterPicker(panel, "Stato", Arrays.asList("Da leggere", "In lettura", "Letto", "In pausa", "Abbandonato"), b.status);
-        Spinner rating = filterPicker(panel, "Valutazione (0 = non assegnata)", Arrays.asList("0", "1", "2", "3", "4", "5"), Integer.toString(b.rating));
-        EditText started = field(panel, "Inizio lettura (AAAA-MM-GG)", b.started);
-        EditText finished = field(panel, "Fine lettura (AAAA-MM-GG)", b.finished);
-        EditText notes = field(panel, "Note personali", b.notes); notes.setSingleLine(false); notes.setMinLines(3);
+        Picker medium = new Picker(panel, "Formato del libro", Arrays.asList("", "Cartaceo", "Ebook", "Audiolibro"), b.medium);
         EditText series = field(panel, "Saga", b.series), number = field(panel, "Numero nella saga", b.number > 0 ? number(b.number) : "");
         number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         EditText genre = field(panel, "Genere", b.genre);
@@ -786,31 +944,18 @@ public final class MainActivity extends ComponentActivity {
             .setNegativeButton("Annulla", null).setPositiveButton("Salva", null).create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             if (title.getText().toString().trim().isEmpty()) { title.setError("Inserisci un titolo"); return; }
-            int current, total;
+            int total;
             try {
-                current = currentPage.getText().toString().trim().isEmpty() ? 0 : Integer.parseInt(currentPage.getText().toString().trim());
                 total = totalPages.getText().toString().trim().isEmpty() ? 0 : Integer.parseInt(totalPages.getText().toString().trim());
-                if (current < 0 || total < 0 || (total > 0 && current > total)) throw new NumberFormatException();
-            } catch (NumberFormatException e) { currentPage.setError("Controlla le pagine: attuale non oltre il totale"); return; }
-            b.currentPage = current; b.totalPages = total;
+                if (total < 0) throw new NumberFormatException();
+            } catch (NumberFormatException e) { totalPages.setError("Inserisci un numero di pagine valido"); return; }
+            b.totalPages = total; if (total > 0 && b.currentPage > total) b.currentPage = total;
             double n = 0;
             try { if (!number.getText().toString().isEmpty()) n = Double.parseDouble(number.getText().toString()); }
             catch (NumberFormatException e) { number.setError("Inserisci un numero"); return; }
             if (!Double.isFinite(n) || n < 0) { number.setError("Inserisci un numero positivo"); return; }
-            for (EditText date : new EditText[]{started, finished}) {
-                String value = date.getText().toString().trim();
-                try { if (!value.isEmpty()) java.time.LocalDate.parse(value); }
-                catch (java.time.format.DateTimeParseException e) { date.setError("Usa una data valida: AAAA-MM-GG"); return; }
-            }
-            if (!started.getText().toString().trim().isEmpty() && !finished.getText().toString().trim().isEmpty()
-                    && started.getText().toString().trim().compareTo(finished.getText().toString().trim()) > 0) {
-                finished.setError("La fine precede l’inizio"); return;
-            }
             b.subtitle = subtitle.getText().toString().trim(); b.tags = tags.getText().toString().trim();
-            b.location = location.getText().toString().trim(); b.medium = medium.getSelectedItem().toString();
-            b.status = status.getSelectedItem().toString(); b.rating = rating.getSelectedItemPosition();
-            b.started = started.getText().toString().trim(); b.finished = finished.getText().toString().trim();
-            b.notes = notes.getText().toString();
+            b.location = location.getText().toString().trim(); b.medium = medium.value();
             b.title = title.getText().toString().trim(); b.author = author.getText().toString().trim();
             if (b.author.isEmpty()) b.author = "Autore sconosciuto";
             b.series = series.getText().toString().trim(); b.number = n; b.genre = genre.getText().toString().trim();
@@ -820,7 +965,7 @@ public final class MainActivity extends ComponentActivity {
                 if (creating) store.addCatalog(b);
                 else store.replace(b);
             } catch (Exception e) { error(e); return; }
-            if (creating) { tab = "Tutti i libri"; query = ""; filterStatus = ""; filterGenre = ""; filterFormat = ""; showLibrary(); }
+            if (creating) { tab = "Tutti i libri"; query = ""; filterGenre = ""; filterFormat = ""; showLibrary(); }
             dialog.dismiss(); renderContent(); details(b);
         })); dialog.show();
     }
@@ -1078,7 +1223,7 @@ public final class MainActivity extends ComponentActivity {
         Button next = button(reverse ? "→ Precedente" : "Seguente ›", true, () -> turn(reverse ? -1 : 1));
         next.setEnabled(reverse ? page > 0 : page + 1 < pages.size()); turns.addView(next, new LinearLayout.LayoutParams(0, -2, 1));
         if (page + 1 == pages.size() && !reading.status.equals("Letto")) {
-            gap(footer, 6); footer.addView(button("Segna come letto", false, () -> { reading.status = "Letto"; rememberPage(); showReader(); }));
+            gap(footer, 6); footer.addView(button("Segna come letto", false, () -> { reading.status = Book.READ; Book.applyStatusEffects(reading, java.time.LocalDate.now().toString()); rememberPage(); showReader(); }));
         }
     }
 

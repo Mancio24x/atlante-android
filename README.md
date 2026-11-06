@@ -10,15 +10,19 @@ La compilazione automatica esegue test JVM, lint e verifica della firma; la prov
 
 ## Navigazione e temi
 
-Il pulsante **☰** in alto a sinistra apre il menu laterale: Tutti i libri, Desideri,
-In lettura, Letti, Mappa, Autori e Saghe, più ricerca online, importazione e impostazioni.
-Il menu si chiude con **☰**, toccando fuori o premendo Indietro.
-La rotella **⚙** apre le impostazioni, con temi e preferenze di lettura.
+L’interfaccia usa Material Design 3. In alto ci sono la barra di ricerca e i chip
+**Tutti · Da leggere · In lettura · Letti**, più il chip **Filtri e ordine**; il pulsante
+flottante **Aggiungi libro** crea una scheda manuale. Il menu **☰** porta a Biblioteca,
+Mappa, Autori e Saghe, alla ricerca online, all’importazione e alle impostazioni; si
+chiude toccando fuori o con Indietro. Indietro da Mappa, Autori o Saghe torna alla biblioteca.
 
-Sono disponibili nove temi, ricordati al riavvio: **Atlante**, **Rosa petalo**,
-**Lavanda**, **Salvia**, **Blu polvere**, **Sabbia**, **Grafite**, **Notte viola**
-e **AMOLED nero**. L’AMOLED usa nero puro per lo sfondo della biblioteca.
-Pulsanti, schede, campi, menu e nodi della mappa hanno bordi arrotondati.
+Il tema predefinito è **Colori del telefono** (Material You, Android 12+): segue lo
+sfondo e il tema chiaro/scuro del telefono. Restano disponibili nove palette, ricordate
+al riavvio: **Atlante**, **Rosa petalo**, **Lavanda**, **Salvia**, **Blu polvere**,
+**Sabbia**, **Grafite**, **Notte viola** e **AMOLED nero** (nero puro).
+
+La **Mappa** occupa tutto lo schermo: in alto si cerca l’autore, sotto si scorre in
+verticale autore → saghe → libri nell’ordine di lettura.
 La nuova icona usa sfondo nero, libro chiaro e bandiera pirata rossa.
 
 La ricerca lavora separatamente dalle importazioni e mostra una prima pagina
@@ -35,7 +39,7 @@ artifact. Usa soltanto dati fittizi nell’app debug, separata dalla libreria pe
 
 ## Catalogazione manuale, scheda e copertine
 
-**＋ Aggiungi libro** apre una scheda manuale utilizzabile anche offline, senza ISBN
+**Aggiungi libro** apre una scheda manuale utilizzabile anche offline, senza ISBN
 né file. Solo il titolo è obbligatorio. Puoi registrare sottotitolo, autori, tag,
 scaffale/posizione, cartaceo/ebook/audiolibro, stato, voto da 0 a 5, date di inizio
 e fine lettura, pagine, trama e note. Le modifiche si applicano su una copia e
@@ -43,7 +47,7 @@ vengono confermate soltanto con **Salva**; **Annulla** conserva la scheda preced
 
 Dalla scheda puoi scegliere una copertina dalla galleria tramite il selettore
 Android: viene salvata una copia privata, senza cambiare l’originale. Il pulsante
-**Elenco / Griglia** cambia la visualizzazione e ricorda la scelta al riavvio.
+L’icona **Elenco / Griglia** in alto cambia la visualizzazione e ricorda la scelta al riavvio.
 Piano e limiti della modifica sono in [PIANO-E-VERIFICA.md](PIANO-E-VERIFICA.md).
 
 Il Mac usato da Craft Anything è configurato con Java 17, Gradle 8.9 e Android
@@ -70,9 +74,9 @@ poco dopo l’ultima pagina girata e all’uscita dal lettore.
 
 ## Filtri e ordinamento della biblioteca
 
-**Filtri e ordine**, sotto la ricerca, combina stato di lettura, genere e formato.
+**Filtri e ordine**, accanto ai chip degli stati, combina genere e formato.
 Le scelte restano al riavvio e valgono anche per autori, saghe e mappa; il contatore
-mostra i risultati sul totale. **Azzera filtri** permette di ritrovare tutti i libri.
+mostra i risultati sul totale. **Azzera** permette di ritrovare tutti i libri.
 L’ordine può essere per titolo, autore o saga e numero del volume (i libri senza
 saga seguono gli altri). La ricerca trova anche gli ISBN salvati.
 
@@ -89,17 +93,21 @@ Premi **Cerca libri online** e cerca un titolo, autore o ISBN su Open Library.
 metadati dell’edizione di riferimento (preferita italiana tra quelle restituite).
 I campi mancanti sono indicati come non disponibili. Verifica l’edizione e premi
 **Aggiungi alla mia libreria**: viene salvata una scheda senza file, disponibile
-anche offline e nella sezione **Desideri**. La ricerca non scarica ebook.
+anche offline, con stato **Da leggere**. La ricerca non scarica ebook.
 Lo stesso lavoro di Open Library viene riconosciuto per evitare schede duplicate.
 
 Anche i file importati passano da una scheda di anteprima: ogni libro viene
 aggiunto solo dopo conferma. I dati del file, inclusa la trama se presente,
 restano modificabili in **Modifica scheda**. I cataloghi esistenti vengono conservati.
 
-Dalla scheda usa **Aggiorna avanzamento e note** per pagina attuale, totale e
-note personali, anche per un cartaceo. La percentuale viene calcolata dal totale.
-Lo stato comprende Da leggere, In lettura, Letto, In pausa e Abbandonato; le sezioni
-**In lettura** e **Letti** aiutano a ritrovare i titoli. Il segnalibro del lettore
+Gli stati di lettura sono tre: **Da leggere**, **In lettura** e **Letto**. Le schede
+create con le versioni precedenti vengono convertite all’apertura: «In pausa» diventa
+In lettura, «Abbandonato» diventa Da leggere. Nella scheda del libro la sezione
+**Lettura** cambia lo stato con un tocco (In lettura imposta la data di inizio, Letto
+quella di fine e l’ultima pagina) e mostra avanzamento, date, voto e note.
+**Aggiorna pagina, date e voto** apre un’unica finestra con stato, pagina attuale e
+totale, date scelte dal calendario, valutazione da 0 a 5 stelle e note; si salva solo
+con **Salva**. **Modifica scheda** resta per i dati del libro. Il segnalibro del lettore
 digitale resta separato dalle pagine dell’edizione cartacea inserite manualmente.
 L’icona dell’app mostra un libro chiaro con bandiera pirata rossa su sfondo nero.
 
@@ -123,7 +131,7 @@ Riferimenti: [Search API](https://openlibrary.org/dev/docs/api/search),
   regolabile e punto di lettura salvato. Il testo EPUB viene semplificato: non è
   un’impaginazione completa con immagini, stili e tabelle.
 - Lettore CBZ a pagine con ordine numerico e direzione manga; avanzamento salvato.
-- Stato Da leggere/In lettura/Letto; esportazione del file originale e rimozione
+- Stati Da leggere/In lettura/Letto; esportazione del file originale e rimozione
   della sola copia nella libreria Android.
 
 Questa edizione non comprende conversioni AZW3/EPUB,
