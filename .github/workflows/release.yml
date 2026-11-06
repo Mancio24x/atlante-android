@@ -3,6 +3,8 @@ name: Android APK
 on:
   push:
     branches: [main]
+    # Only app changes produce a new release (and an Obtainium update).
+    paths-ignore: ['**.md', 'scripts/**', '.github/workflows/ui-preview.yml', '.github/workflows/verify.yml']
   workflow_dispatch:
 
 permissions:

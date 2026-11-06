@@ -32,14 +32,14 @@ def wait_for_app_files():
         try: adb('shell','run-as',package,'ls','files',stderr=subprocess.STDOUT);return
         except subprocess.CalledProcessError: time.sleep(.5)
     raise RuntimeError('App data directory not ready')
-def tap(label, scroll=False, editable=False):
+def tap(label, scroll=False, editable=False, exact=False):
     for attempt in range(7 if scroll else 3):
         tree=dump()
         if dismiss_system_dialog(tree): tree=dump()
         for node in tree.iter('node'):
             if editable and not node.get('class','').endswith('EditText'): continue
             values=[node.get('text',''),node.get('content-desc','')]
-            if any(v.casefold().startswith(label.casefold()) for v in values):
+            if any((v.casefold()==label.casefold()) if exact else v.casefold().startswith(label.casefold()) for v in values):
                 bounds=list(map(int,re.findall(r'\d+',node.get('bounds',''))))
                 if len(bounds)==4 and bounds[3]>bounds[1] and bounds[2]>bounds[0]:
                     adb('shell','input','tap',str((bounds[0]+bounds[2])//2),str((bounds[1]+bounds[3])//2));time.sleep(.4);return
@@ -90,8 +90,8 @@ book=next(b for b in catalog() if b['title']=='Il giardino delle storie')
 assert book['status']=='Letto' and book.get('finished'), 'State change not saved'
 shot('12c-sheet-read');tap('Posizione');time.sleep(.4);shot('12d-position-wheel');tap('Annulla')
 # Chapters: added with a wheel, then rated with stars and a comment.
-tap('Tutti');tap('Il sentiero di casa');tap('Capitoli');tap('Aggiungi capitoli');tap('Aggiungi')
-tap('Capitolo 1',True);shot('12e-chapter');tap('Salva')
+tap('Tutti');tap('Il sentiero di casa');tap('Capitoli');tap('Aggiungi capitoli');tap('Aggiungi',exact=True)
+tap('Capitolo 1',True,exact=True);shot('12e-chapter');tap('Salva')
 book=next(b for b in catalog() if b['title']=='Il sentiero di casa')
 assert len(book.get('chapters',[]))==10, 'Chapters not added'
 shot('12f-chapters');tap('Chiudi')
