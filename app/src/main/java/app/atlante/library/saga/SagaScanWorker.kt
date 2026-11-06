@@ -36,6 +36,8 @@ class SagaScanWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val batch = due.take(if (Hardcover.enabled) BATCH_HARDCOVER else BATCH)
         for (b in batch) {
             if (isStopped) return Result.success()
+            // A Hardcover sync is running: it gets the request budget, the scan goes on in a minute.
+            if (app.atlante.library.sync.HardcoverSync.syncing) { next(applicationContext); return Result.success() }
             val force = links[b.id]?.let { it.status in UNSURE && it.checkedAt < recheckSince } ?: false
             runCatching { repo.recognize(b, force) }
         }

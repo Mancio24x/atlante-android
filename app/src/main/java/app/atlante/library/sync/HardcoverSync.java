@@ -22,7 +22,11 @@ public final class HardcoverSync {
     public static final String SERVICE = "hardcover", ENDPOINT = "https://api.hardcover.app/v1/graphql";
     private static long nextRequest;
 
-    public static final class Settings { public String token = ""; public boolean createMissing = true, sendToRead = false; }
+    public static final class Settings { public String token = ""; public boolean createMissing = true, sendToRead = false; public volatile boolean cancelled; }
+    /** True while a sync runs: the background saga scan waits, so the sync gets Hardcover's whole request budget. */
+    public static volatile boolean syncing;
+    /** A book searched on Hardcover without result is not searched again for this long. */
+    static final long MISSING_RETRY = 30L * 86_400_000L;
     public static final class Report {
         public String user = ""; public int remote, linked, pushed, pulled, created, added, onlyHere, recognized;
         public final List<String> notes = new ArrayList<>();
@@ -38,6 +42,20 @@ public final class HardcoverSync {
 
     /** The API is injected so that the merge can be tested without a network. */
     public static Report sync(SyncStore store, Settings s, Progress progress, Api api) throws Exception {
+        syncing = true;
+        List<Book> pending = new ArrayList<>();
+        try { return run(store, s, progress, api, pending); }
+        finally { syncing = false; store.replaceAll(pending); }
+    }
+
+    /** Changed books are saved in groups of 100 (and at the end, also when interrupted or failing). */
+    private static void keep(SyncStore store, List<Book> pending, Book local, Book copy) throws Exception {
+        if (copy.json().toString().equals(local.json().toString())) return;
+        pending.add(copy);
+        if (pending.size() >= 100) { store.replaceAll(pending); pending.clear(); }
+    }
+
+    private static Report run(SyncStore store, Settings s, Progress progress, Api api, List<Book> pending) throws Exception {
         Report report = new Report();
         progress.update("Collegamento a Hardcover…");
         Object me = api.call("query { me { id username } }", new JSONObject()).opt("me");
@@ -47,6 +65,7 @@ public final class HardcoverSync {
 
         List<JSONObject> remote = new ArrayList<>();
         for (int offset = 0; ; offset += 100) {
+            if (s.cancelled) { report.notes.add("Sincronizzazione interrotta: niente è stato cambiato."); return report; }
             progress.update("Lettura della libreria Hardcover · " + remote.size() + " libri");
             JSONArray page = api.call("query($id:Int!,$offset:Int!){ user_books(where:{user_id:{_eq:$id}}, order_by:{id:asc}, limit:100, offset:$offset) {"
                 + " id book_id status_id rating edition { id pages isbn_13 isbn_10 }"
@@ -61,23 +80,34 @@ public final class HardcoverSync {
 
         String today = LocalDate.now().toString();
         Set<Integer> matched = new HashSet<>();
-        for (Book local : store.snapshot()) {
+        List<Book> all = store.snapshot(); int done = 0; long now = System.currentTimeMillis();
+        for (Book local : all) {
+            if (s.cancelled) { report.notes.add("Sincronizzazione interrotta: i libri già controllati sono salvati."); return report; }
+            done++;
+            if (done % 25 == 0) progress.update("Confronto con Hardcover · " + done + " di " + all.size());
             JSONObject ub = match(local, remote, matched);
             SyncCore.Snapshot here = SyncCore.Snapshot.of(local);
             Book copy = Book.from(local.json());
             if (ub == null) {
                 // Books not yet on Hardcover are sent when they have a reading (or when the user asks for all of them).
                 if (here.status.equals(Book.TO_READ) && !s.sendToRead) { report.onlyHere++; continue; }
-                progress.update("Ricerca su Hardcover: " + local.title);
+                // Searched recently without result: not again at every sync (each search costs about a second).
+                JSONObject old = SyncCore.link(local, SERVICE);
+                if (old != null && old.optInt("id") == 0 && now - old.optLong("missing") < MISSING_RETRY) { report.onlyHere++; continue; }
+                progress.update("Ricerca su Hardcover (" + done + " di " + all.size() + "): " + local.title);
                 Integer bookId = findBook(api, local);
-                if (bookId == null) { report.onlyHere++; report.notes.add("Non trovato su Hardcover: " + local.title); continue; }
+                if (bookId == null) {
+                    report.onlyHere++; report.notes.add("Non trovato su Hardcover: " + local.title);
+                    SyncCore.remember(copy, SERVICE, new JSONObject().put("missing", now), here); keep(store, pending, local, copy);
+                    continue;
+                }
                 JSONObject object = new JSONObject().put("book_id", bookId).put("status_id", statusId(here.status));
                 if (here.rating > 0) object.put("rating", here.rating);
                 JSONObject created = api.call("mutation($o:UserBookCreateInput!){ insert_user_book(object:$o) { id error } }", new JSONObject().put("o", object)).optJSONObject("insert_user_book");
                 if (created == null || created.optInt("id") == 0) { report.notes.add("Hardcover non ha aggiunto «" + local.title + "»" + (created == null ? "" : ": " + created.optString("error"))); continue; }
                 pushProgress(api, created.getInt("id"), here, null);
                 SyncCore.remember(copy, SERVICE, new JSONObject().put("id", created.getInt("id")).put("book", bookId), here);
-                store.replace(copy); report.added++; continue;
+                keep(store, pending, local, copy); report.added++; continue;
             }
             matched.add(ub.getInt("id")); report.linked++;
             SyncCore.Snapshot there = snapshot(ub);
@@ -100,9 +130,11 @@ public final class HardcoverSync {
                 SyncCore.apply(copy, there, false, true, today);
                 SyncCore.remember(copy, SERVICE, newLink, SyncCore.Snapshot.of(copy)); report.pulled++;
             } else SyncCore.remember(copy, SERVICE, newLink, here);
-            store.replace(copy);
+            keep(store, pending, local, copy);
         }
+        store.replaceAll(pending); pending.clear();
         if (s.createMissing) for (JSONObject ub : remote) {
+            if (s.cancelled) { report.notes.add("Sincronizzazione interrotta."); return report; }
             if (matched.contains(ub.getInt("id"))) continue;
             Book b = sheet(ub);
             if (b == null || store.find(b.id) != null) continue;

@@ -149,6 +149,14 @@ public final class LibraryStore implements SyncStore {
         try { save(); } catch (Exception e) { books.set(index, previous); throw e; }
     }
 
+    /** One write for many changed books; on failure every book goes back to how it was. */
+    @Override public synchronized void replaceAll(List<Book> updated) throws Exception {
+        if (updated.isEmpty()) return;
+        ArrayList<Book> before = new ArrayList<>(books);
+        for (Book u : updated) { Book previous = find(u.id); if (previous != null) books.set(books.indexOf(previous), u); }
+        try { save(); } catch (Exception e) { books.clear(); books.addAll(before); throw e; }
+    }
+
     public synchronized void saveDownloadedCover(Book book, byte[] bytes) throws Exception {
         if (find(book.id) == null) return;
         if (!directory(book).isDirectory() && !directory(book).mkdirs()) return;

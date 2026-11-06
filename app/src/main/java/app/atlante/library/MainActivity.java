@@ -1827,18 +1827,24 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /** A loading dialog whose message can change while the work goes on. */
-    private TextView progressDialog(String title, AlertDialog[] holder) {
+    private TextView progressDialog(String title, AlertDialog[] holder) { return progressDialog(title, holder, null); }
+    /** With [stop]: an "Interrompi" button; the work stops at the next book and keeps what it already did. */
+    private TextView progressDialog(String title, AlertDialog[] holder, Runnable stop) {
         LinearLayout panel=row(); panel.setPadding(dp(24),dp(16),dp(24),dp(16));
         CircularProgressIndicator spinner=new CircularProgressIndicator(this); spinner.setIndeterminate(true); panel.addView(spinner);
         TextView label=text("Un momento…",15,INK,false); label.setPadding(dp(16),0,0,0); panel.addView(label,new LinearLayout.LayoutParams(0,-2,1));
-        holder[0]=dialogBuilder().setTitle(title).setView(panel).setCancelable(false).create(); holder[0].show(); return label;
+        com.google.android.material.dialog.MaterialAlertDialogBuilder b=dialogBuilder().setTitle(title).setView(panel).setCancelable(false);
+        if(stop!=null) b.setNegativeButton("Interrompi",null);
+        holder[0]=b.create(); holder[0].show();
+        if(stop!=null) holder[0].getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v->{ stop.run(); label.setText("Interrompo dopo il libro in corso…"); v.setEnabled(false); });
+        return label;
     }
 
     private void runHardcover() {
         if(busy) return; busy=true;
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         HardcoverSync.Settings s=new HardcoverSync.Settings(); s.createMissing=prefs.getBoolean("hardcoverCreate",true); s.sendToRead=prefs.getBoolean("hardcoverToRead",false);
-        AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Hardcover",dialog);
+        AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Hardcover",dialog,()->s.cancelled=true);
         worker.execute(()->{
             Exception failure=null; HardcoverSync.Report r=null;
             try { s.token=app.atlante.library.sync.HardcoverAuth.token(this); r=HardcoverSync.sync(store,s,m->runOnUiThread(()->label.setText(m))); } catch(Exception e){ failure=e; }
