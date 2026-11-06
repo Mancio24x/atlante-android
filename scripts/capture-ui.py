@@ -224,6 +224,7 @@ print('Cache settings completed.')
 
 # Ripara saghe: runs on the whole sample library and reports; the library itself is unchanged except empty saga fields.
 before=len(catalog())
+tap('Home',exact=True);tap('Impostazioni')   # back to the top of the settings
 tap('Ripara saghe',True,exact=True)
 for _ in range(120):
     if any(n.get('text','').startswith('Fatto:') for n in dump().iter('node')): break

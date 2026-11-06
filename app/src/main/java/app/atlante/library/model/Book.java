@@ -50,12 +50,18 @@ public final class Book {
     public static final class Chapter {
         public String title = "", comment = "";
         public int rating;
+        /** 0 = chapter, 1 = sub-chapter, … (from the book's table of contents). */
+        public int level;
         public Chapter() { }
         public Chapter(String title) { this.title = title; }
-        public JSONObject json() throws JSONException { return new JSONObject().put("title", title).put("rating", rating).put("comment", comment); }
+        public JSONObject json() throws JSONException {
+            JSONObject j = new JSONObject().put("title", title).put("rating", rating).put("comment", comment);
+            if (level > 0) j.put("level", level);
+            return j;
+        }
         public static Chapter from(JSONObject j) {
             Chapter c = new Chapter(j.optString("title"));
-            c.rating = Math.max(0, Math.min(5, j.optInt("rating"))); c.comment = j.optString("comment");
+            c.rating = Math.max(0, Math.min(5, j.optInt("rating"))); c.comment = j.optString("comment"); c.level = Math.max(0, Math.min(5, j.optInt("level")));
             return c;
         }
     }
@@ -105,7 +111,7 @@ public final class Book {
         b.title = j.optString("title"); b.author = j.optString("author", b.author);
         b.series = j.optString("series"); b.genre = j.optString("genre");
         b.description = j.optString("description"); b.format = j.getString("format");
-        if (!b.format.matches("EPUB|TXT|CBZ|CATALOGO")) throw new JSONException("Formato non valido");
+        if (!b.format.matches("EPUB|TXT|CBZ|AZW3|CATALOGO")) throw new JSONException("Formato non valido");
         b.status = normalizeStatus(j.optString("status", b.status)); b.number = j.optDouble("number", 0);
         b.page = Math.max(0, j.optInt("page", 0));
         b.edition = j.optString("edition"); b.isbn = j.optString("isbn"); b.publisher = j.optString("publisher"); b.language = j.optString("language"); b.year = j.optString("year"); b.coverId = j.optLong("coverId", 0);

@@ -168,33 +168,38 @@ object CoverSearch {
 
     private val NUMBER = Regex("^([0-9]+|[ivx]+)$")
 
-    /** Significant words of a title part: articles dropped, volume numbers kept apart. */
+    /** Significant words of a title part: articles dropped. */
     private fun significant(part: String) = words(part).filterNot { it in STOP }.toSet()
 
     /** Parts of a title ("Blackwater I. La piena" → "Blackwater I", "La piena"); volume labels are marked. */
-    private fun rawParts(title: String) = title.split(Regex("\\s*[.:;]\\s+|\\s+[-–—]\\s+|\\s*#\\s*\\d+[.:]?\\s*|\\s*\\(.*?\\)\\s*"))
+    /** "Mistborn #1. L'ultimo impero - The Final Empire" → "Mistborn #1", "L'ultimo impero", "The Final Empire". */
+    private fun segments(title: String) = title.replace(Regex("\\s*\\(.*?\\)\\s*"), " ").split(Regex("\\s*[.:;]\\s+|\\s+[-–—]\\s+")).filter { it.isNotBlank() }
 
-    /** Title parts without volume labels ("Blackwater I", "Libro 2"): those prove nothing about the book. */
-    private fun parts(title: String) = rawParts(title)
-        .filterNot { part -> Normalizer.normalize(part.lowercase(), Normalizer.Form.NFD).split(Regex("[^a-z0-9]+")).any { NUMBER.matches(it) } }
-        .map { significant(it) }.filter { it.isNotEmpty() }
+    /** A volume label: "Blackwater I", "Mistborn #1", "Libro 2". */
+    private fun isLabel(segment: String) = segment.contains('#') ||
+        Normalizer.normalize(segment.lowercase(), Normalizer.Form.NFD).split(Regex("[^a-z0-9]+")).any { NUMBER.matches(it) }
 
     /**
      * Same book title, strictly:
      * - the same significant words; or
-     * - the same title part that is not a volume label ("La piena" = "Blackwater I. La piena", but
-     *   "Blackwater I" alone proves nothing); or
-     * - a title of two or more words contained in a longer one ("L'ultimo impero" in
-     *   "Mistborn #1. L'ultimo impero - The Final Empire"). One-word titles ("Dune") must match exactly.
+     * - the book's title is the first part of the store title ("Il nome della rosa. Nuova edizione"), or the part
+     *   right after a volume label ("Mistborn #1. L'ultimo impero", "Blackwater I. La piena"). A saga name later in
+     *   the title proves nothing: "Morning Star - Red Rising" is not "Red Rising". One-word titles match exactly.
      */
     fun titleMatches(mine: String, theirs: String): Boolean {
         val a = significant(mine); val b = significant(theirs)
         if (a.isEmpty() || b.isEmpty()) return false
         if (a == b) return true
-        val pa = parts(mine); val pb = parts(theirs)
-        if (pa.any { x -> (x.size >= 2 || x.first().length >= 4) && pb.any { it == x } }) return true
-        val numbers = a.filter { NUMBER.matches(it) }
-        return a.size >= 2 && b.containsAll(a) && b.size <= a.size + 8 && numbers.all { it in b }
+        val wanted = segments(mine).filterNot(::isLabel).map(::significant).filter { it.size >= 2 || it.firstOrNull()?.let { w -> w.length >= 4 } == true }
+        val theirSegments = segments(theirs)
+        for ((i, seg) in theirSegments.withIndex()) {
+            if (isLabel(seg)) continue
+            val allowed = i == 0 || isLabel(theirSegments[i - 1])
+            if (allowed && significant(seg) in wanted) return true
+        }
+        // "Il nome della rosa edizione illustrata": the store title starts with the whole book title.
+        val mineWords = words(mine).filterNot { it in STOP }; val theirWords = words(theirs).filterNot { it in STOP }
+        return mineWords.size >= 2 && theirWords.size > mineWords.size && theirWords.take(mineWords.size) == mineWords
     }
 
     fun authorMatches(mine: String, theirs: String): Boolean {

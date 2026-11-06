@@ -29,7 +29,7 @@ public final class BackupArchive {
     public static final int COVER_LIMIT = 12 * 1024 * 1024;
     public static final long BOOK_LIMIT = 512L * 1024 * 1024;
     public static final int MAX_BOOKS = 100_000;
-    private static final Pattern ENTRY = Pattern.compile("books/([0-9a-f]{64})/(cover|book\\.(epub|txt|cbz))");
+    private static final Pattern ENTRY = Pattern.compile("books/([0-9a-f]{64})/(cover|book\\.(epub|txt|cbz|azw3))");
 
     public static final class Contents {
         public final ArrayList<Book> books = new ArrayList<>();
@@ -145,7 +145,7 @@ public final class BackupArchive {
                 if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException("Impossibile preparare il ripristino");
                 File partial = new File(directory, m.group(2) + ".part");
                 String hash = copyLimited(zip, partial, cover ? COVER_LIMIT : BOOK_LIMIT);
-                if (!cover && !hash.equals(book.id)) { partial.delete(); continue; }
+                if (!cover && !hash.equals(book.meta.optString("fileSha256",book.id))) { partial.delete(); continue; }
                 if (!partial.renameTo(target)) throw new IOException("Impossibile preparare il ripristino");
                 if (!cover) restored.add(book.id);
             }

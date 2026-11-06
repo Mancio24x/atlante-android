@@ -451,3 +451,8 @@ titoli e nei metadati. Mistborn distingue le due ere; raccolte e omnibus non ric
 un numero inventato. È un catalogo iniziale, non un riconoscimento universale.
 Per le altre saghe puoi modificare saga e numero nella scheda. I numeri sconosciuti
 vengono dopo quelli noti, sia nella mappa sia nell’ordinamento per saga.
+
+
+## Impostazioni, eBook e obiettivi
+
+La nuova organizzazione, i formati realmente supportati, la conservazione dei dati e i test sono descritti in [Aggiornamento impostazioni e importazione](docs/AGGIORNAMENTO-IMPOSTAZIONI-IMPORTAZIONE.md).

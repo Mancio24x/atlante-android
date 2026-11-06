@@ -71,6 +71,16 @@ public class BackupArchiveTest {
         assertTrue(new File(staging, sheet.id + "/cover").isFile());
     }
 
+    @Test public void attachedAzw3KeepsFileAcrossBackup() throws Exception {
+        Book b=book(new String(new char[64]).replace('\0','e'),"AZW3");
+        b.meta.put("fileSha256",sha(b.title.getBytes(StandardCharsets.UTF_8)));
+        byte[] bytes=backup(library(b),true,b);
+        BackupArchive.Contents contents=BackupArchive.readManifest(new ByteArrayInputStream(bytes));
+        File staging=temp.newFolder("attached");
+        assertTrue(BackupArchive.extract(new ByteArrayInputStream(bytes),byId(contents.books),staging).contains(b.id));
+        assertTrue(new File(staging,b.id+"/book.azw3").isFile());
+    }
+
     @Test public void lightBackupLeavesBookFilesOut() throws Exception {
         Book epub = book(sha("Titolo EPUB".getBytes(StandardCharsets.UTF_8)), "EPUB");
         byte[] zip = backup(library(epub), false, epub);

@@ -112,7 +112,15 @@ public final class EbookParser {
                 else if (tag.equals("publisher")) book.publisher = p.nextText();
                 else if (tag.equals("language")) book.language = p.nextText();
                 else if (tag.equals("date")) book.year = p.nextText();
-                else if (tag.equals("identifier") && book.isbn.isEmpty()) book.isbn = p.nextText();
+                else if (tag.equals("identifier")) {
+                    String id = p.nextText().trim();
+                    Set<String> isbn = app.atlante.library.model.BookMatcher.isbns(id.replaceFirst("(?i)^urn:isbn:", ""));
+                    if (!isbn.isEmpty() && book.isbn.isEmpty()) book.isbn = isbn.iterator().next();
+                    else if (isbn.isEmpty() && !id.isEmpty()) {
+                        org.json.JSONObject ids = book.meta.optJSONObject("ids"); if (ids == null) ids = new org.json.JSONObject();
+                        ids.put(id.toLowerCase(Locale.ROOT).startsWith("urn:uuid:") ? "uuid" : "epub", id); book.meta.put("ids", ids);
+                    }
+                }
             }
             if (opf.manifest.size() > 10000 || opf.spine.size() > MAX_PAGES) throw new IOException("EPUB troppo complesso");
         }
@@ -173,22 +181,37 @@ public final class EbookParser {
     }
 
     public static void metadata(File file, File cover, Book book) throws Exception {
-        if (book.format.equals("TXT")) return;
+        if (book.format.equals("TXT")) { checkText(file); return; }
+        if (book.format.equals("AZW3")) { Azw3.metadata(file, cover, book); return; }
         try (ZipFile zip = new ZipFile(file)) {
             String image = null;
             if (book.format.equals("EPUB")) {
+                if (protectedEpub(zip)) throw new IOException("Questo EPUB è protetto da DRM: Atlante non può aprirlo né importarlo.");
                 Package p = epub(zip, book);
                 image = p.manifest.get(p.coverId);
+                try { book.chapters.clear(); for (Book.Chapter c : chapters(zip, p)) book.chapters.add(c); } catch (Exception ignored) { /* Without an index the book is still readable. */ }
             } else {
                 List<String> pages = comicPages(zip);
                 if (pages.isEmpty()) throw new IOException("Il CBZ non contiene immagini");
                 image = pages.get(0);
-                ZipEntry comicInfo = zip.getEntry("ComicInfo.xml");
+                ZipEntry comicInfo = null;
+                for (Enumeration<? extends ZipEntry> e = zip.entries(); e.hasMoreElements();) {
+                    ZipEntry z = e.nextElement(); String n = z.getName();
+                    if (n.equals("ComicInfo.xml") || n.endsWith("/ComicInfo.xml")) { comicInfo = z; break; }
+                }
                 if (comicInfo != null) {
-                    XmlPullParser p = xml(entry(zip, "ComicInfo.xml"));
+                    XmlPullParser p = xml(entry(zip, comicInfo.getName()));
                     for (int t = p.getEventType(); t != XmlPullParser.END_DOCUMENT; t = p.next()) {
                         if (t != XmlPullParser.START_TAG) continue;
                         String tag = p.getName();
+                        // ComicInfo can say which page is the front cover.
+                        if (tag.equals("Page") && attr(p, "Type").equalsIgnoreCase("FrontCover")) {
+                            try { int index = Integer.parseInt(attr(p, "Image")); if (index >= 0 && index < pages.size()) image = pages.get(index); } catch (NumberFormatException ignored) { }
+                            continue;
+                        }
+                        if (tag.equals("LanguageISO")) { book.language = p.nextText(); continue; }
+                        if (tag.equals("Publisher")) { book.publisher = p.nextText(); continue; }
+                        if (tag.equals("Year")) { book.year = p.nextText(); continue; }
                         if (tag.equals("Title")) book.title = p.nextText();
                         else if (tag.equals("Writer")) book.author = p.nextText();
                         else if (tag.equals("Series")) book.series = p.nextText();
@@ -206,6 +229,86 @@ public final class EbookParser {
         }
     }
 
+    /** A TXT file is readable text, not a renamed binary. */
+    private static void checkText(File file) throws IOException {
+        byte[] head;
+        try (InputStream in = new FileInputStream(file)) {
+            ByteArrayOutputStream sample=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+            while(sample.size()<4096 && (n=in.read(buffer,0,4096-sample.size()))!=-1)sample.write(buffer,0,n);
+            head=sample.toByteArray();
+        }
+        if(head.length==0)throw new IOException("Il file TXT è vuoto");
+        int zeros = 0; for (byte b : head) if (b == 0) zeros++;
+        boolean utf16 = head.length >= 2 && ((head[0] == (byte) 0xFF && head[1] == (byte) 0xFE) || (head[0] == (byte) 0xFE && head[1] == (byte) 0xFF));
+        if (!utf16 && zeros > head.length / 50 + 1) throw new IOException("Il file TXT non contiene testo leggibile");
+    }
+
+    /**
+     * Text encoding of a TXT file: byte order mark (UTF-8, UTF-16), then valid UTF-8, otherwise Windows-1252
+     * (the usual encoding of older Italian texts, a superset of ISO-8859-1).
+     */
+    public static String decodeText(byte[] bytes) {
+        if (bytes.length >= 3 && bytes[0] == (byte) 0xEF && bytes[1] == (byte) 0xBB && bytes[2] == (byte) 0xBF) return new String(bytes, 3, bytes.length - 3, StandardCharsets.UTF_8);
+        if (bytes.length >= 2 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) return new String(bytes, 2, bytes.length - 2, StandardCharsets.UTF_16LE);
+        if (bytes.length >= 2 && bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF) return new String(bytes, 2, bytes.length - 2, StandardCharsets.UTF_16BE);
+        try {
+            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        } catch (java.nio.charset.CharacterCodingException e) {
+            return new String(bytes, java.nio.charset.Charset.forName("windows-1252"));
+        }
+    }
+
+    /** True when the EPUB encrypts its content (DRM); font obfuscation alone is not DRM. */
+    public static boolean protectedEpub(ZipFile zip) throws Exception {
+        if (zip.getEntry("META-INF/rights.xml") != null) return true;
+        if (zip.getEntry("META-INF/encryption.xml") == null) return false;
+        XmlPullParser p = xml(entry(zip, "META-INF/encryption.xml"));
+        for (int t = p.getEventType(); t != XmlPullParser.END_DOCUMENT; t = p.next()) {
+            if (t != XmlPullParser.START_TAG || !p.getName().equals("EncryptionMethod")) continue;
+            String algorithm = attr(p, "Algorithm");
+            if (!algorithm.equals("http://www.idpf.org/2008/embedding") && !algorithm.equals("http://ns.adobe.com/pdf/enc#RC")) return true;
+        }
+        return false;
+    }
+
+    /** Table of contents with levels: EPUB 3 navigation first, then the EPUB 2 NCX; nested entries are sub-chapters. */
+    public static List<Book.Chapter> chapters(File file) throws Exception {
+        try (ZipFile zip = new ZipFile(file)) { return chapters(zip, epub(zip, null)); }
+    }
+
+    static List<Book.Chapter> chapters(ZipFile zip, Package p) throws Exception {
+        List<Book.Chapter> out = new ArrayList<>();
+        if (p.nav != null && zip.getEntry(p.nav) != null) {
+            XmlPullParser x = xml(entry(zip, p.nav)); int toc = -1, lists = 0;
+            for (int t = x.getEventType(); t != XmlPullParser.END_DOCUMENT && out.size() < MAX_CHAPTERS; t = x.next()) {
+                if (t == XmlPullParser.END_TAG && x.getName().equals("nav") && x.getDepth() == toc) toc = -1;
+                if (toc >= 0 && t == XmlPullParser.END_TAG && x.getName().equals("ol")) lists--;
+                if (t != XmlPullParser.START_TAG) continue;
+                if (x.getName().equals("nav") && Arrays.asList(attr(x, "type").split("\\s+")).contains("toc")) { toc = x.getDepth(); lists = 0; }
+                else if (toc >= 0 && x.getName().equals("ol")) lists++;
+                else if (toc >= 0 && x.getName().equals("a")) addChapter(out, text(x), lists - 1);
+            }
+        }
+        if (out.isEmpty() && p.ncx != null && zip.getEntry(p.ncx) != null) {
+            XmlPullParser x = xml(entry(zip, p.ncx)); int level = 0; boolean label = false;
+            for (int t = x.getEventType(); t != XmlPullParser.END_DOCUMENT && out.size() < MAX_CHAPTERS; t = x.next()) {
+                if (t == XmlPullParser.START_TAG && x.getName().equals("navPoint")) level++;
+                else if (t == XmlPullParser.END_TAG && x.getName().equals("navPoint")) level--;
+                else if (t == XmlPullParser.START_TAG && x.getName().equals("navLabel")) label = true;
+                else if (t == XmlPullParser.END_TAG && x.getName().equals("navLabel")) label = false;
+                else if (t == XmlPullParser.START_TAG && label && x.getName().equals("text")) addChapter(out, text(x), level - 1);
+            }
+        }
+        return out;
+    }
+
+    private static void addChapter(List<Book.Chapter> out, String title, int level) {
+        title = title.replaceAll("\\s+", " ").trim();
+        if (title.isEmpty()) return;
+        Book.Chapter c = new Book.Chapter(title.length() > 200 ? title.substring(0, 200) : title); c.level = Math.max(0, Math.min(5, level)); out.add(c);
+    }
+
     public static String plain(String html) {
         // Native text rendering: no WebView, scripts, remote fonts or image requests.
         return Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY).toString().trim();
@@ -214,7 +317,11 @@ public final class EbookParser {
     public static List<String> textPages(File file, String format) throws Exception {
         StringBuilder text = new StringBuilder();
         if (format.equals("TXT")) {
-            try (InputStream in = new FileInputStream(file)) { text.append(new String(read(in, TEXT_LIMIT), StandardCharsets.UTF_8)); }
+            try (InputStream in = new FileInputStream(file)) { text.append(decodeText(read(in, TEXT_LIMIT))); }
+        } else if (format.equals("AZW3")) {
+            String html = Azw3.text(file);
+            if (html.length() > TEXT_LIMIT) throw new IOException("Testo oltre 32 MB");
+            text.append(plain(html.replaceAll("(?is)<head>.*?</head>", "")));
         } else {
             try (ZipFile zip = new ZipFile(file)) {
                 Package p = epub(zip, null);

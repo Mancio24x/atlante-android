@@ -29,6 +29,14 @@ public final class ReadingJournal {
             put(b,"sessions",a);
         } catch (JSONException e) { throw new IllegalArgumentException(e); }
     }
+    /** The stable timer ID also prevents replay if the process stops between saving the book and clearing the timer. */
+    public static void sessionOnce(Book b,int from,int to,long seconds,LocalDate day,String timerId) {
+        JSONArray sessions=array(b,"sessions");
+        for(int i=0;i<sessions.length();i++)if(sessions.optJSONObject(i)!=null&&timerId.equals(sessions.optJSONObject(i).optString("timerId")))return;
+        session(b,from,to,seconds,day);
+        sessions=array(b,"sessions");
+        try { sessions.getJSONObject(sessions.length()-1).put("timerId",timerId); } catch(JSONException e){throw new IllegalArgumentException(e);}
+    }
     public static long[] totals(List<Book> books, LocalDate day) {
         long pages=0, seconds=0;
         for (Book b:books) { JSONArray a=array(b,"sessions");

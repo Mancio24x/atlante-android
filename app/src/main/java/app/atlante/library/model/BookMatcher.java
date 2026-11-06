@@ -22,6 +22,12 @@ public final class BookMatcher {
     public static boolean same(Book a, Book b) { return score(a, b) >= SAME_TITLE_UNKNOWN_AUTHOR; }
 
     public static int score(Book a, Book b) {
+        String ah=a.meta.optString("fileSha256",a.id==null?"":a.id), bh=b.meta.optString("fileSha256",b.id==null?"":b.id);
+        if(ah.matches("[0-9a-f]{64}")&&ah.equals(bh))return SAME_ISBN;
+        org.json.JSONObject ai=a.meta.optJSONObject("ids"),bi=b.meta.optJSONObject("ids");
+        if(ai!=null&&bi!=null)for(String key:new String[]{"asin","uuid","doi"}) {
+            String value=ai.optString(key);if(!value.isEmpty()&&value.equalsIgnoreCase(bi.optString(key)))return SAME_ISBN;
+        }
         Set<String> ia = isbns(a.isbn), ib = isbns(b.isbn);
         for (String i : ia) if (ib.contains(i)) return SAME_ISBN;
         if (a.number > 0 && b.number > 0 && a.number != b.number && !a.series.isEmpty() && SbnCatalog.normalize(a.series).equals(SbnCatalog.normalize(b.series))) return DIFFERENT;

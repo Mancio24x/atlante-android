@@ -60,14 +60,15 @@ public final class LibraryStore implements SyncStore {
         try (Cursor c = context.getContentResolver().query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
             if (c != null && c.moveToFirst()) return c.getString(0);
         } catch (Exception ignored) { /* Some providers do not expose a display name. */ }
-        return "libro";
+        String last = uri.getLastPathSegment();
+        return last != null && last.contains(".") ? last.substring(last.lastIndexOf('/') + 1) : "libro";
     }
 
     public Book importBook(Uri uri) throws Exception {
         String name = name(uri);
         int dot = name.lastIndexOf('.');
         String ext = dot < 0 ? "" : name.substring(dot + 1).toUpperCase(Locale.ROOT);
-        if (!ext.matches("EPUB|TXT|CBZ")) throw new IOException(name + ": scegli EPUB, TXT o CBZ");
+        if (!ext.matches("EPUB|TXT|CBZ|AZW3")) throw new IOException(name + ": scegli EPUB, TXT, CBZ o AZW3");
         File temporary = File.createTempFile("import-", ".tmp", context.getCacheDir());
         File dest = null;
         boolean committed = false;
@@ -86,20 +87,16 @@ public final class LibraryStore implements SyncStore {
             StringBuilder hex = new StringBuilder();
             for (byte b : digest.digest()) hex.append(String.format(Locale.ROOT, "%02x", b & 255));
             String id = hex.toString();
+            String fileHash=id;
             synchronized (this) {
-                Book existing = find(id);
-                if (existing != null) {
-                    // A book restored from a backup without files gets its file back here.
-                    if (existing.format.equals(ext) && !original(existing).exists()) {
-                        if (!directory(existing).isDirectory() && !directory(existing).mkdirs()) throw new IOException("Impossibile salvare il libro");
-                        if (!temporary.renameTo(original(existing))) throw new IOException("Impossibile copiare il libro");
-                        existing.reattached = true;
-                        return existing;
-                    }
-                    return null;
+                for(Book existing:books) if(existing.meta.optString("fileSha256",existing.id).equals(fileHash)) {
+                    if(original(existing).isFile())return null;
+                    // Stage under a separate ID; linking is confirmed in the preview.
+                    id=UUID.randomUUID().toString().replace("-","")+UUID.randomUUID().toString().replace("-","");
+                    break;
                 }
             }
-            Book book = new Book(); book.id = id; book.format = ext;
+            Book book = new Book(); book.id = id; book.format = ext; book.meta.put("fileSha256",fileHash);
             book.title = name.substring(0, dot);
             dest = directory(book);
             // The original URI is read only; imported copies stay in the private app directory.
@@ -168,6 +165,41 @@ public final class LibraryStore implements SyncStore {
             throw e;
         }
         return added.size();
+    }
+
+    /**
+     * Gives an imported file to a book already in the library that has none (a record added by hand, from a
+     * catalog or from a backup): the existing record keeps all its data; only empty fields, the chapters and a
+     * missing cover come from the file.
+     */
+    public synchronized Book attachFile(Book candidate, Book existing) throws Exception {
+        Book target = find(existing.id);
+        if (target == null) throw new IOException("Libro non disponibile");
+        if (!target.format.equals("CATALOGO") && original(target).exists()) throw new IOException("Questo libro ha già un file");
+        File from = original(candidate);
+        if (!from.isFile()) throw new IOException("File importato non disponibile");
+        Book before = Book.from(target.json());
+        String oldFormat = target.format;
+        target.format = candidate.format;
+        File dir = directory(target);
+        if (!dir.isDirectory() && !dir.mkdirs()) { target.format = oldFormat; throw new IOException("Impossibile salvare il file"); }
+        File to = original(target);
+        if (!from.renameTo(to)) { target.format = oldFormat; throw new IOException("Impossibile collegare il file"); }
+        boolean coverMoved = !cover(target).isFile() && cover(candidate).isFile() && cover(candidate).renameTo(cover(target));
+        target.meta.put("fileSha256", candidate.meta.optString("fileSha256", candidate.id));
+        if (target.isbn.isEmpty()) target.isbn = candidate.isbn;
+        if (target.publisher.isEmpty()) target.publisher = candidate.publisher;
+        if (target.language.isEmpty()) target.language = candidate.language;
+        if (target.year.isEmpty()) target.year = candidate.year;
+        if (target.description.isEmpty()) target.description = candidate.description;
+        if (target.chapters.isEmpty()) target.chapters.addAll(candidate.chapters);
+        try { save(); }
+        catch (Exception e) {
+            to.renameTo(from); if (coverMoved) cover(target).renameTo(cover(candidate));
+            books.set(books.indexOf(target), before); throw e;
+        }
+        deleteTree(directory(candidate));
+        return target;
     }
 
     public synchronized void discardCandidate(Book candidate) {

@@ -48,6 +48,8 @@ class StatsData(books: List<Book>, val yearGoal: Int, val monthGoal: Int, today:
     val total = books.size
     val genres = books.groupingBy { if (it.genre.isEmpty()) "Genere non indicato" else it.genre }.eachCount().entries.sortedByDescending { it.value }
     val sessions: Map<LocalDate, List<DaySession>>
+    /** Previous months against their monthly goal (empty when the monthly goal is off). */
+    var monthHistory: List<Pair<java.time.YearMonth, app.atlante.library.model.ReadingGoals.Progress>> = emptyList()
     init {
         val totals = ReadingJournal.totals(books, null); pages = totals[0]; minutes = totals[1] / 60
         val map = HashMap<LocalDate, MutableList<DaySession>>()
@@ -67,9 +69,10 @@ class StatsData(books: List<Book>, val yearGoal: Int, val monthGoal: Int, today:
 object StatisticsView {
     /** Called from MainActivity: the Compose screen inside the existing View-based navigation. */
     @JvmStatic
-    fun create(activity: ComponentActivity, palette: ThemePalette, books: List<Book>, yearGoal: Int, monthGoal: Int, motion: Boolean, onGoals: Runnable): View =
+    fun create(activity: ComponentActivity, palette: ThemePalette, books: List<Book>, yearGoal: Int, monthGoal: Int, motion: Boolean, onGoals: Runnable,
+               goals: app.atlante.library.model.ReadingGoals? = null): View =
         ComposeView(activity).apply {
-            val data = StatsData(books, yearGoal, monthGoal)
+            val data = StatsData(books, yearGoal, monthGoal).also { d -> goals?.takeIf { it.monthOn }?.let { g -> d.monthHistory = g.history(books, 6) } }
             setContent { AtlanteTheme(palette) { StatisticsScreen(data, palette, motion) { onGoals.run() } } }
         }
 }
@@ -142,13 +145,24 @@ fun StatisticsScreen(data: StatsData, palette: ThemePalette, motion: Boolean, on
         Row(verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator(progress = { progress }, modifier = Modifier.size(74.dp).semantics { contentDescription = "${data.yearDone} libri su ${data.yearGoal}" }, strokeWidth = 7.dp)
             Column(Modifier.padding(start = 18.dp)) {
-                Text("${data.yearDone} / ${data.yearGoal} libri", style = MaterialTheme.typography.headlineSmall)
+                Text(if (data.yearGoal > 0) "${data.yearDone} / ${data.yearGoal} libri" else "${data.yearDone} libri", style = MaterialTheme.typography.headlineSmall)
                 Text("Quest’anno", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
-                Text("${data.monthDone} / ${data.monthGoal} questo mese", color = MaterialTheme.colorScheme.primary)
+                Text(if (data.monthGoal > 0) "${data.monthDone} / ${data.monthGoal} questo mese" else "${data.monthDone} questo mese", color = MaterialTheme.colorScheme.primary)
             }
         }
-        if (data.yearDone >= data.yearGoal) Text("★ Obiettivo annuale raggiunto!", Modifier.padding(top = 10.dp), color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.titleMedium)
+        if (data.monthHistory.isNotEmpty()) {
+            Text("Mesi precedenti", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleSmall)
+            data.monthHistory.forEach { (m, p) ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                    Text(m.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ITALIAN).replaceFirstChar { it.uppercase() } + " ${m.year}",
+                        Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text("${p.done} / ${p.goal}" + if (p.reached) "  ✓" else "", style = MaterialTheme.typography.bodyMedium,
+                        color = if (p.reached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (data.yearGoal > 0 && data.yearDone >= data.yearGoal) Text("★ Obiettivo annuale raggiunto!", Modifier.padding(top = 10.dp), color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.titleMedium)
         TextButton(onClick = onGoals, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Imposta obiettivi") }
     }
 }
