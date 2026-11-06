@@ -147,7 +147,10 @@ print('Navigation, themes, reading states, progress wheels, chapters, manual ent
 
 # Dedicated settings page, returning to the originating destination, and KOReader first in Sync.
 # Home is the root: Back there would close the app, so go straight to Sync.
-tap('Sync',exact=True);shot('30-sync-koreader')
+tap('Sync',exact=True)
+# Sync keeps its scroll position: scroll back to the top, where KOReader is the first section.
+for _ in range(4): adb('shell','input','swipe','540','600','540','1500','300')
+time.sleep(.4);shot('30-sync-koreader')
 assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'KOReader not first/visible in Sync'
 tap('Configura KOReader');shot('31-koreader-settings');tap('Annulla',exact=True)
 tap('Impostazioni');shot('32-settings-page')
