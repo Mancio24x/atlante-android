@@ -146,7 +146,8 @@ tap('Home',exact=True);shot('20-home-restored')
 print('Navigation, themes, reading states, progress wheels, chapters, manual entry, list view, bottom navigation and Sync completed.')
 
 # Dedicated settings page, returning to the originating destination, and KOReader first in Sync.
-back();tap('Sync',exact=True);shot('30-sync-koreader')
+# Home is the root: Back there would close the app, so go straight to Sync.
+tap('Sync',exact=True);shot('30-sync-koreader')
 assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'KOReader not first/visible in Sync'
 tap('Configura KOReader');shot('31-koreader-settings');tap('Annulla',exact=True)
 tap('Impostazioni');shot('32-settings-page')
