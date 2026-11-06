@@ -248,6 +248,8 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(text("Lingua dell’interfaccia: italiano.",12,MUTED,false));
         gap(panel,20); panel.addView(sectionLabel("SAGHE E MAPPA")); gap(panel,8);
         panel.addView(text("Riconosci saga e numero dai metadati e dai titoli. Controlla le proposte prima di applicarle. Puoi sempre correggere saga e ordine nella scheda del libro.",14,MUTED,false));
+        panel.addView(app.atlante.library.ui.compose.SagaRepairView.create(this, palette, sagaHost)); gap(panel,8);
+        panel.addView(text("Proposte rapide dai titoli e dai metadati già presenti, senza connessione:",14,MUTED,false));
         panel.addView(button("Riconosci saghe e ordine di lettura",false,this::recognizeSeries));
         gap(panel,20); panel.addView(sectionLabel("CACHE E DATI TEMPORANEI")); gap(panel,8);
         panel.addView(app.atlante.library.ui.compose.CacheSettingsView.create(this, palette));

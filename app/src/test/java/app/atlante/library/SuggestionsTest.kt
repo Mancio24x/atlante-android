@@ -81,6 +81,13 @@ class SuggestionsTest {
         assertEquals(listOf(1, 0, 2), ordered(items, SagaOrder.PUBLICATION))
     }
 
+    @Test fun bundlesAreNotSuggested() {
+        for (t in listOf("Red Rising 3-Book Box Set", "The Red Rising Series Collection", "Kızıl İsyan Serisi", "Mistborn Trilogy Boxed Set", "The Stormlight Archive Books 1-3", "Summary of Red Rising"))
+            assertTrue(t, Suggestions.bundle(t))
+        for (t in listOf("Golden Son", "The Way of Kings", "Il nome della rosa", "Dune Messiah", "Setting Sun"))
+            assertFalse(t, Suggestions.bundle(t))
+    }
+
     @Test fun authorsAreComparedByFullName() {
         assertTrue(Suggestions.sameAuthor("J. K. Rowling", "J.K. Rowling"))
         assertTrue(Suggestions.sameAuthor("Brandon Sanderson", "brandon sanderson"))

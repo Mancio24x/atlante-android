@@ -52,9 +52,9 @@ fun CacheSettingsSection(cache: CacheManager, onRefreshChanged: () -> Unit) {
             UsageRow("Database delle saghe", u.graph, null)
             Text("Totale: " + size(u.covers + u.catalog + u.suggestions + u.graph), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp))
         }
-        Stepper("Spazio massimo per le copertine", cache.settings.coverMb, 20f..1000f, 49, { "$it MB" }) { cache.settings.coverMb = it; act("Limite aggiornato") { cache.covers.trim() } }
-        Stepper("Suggerimenti validi per", cache.settings.suggestionDays, 1f..90f, 88, { "$it giorni" }) { cache.settings.suggestionDays = it }
-        Stepper("Aggiorna le saghe ogni", cache.settings.sagaRefreshDays, 1f..30f, 28, { if (it == 1) "giorno" else "$it giorni" }) { cache.settings.sagaRefreshDays = it; onRefreshChanged() }
+        Stepper("Spazio massimo per le copertine", cache.settings.coverMb, 20f..1000f, 10, { "$it MB" }) { cache.settings.coverMb = it; act("Limite aggiornato") { cache.covers.trim() } }
+        Stepper("Suggerimenti validi per", cache.settings.suggestionDays, 1f..90f, 1, { if (it == 1) "1 giorno" else "$it giorni" }) { cache.settings.suggestionDays = it }
+        Stepper("Aggiorna le saghe ogni", cache.settings.sagaRefreshDays, 1f..30f, 1, { if (it == 1) "giorno" else "$it giorni" }) { cache.settings.sagaRefreshDays = it; onRefreshChanged() }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { act("Copertine eliminate") { cache.clearCovers() } }, Modifier.weight(1f)) { Text("Svuota copertine") }
             OutlinedButton(onClick = { act("Suggerimenti eliminati") { cache.clearSuggestions(); cache.clearCatalog() } }, Modifier.weight(1f)) { Text("Svuota suggerimenti") }
@@ -74,12 +74,12 @@ private fun UsageRow(label: String, bytes: Long, limit: Long?) {
 }
 
 @Composable
-private fun Stepper(label: String, initial: Int, range: ClosedFloatingPointRange<Float>, steps: Int, format: (Int) -> String, onDone: (Int) -> Unit) {
+/** Continuous slider (no tick dots) whose value is rounded to a multiple of [round]. */
+private fun Stepper(label: String, initial: Int, range: ClosedFloatingPointRange<Float>, round: Int, format: (Int) -> String, onDone: (Int) -> Unit) {
     var value by remember { mutableFloatStateOf(initial.toFloat()) }
-    val stepSize = (range.endInclusive - range.start) / (steps + 1)
-    fun snap(v: Float) = (range.start + ((v - range.start) / stepSize).roundToInt() * stepSize).roundToInt()
+    fun snap(v: Float) = ((v / round).roundToInt() * round).coerceIn(range.start.roundToInt(), range.endInclusive.roundToInt())
     Column(Modifier.padding(top = 8.dp)) {
         Text("$label: ${format(snap(value))}", style = MaterialTheme.typography.bodyMedium)
-        Slider(value, { value = it }, valueRange = range, steps = steps, onValueChangeFinished = { onDone(snap(value)) })
+        Slider(value, { value = it }, valueRange = range, onValueChangeFinished = { value = snap(value).toFloat(); onDone(snap(value)) })
     }
 }

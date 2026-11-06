@@ -80,6 +80,7 @@ class Suggestions(
         val online = cachedSearch("author", name, "author=" + URLEncoder.encode(name, "UTF-8"))
             // The author search also returns anthologies and namesakes: the first author must be this very person.
             .filter { w -> w.authors.firstOrNull()?.let { sameAuthor(it, name) } == true }
+            .filterNot { w -> bundle(w.title) || surnames.any { s -> w.title.lowercase().contains("$s's") || w.title.lowercase().contains("$s’s") } }
             .filterNot { w -> BookMatcher.same(Book().apply { title = w.title; author = name }, book) || owned.any { o -> sameTitle(w, o.title) } || listed(w, exclude) }
         return owned + online.map { it.asItem() }
     }
@@ -97,7 +98,7 @@ class Suggestions(
         val perAuthor = HashMap<String, Int>()
         return cachedSearch("subject", "$subject:$from-$to", "q=" + URLEncoder.encode("subject:$subject first_publish_year:[$from TO $to]", "UTF-8"))
             .filterNot { w -> w.authors.any { a -> BookMatcher.surnames(a).any { it in surnames } } }
-            .filterNot { w -> books.any { b -> sameTitle(w, b.title) } || listed(w, exclude) }
+            .filterNot { w -> bundle(w.title) || books.any { b -> sameTitle(w, b.title) } || listed(w, exclude) }
             .filter { w -> (perAuthor.merge(w.authors.firstOrNull() ?: "", 1, Int::plus) ?: 0) <= 2 }
             .take(20).map { it.asItem() }
     }
@@ -139,6 +140,11 @@ class Suggestions(
     private fun listed(w: Found, items: List<ShelfItem>) = items.any { i -> (listOf(i.title) + i.alsoKnownAs).any { sameTitle(w, it) } }
 
     companion object {
+        private val BUNDLE = Regex("""(?i)\b(box(ed)? ?set|boxset|collection|collected|omnibus|cofanetto|serisi|series|serie|trilog(y|ia)|books? \d|\d[- ]book|volumes? \d+ ?[-–] ?\d+|complete|graphic novel|sampler|summary of|study guide)\b""")
+
+        /** Box sets, collections, translated "series" bundles and study guides: not books to suggest. */
+        fun bundle(title: String) = BUNDLE.containsMatchIn(title)
+
         /** "J. K. Rowling" = "J.K. Rowling" = "Joanne K. Rowling"? Same surname and same first initial. */
         fun sameAuthor(a: String, b: String): Boolean {
             fun words(s: String) = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")

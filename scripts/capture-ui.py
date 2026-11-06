@@ -207,3 +207,14 @@ back();tap('Impostazioni');tap('Svuota tutta la cache',True);time.sleep(1.5);sho
 assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
 assert any(b['title']=='Red Rising' for b in catalog()), 'Cache cleanup touched the library'
 print('Cache settings completed.')
+
+# Ripara saghe: runs on the whole sample library and reports; the library itself is unchanged except empty saga fields.
+before=len(catalog())
+tap('Ripara saghe',True,exact=True)
+for _ in range(120):
+    if any(n.get('text','').startswith('Fatto:') for n in dump().iter('node')): break
+    time.sleep(2)
+shot('54-repair-sagas')
+assert any(n.get('text','').startswith('Fatto:') for n in dump().iter('node')), 'Ripara saghe did not finish'
+assert len(catalog())==before, 'Ripara saghe changed the number of books'
+print('Repair completed.')

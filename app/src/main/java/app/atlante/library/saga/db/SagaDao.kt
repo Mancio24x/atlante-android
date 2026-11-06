@@ -62,6 +62,8 @@ interface SagaDao {
     @Query("SELECT * FROM book_links WHERE bookId = :bookId") suspend fun link(bookId: String): BookLink?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putLink(l: BookLink)
     @Query("SELECT * FROM book_links") suspend fun links(): List<BookLink>
+    @Query("DELETE FROM book_links WHERE bookId = :bookId") suspend fun deleteLink(bookId: String)
+    @Query("SELECT ordinal FROM series_entries WHERE seriesId = :seriesId AND workId = :workId") suspend fun ordinal(seriesId: Long, workId: Long): String?
     @Query("SELECT * FROM book_links WHERE workId IN (:workIds)") suspend fun linksForWorks(workIds: List<Long>): List<BookLink>
 
     // ---- provenance and user corrections ----
