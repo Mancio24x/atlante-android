@@ -114,6 +114,14 @@ final class LibraryStore {
         return candidate;
     }
 
+    synchronized void replace(Book updated) throws Exception {
+        Book previous = find(updated.id);
+        if (previous == null) throw new IOException("Libro non disponibile");
+        int index = books.indexOf(previous);
+        books.set(index, updated);
+        try { save(); } catch (Exception e) { books.set(index, previous); throw e; }
+    }
+
     synchronized void saveDownloadedCover(Book book, byte[] bytes) throws Exception {
         if (find(book.id) == null) return;
         if (!directory(book).isDirectory() && !directory(book).mkdirs()) return;

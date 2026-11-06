@@ -24,7 +24,7 @@ public final class MainActivity extends Activity {
     private int visibleBooks = 60;
     private final ExecutorService catalogWorker = Executors.newSingleThreadExecutor();
     private final ExecutorService coverWorker = Executors.newSingleThreadExecutor();
-    private static final int IMPORT = 101, EXPORT = 102;
+    private static final int IMPORT = 101, EXPORT = 102, COVER = 103;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final LruCache<String, Bitmap> covers = new LruCache<String, Bitmap>(8192) {
         @Override protected int sizeOf(String key, Bitmap value) { return value.getByteCount() / 1024; }
@@ -36,23 +36,25 @@ public final class MainActivity extends Activity {
     private String lastOnlineQuery = "";
     private String tab = "Tutti i libri", query = "", mapAuthor = "", exportId;
     private String filterStatus = "", filterGenre = "", filterFormat = "", sortOrder = "Titolo";
+    private String coverBookId;
     private Book reading;
     private List<String> pages;
     private int page;
     private float fontSize = 20;
-    private boolean readerDark, manga, busy;
+    private boolean readerDark, manga, busy, listView;
     private TextView notice;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         if (state != null) {
             tab = state.getString("tab", tab); query = state.getString("query", "");
-            mapAuthor = state.getString("author", ""); exportId = state.getString("export");
+            mapAuthor = state.getString("author", ""); exportId = state.getString("export"); coverBookId = state.getString("coverBook");
         }
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         applyPalette(ThemePalette.find(prefs.getString("theme", "atlante")));
         filterStatus = prefs.getString("filterStatus", ""); filterGenre = prefs.getString("filterGenre", "");
         filterFormat = prefs.getString("filterFormat", ""); sortOrder = prefs.getString("sortOrder", "Titolo");
+        listView = prefs.getBoolean("listView", false);
         OnlineCatalog.configure(new File(getCacheDir(), "catalog"));
         fontSize = Math.max(8, Math.min(80, prefs.getFloat("fontSize", 20)));
         readerDark = prefs.getBoolean("dark", false); manga = prefs.getBoolean("manga", false);
@@ -71,6 +73,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
+        state.putString("coverBook", coverBookId);
         state.putString("tab", tab); state.putString("query", query);
         state.putString("author", mapAuthor); state.putString("export", exportId);
         if (reading != null) state.putString("reading", reading.id);
@@ -268,6 +271,12 @@ public final class MainActivity extends Activity {
         gap(header, 8);
         header.addView(button("Filtri e ordine" + (hasFilters() ? " · attivi" : "") + " · " + sortOrder, false, this::libraryFilters));
         gap(header, 8);
+        LinearLayout actions = row();
+        actions.addView(button("＋ Aggiungi libro", true, this::manualBook), new LinearLayout.LayoutParams(0, dp(48), 1));
+        actions.addView(button(listView ? "Griglia" : "Elenco", false, () -> {
+            listView = !listView; getPreferences(MODE_PRIVATE).edit().putBoolean("listView", listView).apply(); showLibrary();
+        }), new LinearLayout.LayoutParams(dp(100), dp(48)));
+        header.addView(actions); gap(header, 8);
         rule(root);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -351,8 +360,8 @@ public final class MainActivity extends Activity {
 
     private void grid(LinearLayout parent, List<Book> books) {
         int width = getResources().getConfiguration().screenWidthDp;
-        int columns = width >= 1100 ? 6 : width >= 760 ? 4 : width >= 550 ? 3 : 2;
-        int coverHeight = Math.min(310, Math.max(170, (width - 40 - columns * 12) / columns * 14 / 10));
+        int columns = listView ? 1 : width >= 1100 ? 6 : width >= 760 ? 4 : width >= 550 ? 3 : 2;
+        int coverHeight = listView ? 150 : Math.min(310, Math.max(170, (width - 40 - columns * 12) / columns * 14 / 10));
         LinearLayout line = null;
         for (int i = 0; i < books.size(); i++) {
             if (i % columns == 0) { line = row(); line.setGravity(Gravity.TOP); parent.addView(line); }
@@ -475,7 +484,13 @@ public final class MainActivity extends Activity {
             panel.addView(image, new LinearLayout.LayoutParams(-1, dp(220))); gap(panel, 16);
         }
         panel.addView(text(b.title, 28, INK, true)); gap(panel, 6);
-        panel.addView(text(b.author, 16, SAGE, false)); gap(panel, 12);
+        if (!b.subtitle.isEmpty()) panel.addView(text(b.subtitle, 18, MUTED, true));
+        panel.addView(text(b.author, 16, SAGE, false));
+        if (!b.tags.isEmpty()) panel.addView(text("Tag: " + b.tags, 14, SAGE, false));
+        if (!b.location.isEmpty()) panel.addView(text("Posizione: " + b.location, 14, MUTED, false));
+        if (!b.medium.isEmpty()) panel.addView(text(b.medium, 14, MUTED, false));
+        if (b.rating > 0) panel.addView(text("Valutazione: " + b.rating + "/5", 14, COPPER, false));
+        if (!b.started.isEmpty() || !b.finished.isEmpty()) panel.addView(text("Inizio: " + available(b.started) + " · Fine: " + available(b.finished), 13, MUTED, false)); gap(panel, 12);
         bibliographic(panel, b);
         if (!b.series.isEmpty()) panel.addView(text(b.series + order(b), 14, SAGE, false));
         if (!b.genre.isEmpty()) panel.addView(text(b.genre, 13, MUTED, false));
@@ -498,6 +513,10 @@ public final class MainActivity extends Activity {
         })); gap(panel, 8);
         panel.addView(button("Aggiorna avanzamento e note", false, () -> { dialog.dismiss(); progress(b); })); gap(panel, 8);
         panel.addView(button("Modifica scheda", false, () -> { dialog.dismiss(); edit(b); })); gap(panel, 8);
+        panel.addView(button("Scegli copertina dalla galleria", false, () -> {
+            coverBookId = b.id; dialog.dismiss();
+            startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"), COVER);
+        })); gap(panel, 8);
         if (!b.format.equals("CATALOGO")) panel.addView(button("Esporta il file originale", false, () -> {
             exportId = b.id;
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
@@ -654,9 +673,31 @@ public final class MainActivity extends Activity {
         input.setPadding(dp(16), dp(12), dp(16), dp(12));
         input.setContentDescription(label); panel.addView(input); gap(panel, 10); return input;
     }
-    private void edit(Book b) {
+    private void manualBook() {
+        Book b = new Book();
+        b.id = UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
+        b.format = "CATALOGO"; b.author = ""; b.addedAt = System.currentTimeMillis();
+        edit(b);
+    }
+
+    private void edit(Book original) {
+        final Book b;
+        try { b = Book.from(original.json()); } catch (Exception e) { error(e); return; }
+        final boolean creating = store.find(original.id) == null;
         LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(12));
         EditText title = field(panel, "Titolo", b.title), author = field(panel, "Autore", b.author);
+        EditText currentPage = field(panel, "Pagina attuale (facoltativa)", b.currentPage > 0 ? Integer.toString(b.currentPage) : "");
+        EditText totalPages = field(panel, "Numero di pagine (facoltativo)", b.totalPages > 0 ? Integer.toString(b.totalPages) : "");
+        currentPage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER); totalPages.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText subtitle = field(panel, "Sottotitolo", b.subtitle);
+        EditText tags = field(panel, "Tag (separati da virgola)", b.tags);
+        EditText location = field(panel, "Posizione nella libreria", b.location);
+        Spinner medium = filterPicker(panel, "Formato del libro", Arrays.asList("", "Cartaceo", "Ebook", "Audiolibro"), b.medium);
+        Spinner status = filterPicker(panel, "Stato", Arrays.asList("Da leggere", "In lettura", "Letto", "In pausa", "Abbandonato"), b.status);
+        Spinner rating = filterPicker(panel, "Valutazione (0 = non assegnata)", Arrays.asList("0", "1", "2", "3", "4", "5"), Integer.toString(b.rating));
+        EditText started = field(panel, "Inizio lettura (AAAA-MM-GG)", b.started);
+        EditText finished = field(panel, "Fine lettura (AAAA-MM-GG)", b.finished);
+        EditText notes = field(panel, "Note personali", b.notes); notes.setSingleLine(false); notes.setMinLines(3);
         EditText series = field(panel, "Saga", b.series), number = field(panel, "Numero nella saga", b.number > 0 ? number(b.number) : "");
         number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         EditText genre = field(panel, "Genere", b.genre);
@@ -664,20 +705,46 @@ public final class MainActivity extends Activity {
         EditText publisher = field(panel, "Editore", b.publisher), year = field(panel, "Anno", b.year);
         EditText language = field(panel, "Lingua", b.language), isbn = field(panel, "ISBN / identificatore", b.isbn);
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
-        AlertDialog dialog = dialogBuilder().setTitle("Modifica scheda").setView(scroll)
+        AlertDialog dialog = dialogBuilder().setTitle(creating ? "Aggiungi libro manualmente" : "Modifica scheda").setView(scroll)
             .setNegativeButton("Annulla", null).setPositiveButton("Salva", null).create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             if (title.getText().toString().trim().isEmpty()) { title.setError("Inserisci un titolo"); return; }
+            int current, total;
+            try {
+                current = currentPage.getText().toString().trim().isEmpty() ? 0 : Integer.parseInt(currentPage.getText().toString().trim());
+                total = totalPages.getText().toString().trim().isEmpty() ? 0 : Integer.parseInt(totalPages.getText().toString().trim());
+                if (current < 0 || total < 0 || (total > 0 && current > total)) throw new NumberFormatException();
+            } catch (NumberFormatException e) { currentPage.setError("Controlla le pagine: attuale non oltre il totale"); return; }
+            b.currentPage = current; b.totalPages = total;
             double n = 0;
             try { if (!number.getText().toString().isEmpty()) n = Double.parseDouble(number.getText().toString()); }
             catch (NumberFormatException e) { number.setError("Inserisci un numero"); return; }
             if (!Double.isFinite(n) || n < 0) { number.setError("Inserisci un numero positivo"); return; }
+            for (EditText date : new EditText[]{started, finished}) {
+                String value = date.getText().toString().trim();
+                try { if (!value.isEmpty()) java.time.LocalDate.parse(value); }
+                catch (java.time.format.DateTimeParseException e) { date.setError("Usa una data valida: AAAA-MM-GG"); return; }
+            }
+            if (!started.getText().toString().trim().isEmpty() && !finished.getText().toString().trim().isEmpty()
+                    && started.getText().toString().trim().compareTo(finished.getText().toString().trim()) > 0) {
+                finished.setError("La fine precede l’inizio"); return;
+            }
+            b.subtitle = subtitle.getText().toString().trim(); b.tags = tags.getText().toString().trim();
+            b.location = location.getText().toString().trim(); b.medium = medium.getSelectedItem().toString();
+            b.status = status.getSelectedItem().toString(); b.rating = rating.getSelectedItemPosition();
+            b.started = started.getText().toString().trim(); b.finished = finished.getText().toString().trim();
+            b.notes = notes.getText().toString();
             b.title = title.getText().toString().trim(); b.author = author.getText().toString().trim();
             if (b.author.isEmpty()) b.author = "Autore sconosciuto";
             b.series = series.getText().toString().trim(); b.number = n; b.genre = genre.getText().toString().trim();
             b.description = description.getText().toString().trim(); b.publisher = publisher.getText().toString().trim();
             b.year = year.getText().toString().trim(); b.language = language.getText().toString().trim(); b.isbn = isbn.getText().toString().trim();
-            save(); dialog.dismiss(); renderContent(); details(b);
+            try {
+                if (creating) store.addCatalog(b);
+                else store.replace(b);
+            } catch (Exception e) { error(e); return; }
+            if (creating) { tab = "Tutti i libri"; query = ""; filterStatus = ""; filterGenre = ""; filterFormat = ""; showLibrary(); }
+            dialog.dismiss(); renderContent(); details(b);
         })); dialog.show();
     }
 
@@ -691,6 +758,24 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (result != RESULT_OK || data == null || store == null) return;
+        if (request == COVER && data.getData() != null) {
+            Book target = store.find(coverBookId);
+            if (target == null) return;
+            Uri uri = data.getData();
+            worker.execute(() -> {
+                try (InputStream in = getContentResolver().openInputStream(uri)) {
+                    if (in == null) throw new IOException("Immagine non disponibile");
+                    byte[] bytes = EbookParser.read(in, 12 * 1024 * 1024);
+                    Bitmap image = decode(null, bytes, 1000);
+                    if (image == null) throw new IOException("Formato immagine non supportato");
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    image.compress(Bitmap.CompressFormat.JPEG, 85, out); image.recycle();
+                    store.saveDownloadedCover(target, out.toByteArray());
+                    runOnUiThread(() -> { covers.remove(target.id); renderContent(); details(target); });
+                } catch (Exception e) { runOnUiThread(() -> error(e)); }
+            });
+            return;
+        }
         if (request == IMPORT) {
             ArrayList<Uri> uris = new ArrayList<>();
             if (data.getClipData() != null) {

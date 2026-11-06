@@ -12,7 +12,7 @@ final class LibraryQuery {
         ArrayList<Book> result = new ArrayList<>();
         String needle = query.toLowerCase(Locale.ROOT).trim();
         for (Book b : books) {
-            if (!(b.title + " " + b.author + " " + b.series + " " + b.genre + " " + b.isbn)
+            if (!(b.title + " " + b.author + " " + b.series + " " + b.genre + " " + b.isbn + " " + b.tags + " " + b.subtitle)
                     .toLowerCase(Locale.ROOT).contains(needle)) continue;
             if (tab.equals("Desideri") && !b.format.equals("CATALOGO")) continue;
             if (tab.equals("In lettura") && !b.status.equals("In lettura")) continue;

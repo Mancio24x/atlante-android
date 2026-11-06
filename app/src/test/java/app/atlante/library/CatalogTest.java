@@ -30,4 +30,18 @@ public class CatalogTest {
         Book b = new Book(); OnlineCatalog.enrichEdition(b, new JSONObject("{\"entries\":[{\"title\":\"English\"},{\"key\":\"/books/OL3M\",\"title\":\"Italiano\",\"languages\":[{\"key\":\"/languages/ita\"}],\"publishers\":[\"Editore\"],\"isbn_13\":[\"123\"],\"number_of_pages\":300}]}"));
         assertEquals("Italiano", b.title); assertEquals("Editore", b.publisher); assertEquals("123", b.isbn); assertEquals(300, b.totalPages);
     }
+    @Test public void manualBookWithoutIsbnRetainsPersonalFieldsAndReaderPosition() throws Exception {
+        Book b = new Book(); b.id = new String(new char[64]).replace('\0', 'b');
+        b.format = "CATALOGO"; b.title = "Libro senza ISBN"; b.author = "Ada; Bruno";
+        b.subtitle = "Sottotitolo"; b.tags = "preferiti, viaggio"; b.medium = "Cartaceo";
+        b.location = "Scaffale 2"; b.rating = 4; b.started = "2026-10-01";
+        b.finished = "2026-11-06"; b.addedAt = 123456789L; b.page = 9;
+        Book copy = Book.from(b.json());
+        assertEquals("", copy.isbn); assertEquals(b.subtitle, copy.subtitle);
+        assertEquals(b.tags, copy.tags); assertEquals(b.location, copy.location);
+        assertEquals(b.medium, copy.medium); assertEquals(4, copy.rating);
+        assertEquals(b.started, copy.started); assertEquals(b.finished, copy.finished);
+        assertEquals(b.addedAt, copy.addedAt); assertEquals(9, copy.page);
+        assertEquals(1, LibraryQuery.select(java.util.Arrays.asList(copy), "viaggio", "Tutti i libri", "", "", "", "Titolo").size());
+    }
 }

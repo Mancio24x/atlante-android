@@ -8,10 +8,11 @@ def adb(*args,**kw): return subprocess.check_output(['adb',*args],**kw)
 def dump():
     adb('shell','uiautomator','dump','/sdcard/atlante-ui.xml')
     return ET.fromstring(adb('exec-out','cat','/sdcard/atlante-ui.xml'))
-def tap(label, scroll=False):
+def tap(label, scroll=False, editable=False):
     for attempt in range(7 if scroll else 3):
         tree=dump()
         for node in tree.iter('node'):
+            if editable and not node.get('class','').endswith('EditText'): continue
             values=[node.get('text',''),node.get('content-desc','')]
             if any(v.casefold().startswith(label.casefold()) for v in values):
                 bounds=list(map(int,re.findall(r'\d+',node.get('bounds',''))))
@@ -47,4 +48,20 @@ state=dump()
 assert any('Temi · AMOLED nero' in n.get('text','') for n in state.iter('node')), 'Theme preference was not restored'
 shot('11-settings-restored')
 tap('Chiudi');shot('12-theme-restored')
-print('Navigation, settings, theme selection and restart completed.')
+# Manual cataloging must save only after confirmation, without requiring an ISBN.
+def catalog(): return json.loads(adb('exec-out','run-as',package,'cat','files/library.json'))
+count=len(catalog())
+tap('＋ Aggiungi libro');tap('Annulla')
+assert len(catalog()) == count, 'Canceled manual entry was saved'
+tap('＋ Aggiungi libro');tap('Titolo',editable=True)
+adb('shell','input','text','AtlanteManualeProva');tap('Salva')
+records=catalog();assert len(records)==count+1, 'Manual book not saved'
+manual=next(b for b in records if b['title']=='AtlanteManualeProva')
+assert manual.get('isbn','')=='', 'Manual book unexpectedly requires ISBN'
+shot('13-manual-book');tap('Chiudi');tap('Elenco');shot('14-list-view')
+adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity')
+tap('Impostazioni');tap('Chiudi')
+assert any(n.get('text','')=='Griglia' for n in dump().iter('node')), 'List preference was not restored'
+assert any(b['title']=='AtlanteManualeProva' for b in catalog()), 'Manual book lost after restart'
+shot('15-manual-and-list-restored')
+print('Navigation, themes, canceled/confirmed manual entry and list persistence completed.')

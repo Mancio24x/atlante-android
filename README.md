@@ -33,6 +33,24 @@ Il workflow manuale **Android UI preview** esegue sull’emulatore Android 35 un
 prova di menu, impostazioni, temi e riavvio; le schermate sono disponibili tra gli
 artifact. Usa soltanto dati fittizi nell’app debug, separata dalla libreria personale.
 
+## Catalogazione manuale, scheda e copertine
+
+**＋ Aggiungi libro** apre una scheda manuale utilizzabile anche offline, senza ISBN
+né file. Solo il titolo è obbligatorio. Puoi registrare sottotitolo, autori, tag,
+scaffale/posizione, cartaceo/ebook/audiolibro, stato, voto da 0 a 5, date di inizio
+e fine lettura, pagine, trama e note. Le modifiche si applicano su una copia e
+vengono confermate soltanto con **Salva**; **Annulla** conserva la scheda precedente.
+
+Dalla scheda puoi scegliere una copertina dalla galleria tramite il selettore
+Android: viene salvata una copia privata, senza cambiare l’originale. Il pulsante
+**Elenco / Griglia** cambia la visualizzazione e ricorda la scelta al riavvio.
+Piano e limiti della modifica sono in [PIANO-E-VERIFICA.md](PIANO-E-VERIFICA.md).
+
+Il Mac usato da Craft Anything non dispone attualmente di Java, Gradle e Android
+SDK: questo impedisce la compilazione locale, ma non quella del workflow
+**Android APK** su GitHub. I sorgenti aggiornati devono essere pubblicati nel
+repository prima di ottenere un nuovo APK dalle release.
+
 ## Filtri e ordinamento della biblioteca
 
 **Filtri e ordine**, sotto la ricerca, combina stato di lettura, genere e formato.
