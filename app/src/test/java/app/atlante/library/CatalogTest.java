@@ -74,4 +74,12 @@ public class CatalogTest {
         OnlineCatalog.enrichEdition(b, new JSONObject("{\"entries\":[{\"key\":\"/books/OL6M\",\"title\":\"Altra\",\"languages\":[{\"key\":\"/languages/ita\"}]},{\"key\":\"/books/OL7M\",\"title\":\"Trovata\"}]}"), "ita");
         assertEquals("Trovata", b.title);
     }
+    @Test public void coverSearchOnlyAcceptsTheSameTitle() {
+        assertTrue(OnlineCatalog.sameTitle("La peste", "La peste"));
+        assertTrue(OnlineCatalog.sameTitle("Il Gattopardo", "Il gattopardo : romanzo"));
+        assertTrue(OnlineCatalog.sameTitle("L’amica geniale", "L'amica geniale"));
+        assertFalse(OnlineCatalog.sameTitle("La casa", "La casa degli spiriti"));
+        assertFalse(OnlineCatalog.sameTitle("Dune", "Dune Messiah"));
+        assertFalse(OnlineCatalog.sameTitle("", "Qualcosa"));
+    }
 }

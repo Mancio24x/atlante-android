@@ -167,6 +167,60 @@ final class OnlineCatalog {
         return null;
     }
 
+    /**
+     * Finds a cover for a book that has none: Open Library by ISBN, otherwise the first search result whose
+     * title matches. Returns the image bytes (JPEG/PNG) or null.
+     */
+    static byte[] findCover(Book book) {
+        try {
+            if (book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) {
+                byte[] image = image(request("https://covers.openlibrary.org/b/isbn/" + book.isbn + "-M.jpg?default=false", 2 * 1024 * 1024));
+                if (image != null) return image;
+            }
+        } catch (Exception ignored) { /* Not on Open Library: try Google Books. */ }
+        try {
+            // Google Books knows recent Italian editions. Its image service needs no API key; for an unknown
+            // ISBN it answers with a small PNG placeholder, while real covers are JPEG.
+            if (book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) {
+                byte[] bytes = request("https://books.google.com/books/content?vid=ISBN" + book.isbn + "&printsec=frontcover&img=1&zoom=1&fife=w480-h720", 2 * 1024 * 1024);
+                if (bytes.length > 2000 && (bytes[0] & 255) == 0xFF && (bytes[1] & 255) == 0xD8) return bytes;
+            }
+        } catch (Exception ignored) { /* Try the other editions of the work. */ }
+        try {
+            // An Italian edition without a cover often belongs to a work whose other editions have one.
+            if (book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) {
+                JSONArray docs = new JSONObject(new String(request("https://openlibrary.org/search.json?q=" + book.isbn + "&limit=1&fields=cover_i", 1024 * 1024), StandardCharsets.UTF_8)).optJSONArray("docs");
+                long cover = docs == null || docs.optJSONObject(0) == null ? 0 : docs.optJSONObject(0).optLong("cover_i", 0);
+                if (cover > 0) { byte[] image = image(request("https://covers.openlibrary.org/b/id/" + cover + "-M.jpg?default=false", 2 * 1024 * 1024)); if (image != null) return image; }
+            }
+        } catch (Exception ignored) { /* Try title and author. */ }
+        try {
+            String author = book.author.equals("Autore sconosciuto") ? "" : book.author.split(" & |, ")[0];
+            JSONArray docs = new JSONObject(new String(request("https://openlibrary.org/search.json?title=" + URLEncoder.encode(book.title, "UTF-8")
+                + (author.isEmpty() ? "" : "&author=" + URLEncoder.encode(author, "UTF-8")) + "&limit=5&fields=title,cover_i", 1024 * 1024), StandardCharsets.UTF_8)).optJSONArray("docs");
+            for (int i = 0; docs != null && i < docs.length(); i++) {
+                JSONObject doc = docs.optJSONObject(i); long cover = doc == null ? 0 : doc.optLong("cover_i", 0);
+                if (cover > 0 && sameTitle(book.title, doc.optString("title")))
+                    return image(request("https://covers.openlibrary.org/b/id/" + cover + "-M.jpg?default=false", 2 * 1024 * 1024));
+            }
+        } catch (Exception ignored) { /* Offline or not found: the book keeps its text cover. */ }
+        return null;
+    }
+
+    /** Same title after normalizing, or the same main title when one adds a subtitle after ":" or " - ". */
+    static boolean sameTitle(String a, String b) {
+        String x = SbnCatalog.normalize(a), y = SbnCatalog.normalize(b);
+        if (x.isEmpty() || y.isEmpty()) return false;
+        return x.equals(y) || SbnCatalog.normalize(mainTitle(a)).equals(SbnCatalog.normalize(mainTitle(b)));
+    }
+    private static String mainTitle(String title) { return title.split("\\s*[:;]\\s*|\\s+[-–—]\\s+|\\.\\s", 2)[0]; }
+
+    private static byte[] image(byte[] bytes) {
+        boolean jpeg = bytes.length > 3 && (bytes[0] & 255) == 0xFF && (bytes[1] & 255) == 0xD8;
+        boolean png = bytes.length > 8 && (bytes[0] & 255) == 0x89 && bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G';
+        return (jpeg || png) && bytes.length > 1000 ? bytes : null;
+    }
+
     /** Fills what a library record lacks (cover, plot, subjects, pages) from Open Library's edition with this ISBN. */
     static void enrichByIsbn(Book book) throws Exception {
         if (!book.isbn.matches("[0-9]{9}[0-9Xx]|97[89][0-9]{10}")) return;

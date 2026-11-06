@@ -218,6 +218,7 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(text("Salva catalogo, note, avanzamento e copertine in un file ZIP da conservare fuori dall’app. Disinstallando Atlante i dati interni vengono cancellati. "
             + "Per importare puoi scegliere un backup di Atlante (anche estratto), un elenco CSV (anche Goodreads o StoryGraph), un catalogo HTML di Atlante o una libreria Calibre.",14,MUTED,false)); gap(panel,8);
         panel.addView(button("Esporta backup",false,() -> { dialog.dismiss(); exportBackup(); })); gap(panel,8);
+        panel.addView(button("Scarica copertine mancanti",false,() -> { dialog.dismiss(); fetchMissingCovers(store.snapshot(), true); })); gap(panel,8);
         Button restore = button("Ripristina o importa un catalogo",false,() -> { dialog.dismiss(); chooseBackup(); }); restore.setEnabled(!busy); panel.addView(restore);
         gap(panel,20); panel.addView(sectionLabel("ATLANTE LIBRARY")); gap(panel,8);
         panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
@@ -673,15 +674,17 @@ public final class MainActivity extends AppCompatActivity {
         androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams appbarSize = new androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(-1,-2);
         stage.addView(appbar,appbarSize);
         com.google.android.material.appbar.CollapsingToolbarLayout collapse = new com.google.android.material.appbar.CollapsingToolbarLayout(this);
-        collapse.setTitle(b.title); collapse.setExpandedTitleColor(INK); collapse.setCollapsedTitleTextColor(INK);
+        // The title is already under the cover: the bar shows it only once the page is scrolled.
+        collapse.setTitle(b.title); collapse.setExpandedTitleColor(Color.TRANSPARENT); collapse.setCollapsedTitleTextColor(INK);
         collapse.setExpandedTitleTypeface(Typeface.create("serif",Typeface.NORMAL)); collapse.setExpandedTitleMargin(dp(24),dp(20),dp(24),dp(20));
         collapse.setContentScrimColor(PAPER); collapse.setMinimumHeight(dp(56));
-        com.google.android.material.appbar.AppBarLayout.LayoutParams collapseSize = new com.google.android.material.appbar.AppBarLayout.LayoutParams(-1,dp(156));
+        com.google.android.material.appbar.AppBarLayout.LayoutParams collapseSize = new com.google.android.material.appbar.AppBarLayout.LayoutParams(-1,dp(72));
         collapseSize.setScrollFlags(com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL | com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_EXIT_UNTIL_COLLAPSED);
         appbar.addView(collapse,collapseSize);
         com.google.android.material.appbar.MaterialToolbar toolbar = new com.google.android.material.appbar.MaterialToolbar(this);
         toolbar.setNavigationIcon(R.drawable.ic_back); toolbar.setNavigationIconTint(INK); toolbar.setNavigationContentDescription("Torna alla biblioteca"); toolbar.setNavigationOnClickListener(v->showLibrary());
-        toolbar.getMenu().add("Azioni del libro").setIcon(R.drawable.ic_settings).setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS);
+        android.graphics.drawable.Drawable more=androidx.core.content.ContextCompat.getDrawable(this,R.drawable.ic_more).mutate(); more.setTint(INK);
+        toolbar.getMenu().add("Azioni del libro").setIcon(more).setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS);
         toolbar.setOnMenuItemClickListener(item->{bookActions(b);return true;});
         com.google.android.material.appbar.CollapsingToolbarLayout.LayoutParams toolbarSize = new com.google.android.material.appbar.CollapsingToolbarLayout.LayoutParams(-1,dp(56));
         toolbarSize.setCollapseMode(com.google.android.material.appbar.CollapsingToolbarLayout.LayoutParams.COLLAPSE_MODE_PIN); collapse.addView(toolbar,toolbarSize);
@@ -711,7 +714,8 @@ public final class MainActivity extends AppCompatActivity {
             gap(panel, 12);
         }
         panel.addView(companionReadingCard(b)); gap(panel, 12);
-        panel.addView(button(timerBook != null && timerBook.equals(b.id) ? "Riprendi sessione" : "Inizia a leggere", true, () -> startTimer(b)));
+        MaterialButton timer = button(timerBook != null && timerBook.equals(b.id) ? "Riprendi la sessione" : "Inizia a leggere · timer", R.style.Atlante_Button_Tonal, () -> startTimer(b));
+        timer.setIconResource(R.drawable.ic_timer); panel.addView(timer, new LinearLayout.LayoutParams(-1, -2));
         addPersonalSections(panel, b);
 
         if (!b.description.isEmpty()) {
@@ -1273,9 +1277,44 @@ public final class MainActivity extends AppCompatActivity {
                 loading.dismiss(); busy = false; if (isFinishing() || isDestroyed()) return;
                 covers.clear(); showLibrary();
                 if (result != null) { error(result); return; }
+                int withoutCover = 0; for (Book b : fresh.values()) if (store.find(b.id) != null && !store.cover(b).isFile()) withoutCover++;
+                if (withoutCover > 0) fetchMissingCovers(new ArrayList<>(fresh.values()), false);
                 dialogBuilder().setTitle(contents.atlante ? "Ripristino completato" : "Importazione completata").setMessage(count + " libri aggiunti alla biblioteca."
+                    + (withoutCover > 0 ? "\n\nCerco in background le " + withoutCover + " copertine mancanti su Open Library (per ISBN, oppure titolo e autore). Le vedrai comparire man mano." : "")
                     + (withoutFile > 0 ? "\n\n" + withoutFile + " libri sono senza file: per leggerli reimportali da ☰ › Importa ebook. Note e avanzamento restano collegati." : ""))
                     .setPositiveButton("OK", null).show();
+            });
+        });
+    }
+
+    private volatile boolean fetchingCovers;
+
+    /**
+     * Downloads, one by one in the background, the covers that are missing: by ISBN, otherwise by title and author.
+     * Only ISBN, title and author are sent to Open Library. Existing covers are never replaced.
+     */
+    private void fetchMissingCovers(List<Book> books, boolean announce) {
+        ArrayList<Book> missing = new ArrayList<>();
+        for (Book b : books) { Book current = store.find(b.id); if (current != null && !store.cover(current).isFile()) missing.add(current); }
+        if (missing.isEmpty()) { if (announce) Toast.makeText(this, "Tutti i libri hanno già una copertina", Toast.LENGTH_SHORT).show(); return; }
+        if (fetchingCovers) { if (announce) Toast.makeText(this, "Download delle copertine già in corso", Toast.LENGTH_SHORT).show(); return; }
+        fetchingCovers = true;
+        if (announce) Toast.makeText(this, "Cerco " + missing.size() + " copertine su Open Library…", Toast.LENGTH_LONG).show();
+        coverWorker.execute(() -> {
+            int found = 0;
+            for (Book b : missing) {
+                if (isDestroyed()) break;
+                byte[] image = OnlineCatalog.findCover(b);
+                if (image == null || decode(null, image, 64) == null) continue;
+                try { store.saveDownloadedCover(b, image); found++; } catch (Exception ignored) { continue; }
+                final boolean refresh = found % 4 == 0;
+                runOnUiThread(() -> { forgetCover(b.id); if (refresh && reading == null && detailId == null) renderContent(); });
+            }
+            final int total = found;
+            runOnUiThread(() -> {
+                fetchingCovers = false; if (isFinishing() || isDestroyed()) return;
+                if (reading == null && detailId == null) renderContent();
+                Toast.makeText(this, total + " copertine trovate su " + missing.size(), Toast.LENGTH_LONG).show();
             });
         });
     }
@@ -1487,18 +1526,19 @@ public final class MainActivity extends AppCompatActivity {
         nav.setBackgroundColor(WHITE);
         for(int i=0;i<names.length;i++) { nav.getMenu().add(0,i+1,i,names[i]).setIcon(icons[i]); if(names[i].equals(destination)) nav.setSelectedItemId(i+1); }
         nav.setOnItemSelectedListener(item -> { String next=names[item.getItemId()-1]; if(!destination.equals(next)) navigate(next); return true; });
-        root.addView(nav,new LinearLayout.LayoutParams(-1,-2));
+        nav.setOnApplyWindowInsetsListener((v,insets)->insets); // root already pads for the system bars
+        nav.setPadding(0,0,0,0); root.addView(nav,new LinearLayout.LayoutParams(-1,-2));
     }
     private LinearLayout companionPage(String title, String subtitle) {
         reading=null; pages=null; body=null; grid=null; detailId=null; base(PAPER);
         LinearLayout top=row(); top.setPadding(dp(12),dp(6),dp(12),dp(8)); root.addView(top);
         top.addView(iconButton(R.drawable.ic_menu,"Apri menu laterale",this::openDrawer));
-        top.addView(text("Atlante",24,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+        TextView name=text(destination.equals("Home")?"Atlante":destination,22,INK,true); name.setPadding(dp(8),0,0,0);
+        top.addView(name,new LinearLayout.LayoutParams(0,-2,1));
         top.addView(iconButton(R.drawable.ic_settings,"Impostazioni",this::settings));
         companionScroll=new ScrollView(this); companionScroll.setFillViewport(true); root.addView(companionScroll,new LinearLayout.LayoutParams(-1,0,1));
-        LinearLayout panel=column(); panel.setPadding(dp(20),dp(12),dp(20),dp(28)); companionScroll.addView(panel);
-        panel.addView(sectionLabel("IL TUO COMPAGNO DI LETTURA")); gap(panel,8);
-        panel.addView(text(title,32,INK,true)); gap(panel,8); panel.addView(text(subtitle,14,MUTED,false)); gap(panel,24);
+        LinearLayout panel=column(); panel.setPadding(dp(20),dp(4),dp(20),dp(28)); companionScroll.addView(panel);
+        panel.addView(text(title,24,INK,true)); gap(panel,4); panel.addView(text(subtitle,14,MUTED,false)); gap(panel,16);
         return panel;
     }
     private void showCompanion() {
@@ -1514,7 +1554,7 @@ public final class MainActivity extends AppCompatActivity {
         if(!label.isEmpty()) { box.addView(sectionLabel(label)); gap(box,12); } gap(parent,16); return box;
     }
     private void headline(LinearLayout p,String label) { gap(p,8); p.addView(text(label,24,INK,true)); gap(p,14); }
-    private int progress(Book b) { return b.totalPages>0?Math.min(100,(int)(100L*b.currentPage/b.totalPages)):b.percent; }
+    private int progress(Book b) { return b.totalPages>0?Math.min(100,Math.round(100f*b.currentPage/b.totalPages)):b.percent; }
     private void home(LinearLayout p) {
         List<Book> all=store.snapshot(); java.time.LocalDate today=java.time.LocalDate.now();
         long[] totals=ReadingJournal.totals(all,today);
@@ -1614,7 +1654,9 @@ public final class MainActivity extends AppCompatActivity {
     private void discover(LinearLayout p) {
         LinearLayout search=surface(p,"CERCA UNA STORIA"); search.addView(text("Titolo, autore o ISBN",24,INK,true)); gap(search,8); search.addView(text("Cerca su Open Library e, per l’italiano, sul catalogo SBN. Controlla i metadati prima di aggiungere.",14,MUTED,false)); search.addView(button("Cerca libri online",true,this::onlineSearch));
         headline(p,"Esplora per genere");
-        for(String genre:new String[]{"Fantasy","Fantascienza","Classici","Gialli","Storia","Filosofia"}) p.addView(button(genre,false,()->{lastOnlineQuery=genre;onlineSearch();}));
+        ChipGroup genres=new ChipGroup(this); genres.setChipSpacingHorizontal(dp(8)); p.addView(genres,new LinearLayout.LayoutParams(-1,-2));
+        for(String genre:new String[]{"Fantasy","Fantascienza","Classici","Gialli","Thriller","Romanzi storici","Storia","Filosofia","Poesia","Fumetti","Saggi","Ragazzi"}) {
+            Chip chip=new Chip(this); chip.setText(genre); chip.setCheckable(false); chip.setOnClickListener(v->{lastOnlineQuery=genre;onlineSearch();}); genres.addView(chip); }
         headline(p,"Classifiche italiane");
         LinearLayout ranks=surface(p,"FONTI DI VENDITA"); ranks.addView(text("Apri le classifiche aggiornate delle librerie. Fonte e data sono quelle del sito: Atlante non inventa posizioni né le mescola ai suggerimenti personali.",14,MUTED,false));
         ranks.addView(button("Classifica IBS ↗",false,()->openLink("https://www.ibs.it/classifica/libri")));

@@ -90,6 +90,13 @@ Prima di aggiungere mostra il formato riconosciuto e quanti libri sono nuovi. Un
 già presente (stesso identificativo, stesso ISBN o stesso titolo e autore) non viene
 duplicato né modificato. I libri importati da altre app diventano schede senza file.
 
+Dopo un’importazione o un ripristino Atlante cerca da solo, in background, le copertine
+mancanti: Open Library per ISBN, poi il servizio immagini di Google Books per ISBN (utile
+per le edizioni italiane recenti), poi le altre edizioni dell’opera e infine titolo e
+autore su Open Library, accettando solo titoli corrispondenti. Le copertine già presenti
+non vengono sostituite. **Impostazioni › Backup › Scarica copertine mancanti** ripete la
+ricerca per tutta la biblioteca. Ai servizi vengono inviati solo ISBN, titolo e autore.
+
 ## Filtri e ordinamento della biblioteca
 
 **Filtri e ordine**, accanto ai chip degli stati, combina genere e formato.
