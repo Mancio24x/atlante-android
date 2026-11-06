@@ -260,7 +260,8 @@ Il codice è diviso per argomento in `app/src/main/java/app/atlante/library/`:
 
 | Cartella | Contenuto |
 | --- | --- |
-| *(radice)* | `MainActivity`: navigazione e schermate (in migrazione verso Jetpack Compose) |
+| *(radice)* | `MainActivity`: navigazione e schermate non ancora migrate |
+| `ui/compose/` | schermate in Jetpack Compose (tema condiviso `AtlanteTheme`, Statistiche) |
 | `model/` | `Book`, diario di lettura (`ReadingJournal`), filtri (`LibraryQuery`), riconoscimento dei doppioni (`BookMatcher`) |
 | `storage/` | catalogo sul telefono (`LibraryStore`), backup ZIP, importazione di cataloghi |
 | `online/` | Open Library, catalogo SBN, saghe |
@@ -275,7 +276,7 @@ collegamenti di Sync).
 ## Compilazione locale per chi sviluppa
 
 Servono JDK 17, Gradle 8.9, piattaforma Android 35 e Build Tools 35.0.0.
-Il progetto usa Android Gradle Plugin 8.7.3, i widget della piattaforma e due librerie AndroidX: `activity` (risultati dei selettori, gesto Indietro predittivo) e `recyclerview` (griglia della biblioteca).
+Il progetto usa Android Gradle Plugin 8.7.3, Kotlin 2.0 e Jetpack Compose (Material 3) per le schermate già migrate, Material Components e AndroidX per le altre. Le build sono ottimizzate con R8: il codice dell’app resta intero, viene tolto solo quello inutilizzato delle librerie.
 Non è incluso un finto wrapper Gradle: il workflow installa Gradle esplicitamente.
 
 ```sh

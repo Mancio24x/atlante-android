@@ -100,7 +100,6 @@ public final class MainActivity extends AppCompatActivity {
     private int insetTop, insetBottom;
     private String lastOnlineQuery = "";
     private String destination = "Home", detailId;
-    private java.time.YearMonth calendarMonth = java.time.YearMonth.now();
     private final Map<String, android.os.Parcelable> libraryPositions = new HashMap<>();
     private final Map<String, Integer> pagePositions = new HashMap<>();
     private ScrollView companionScroll;
@@ -1815,12 +1814,29 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(text(title,24,INK,true)); gap(panel,4); panel.addView(text(subtitle,14,MUTED,false)); gap(panel,16);
         return panel;
     }
+    /** A destination drawn with Jetpack Compose, between the usual top bar and bottom navigation. */
+    private void composePage(View content) {
+        reading=null; pages=null; body=null; grid=null; detailId=null; companionScroll=null; base(PAPER);
+        LinearLayout top=row(); top.setPadding(dp(12),dp(6),dp(12),dp(8)); root.addView(top);
+        top.addView(iconButton(R.drawable.ic_menu,"Apri menu laterale",this::openDrawer));
+        TextView name=text(destination,22,INK,true); name.setPadding(dp(8),0,0,0);
+        top.addView(name,new LinearLayout.LayoutParams(0,-2,1));
+        top.addView(iconButton(R.drawable.ic_settings,"Impostazioni",this::settings));
+        root.addView(content,new LinearLayout.LayoutParams(-1,0,1));
+        addBottomNav(); updateBack();
+    }
+
     private void showCompanion() {
+        if(destination.equals("Statistiche")) {
+            android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+            composePage(app.atlante.library.ui.compose.StatisticsView.create(this,palette,store.snapshot(),prefs.getInt("yearGoal",24),prefs.getInt("monthGoal",2),motion(),this::goals));
+            return;
+        }
         if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("La tua biblioteca, come piace a te.","Aspetto, lettura e gestione dei dati."); settingsPage(p); updateBack(); return; }
         boolean sync=destination.equals("Sync");
         LinearLayout panel=companionPage(sync?"Invia e ricevi.":destination.equals("Statistiche")?"Ogni pagina conta.":destination.equals("Scopri")?"La prossima storia.":"Il tempo per un libro.",
             sync?"Stato, pagina e capitolo condivisi con i tuoi servizi di lettura.":destination.equals("Statistiche")?"Le tue letture, un giorno alla volta.":destination.equals("Scopri")?"Nuove idee da esplorare. La scelta è tua.":"Un piccolo spazio per le tue grandi storie.");
-        if(sync) syncPage(panel); else if(destination.equals("Statistiche")) statistics(panel); else if(destination.equals("Scopri")) discover(panel); else home(panel);
+        if(sync) syncPage(panel); else if(destination.equals("Scopri")) discover(panel); else home(panel);
         addBottomNav(); updateBack(); animateIn(panel);
         int y=pagePositions.getOrDefault(destination,0); companionScroll.post(() -> { if(companionScroll!=null) companionScroll.scrollTo(0,y); });
     }
@@ -1892,40 +1908,6 @@ public final class MainActivity extends AppCompatActivity {
         p.addView(text("Libri al mese",15,INK,false)); NumberPicker month=wheel(1,100,getPreferences(MODE_PRIVATE).getInt("monthGoal",2)); p.addView(month);
         p.addView(text("Pagine al giorno",15,INK,false)); NumberPicker daily=wheel(1,1000,getPreferences(MODE_PRIVATE).getInt("dailyGoal",20)); p.addView(daily);
         dialogBuilder().setTitle("I tuoi obiettivi").setView(scrolled(p)).setNegativeButton("Annulla",null).setPositiveButton("Salva",(d,w)->{getPreferences(MODE_PRIVATE).edit().putInt("yearGoal",year.getValue()).putInt("monthGoal",month.getValue()).putInt("dailyGoal",daily.getValue()).apply(); showLibrary();}).show();
-    }
-    private void statistics(LinearLayout p) {
-        List<Book> all=store.snapshot(); long[] total=ReadingJournal.totals(all,null);
-        LinearLayout box=surface(p,"IL TUO VIAGGIO"); LinearLayout line=row(); box.addView(line);
-        metric(line,Long.toString(total[0]),"pagine registrate"); metric(line,Long.toString(total[1]/60),"minuti di lettura"); metric(line,Integer.toString(ReadingJournal.streak(all,java.time.LocalDate.now())),"giorni di fila");
-        goalCard(p); headline(p,"Calendario di lettura"); calendar(p);
-        headline(p,"La tua biblioteca");
-        for(String state:new String[]{Book.READING,Book.TO_READ,Book.PAUSED,Book.READ}) {
-            int count=0; for(Book b:all) if(state.equals(b.status)) count++;
-            LinearLayout c=surface(p,""); c.addView(text(state+" · "+count,16,INK,false)); LinearProgressIndicator bar=new LinearProgressIndicator(this); bar.setIndicatorColor(SAGE); bar.setTrackColor(LINE); c.addView(bar); bar.setProgressCompat(all.isEmpty()?0:100*count/all.size(),motion());
-        }
-        TreeMap<String,Integer> genres=new TreeMap<>(); for(Book b:all) { String g=b.genre.isEmpty()?"Genere non indicato":b.genre; genres.put(g,genres.getOrDefault(g,0)+1); }
-        headline(p,"Generi nella tua biblioteca"); for(Map.Entry<String,Integer> e:genres.entrySet()) p.addView(text(e.getKey()+" · "+e.getValue(),15,MUTED,false));
-    }
-    private void calendar(LinearLayout p) {
-        LinearLayout box=surface(p,""); LinearLayout top=row(); box.addView(top);
-        top.addView(button("‹",R.style.Atlante_Button_Text,()->{calendarMonth=calendarMonth.minusMonths(1);showLibrary();}));
-        TextView label=text(calendarMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ITALIAN)),18,INK,true); label.setGravity(Gravity.CENTER); top.addView(label,new LinearLayout.LayoutParams(0,-2,1));
-        top.addView(button("›",R.style.Atlante_Button_Text,()->{calendarMonth=calendarMonth.plusMonths(1);showLibrary();}));
-        GridLayout grid=new GridLayout(this); grid.setColumnCount(7); box.addView(grid,new LinearLayout.LayoutParams(-1,-2));
-        for(String day:new String[]{"L","M","M","G","V","S","D"}) calendarCell(grid,day,null,0);
-        int blanks=calendarMonth.atDay(1).getDayOfWeek().getValue()-1; for(int i=0;i<blanks;i++) calendarCell(grid,"",null,0);
-        for(int d=1;d<=calendarMonth.lengthOfMonth();d++) { java.time.LocalDate date=calendarMonth.atDay(d); long[] t=ReadingJournal.totals(store.snapshot(),date); calendarCell(grid,Integer.toString(d),date,t[0]+t[1]); }
-        gap(box,12); box.addView(text("Un punto segna i giorni con sessioni. Tocca un giorno per i dettagli.",12,MUTED,false));
-    }
-    private void calendarCell(GridLayout grid,String value,java.time.LocalDate date,long activity) {
-        TextView cell=text(value+(activity>0?"\n•":""),14,date!=null&&date.equals(java.time.LocalDate.now())?COPPER:INK,false); cell.setGravity(Gravity.CENTER); cell.setMinHeight(dp(48));
-        GridLayout.LayoutParams lp=new GridLayout.LayoutParams(); lp.width=0; lp.height=dp(48); lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f); grid.addView(cell,lp);
-        if(activity>0) cell.setBackground(background(LINE,Color.TRANSPARENT));
-        if(date!=null) { cell.setContentDescription(italianDate(date.toString())+(activity>0?", con letture":" , nessuna sessione")); cell.setOnClickListener(v->{
-            LinearLayout p=column(); p.setPadding(dp(20),dp(12),dp(20),dp(20)); long[] totals=ReadingJournal.totals(store.snapshot(),date); p.addView(text(totals[0]+" pagine · "+totals[1]/60+" minuti",18,INK,true));
-            for(Book b:store.snapshot()) { org.json.JSONArray a=ReadingJournal.array(b,"sessions"); for(int i=0;i<a.length();i++){org.json.JSONObject s=a.optJSONObject(i); if(s!=null&&date.toString().equals(s.optString("date"))) {gap(p,12);p.addView(text(b.title+" · "+s.optInt("pages")+" pagine · "+s.optLong("seconds")/60+" min",14,MUTED,false));}} }
-            dialogBuilder().setTitle(italianDate(date.toString())).setView(scrolled(p)).setPositiveButton("Chiudi",null).show();
-        }); }
     }
     private void discover(LinearLayout p) {
         LinearLayout search=surface(p,"CERCA UNA STORIA"); search.addView(text("Titolo, autore o ISBN",24,INK,true)); gap(search,8); search.addView(text("Cerca su Open Library e, per l’italiano, sul catalogo SBN. Controlla i metadati prima di aggiungere.",14,MUTED,false)); search.addView(button("Cerca libri online",true,this::onlineSearch));

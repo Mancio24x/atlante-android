@@ -1,4 +1,8 @@
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
 
 def version = new Properties()
 rootProject.file('version.properties').withInputStream { version.load(it) }
@@ -32,11 +36,22 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled false
+            // R8 removes unused library code (Compose, Material). The app's own classes are kept as they are.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
-        debug { applicationIdSuffix '.debug'; versionNameSuffix '-debug' }
+        debug {
+            applicationIdSuffix '.debug'; versionNameSuffix '-debug'
+            // Same R8 setup as the release, so the emulator check runs the code that reaches the phone.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
     }
+    buildFeatures { compose true }
+    kotlinOptions { jvmTarget = '1.8' }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -56,8 +71,15 @@ tasks.configureEach { task ->
 }
 
 dependencies {
-    // AndroidX pulls Kotlin stdlib variants with different versions: align them.
-    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
+    // Kotlin stdlib variants pulled by AndroidX are aligned to the Kotlin used for Compose.
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:2.0.21')
+    // Jetpack Compose (screens are migrated one at a time; the rest stays on Views).
+    implementation platform('androidx.compose:compose-bom:2024.10.01')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
     implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.activity:activity:1.9.3'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
