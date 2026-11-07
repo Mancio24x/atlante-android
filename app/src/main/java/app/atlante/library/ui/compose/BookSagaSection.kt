@@ -222,6 +222,10 @@ private fun ShelfCard(item: ShelfItem, host: SagaHost) {
     }
 }
 
+/** The same cover as in the carousels, for the saga map. */
+@Composable
+internal fun SagaCover(item: ShelfItem, host: SagaHost, modifier: Modifier) = Cover(item, host, modifier)
+
 @Composable
 private fun Cover(item: ShelfItem, host: SagaHost, modifier: Modifier) {
     // Stable keys: a library book by its id (its own saved cover), the others by cover URL (Open Library cover id)
@@ -279,7 +283,7 @@ internal fun FullSaga(s: SagaShelf, book: Book, host: SagaHost, onClose: () -> U
             Tab(tab == 1, { tab = 1 }, text = { Text("Elenco") })
         }
         Spacer(Modifier.height(8.dp))
-        if (tab == 0) SagaMap(s, book.id, open)
+        if (tab == 0) SagaMap(s, book.id, host, open)
         else LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(s.items) { v -> VolumeRow(v, v.ownedBookId == book.id, host) }
         }

@@ -5,8 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import app.atlante.library.model.Book
 import app.atlante.library.saga.*
 import app.atlante.library.saga.db.*
-import app.atlante.library.ui.compose.SagaOrder
-import app.atlante.library.ui.compose.ordered
+import app.atlante.library.ui.compose.SagaLayout
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -77,8 +76,18 @@ class SuggestionsTest {
         assertEquals(mapOf("Red Rising Trilogy" to listOf(0, 1, 2)), shelf.lanes)
         val items = listOf(ShelfItem("Prequel", "", "2020", "0", null, false, null, null, ""), ShelfItem("Primo", "", "2010", "1", null, false, null, null, ""),
             ShelfItem("Senza anno", "", null, "2", null, false, null, null, ""))
-        assertEquals(listOf(0, 1, 2), ordered(items, SagaOrder.SAGA))
-        assertEquals(listOf(1, 0, 2), ordered(items, SagaOrder.PUBLICATION))
+        assertEquals(listOf(0, 1, 2), SagaLayout.layout(items, SagaLayout.Order.SAGA, null).nodes.map { it.item })
+        // By publication: the book without a year is not placed by guess.
+        val byYear = SagaLayout.layout(items, SagaLayout.Order.PUBLICATION, null)
+        assertEquals(listOf(1, 0), byYear.nodes.map { it.item }); assertEquals(listOf(2), byYear.waiting.map { it.item })
+        // Your order is saved, comes back with the shelf and wins over the numbering.
+        suggestions.saveOrder(saga, listOf(ids[3], ids[0], ids[1], ids[2]))
+        val again = suggestions.saga(BookLink("b9", ids[0], saga, 95, "auto"))!!
+        assertEquals(listOf(ids[3], ids[0], ids[1], ids[2]), again.manualOrder)
+        assertEquals(listOf("Iron Gold", "Red Rising", "Golden Son", "Morning Star"),
+            SagaLayout.layout(again.items, SagaLayout.Order.PERSONAL, again.manualOrder).nodes.map { again.items[it.item].title })
+        suggestions.saveOrder(saga, null)
+        assertNull(suggestions.saga(BookLink("b9", ids[0], saga, 95, "auto"))!!.manualOrder)
     }
 
     @Test fun bundlesAreNotSuggested() {

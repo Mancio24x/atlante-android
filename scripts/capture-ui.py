@@ -215,8 +215,13 @@ for _ in range(45):
 shot('50-book-saga')
 assert found, 'Saga section did not appear'
 tap('Visualizza saga completa',True);time.sleep(1.5);shot('51-saga-map')
-assert any('Mappa della saga' in n.get('content-desc','') for n in dump().iter('node')), 'Saga map missing'
-tap('Ordine di pubblicazione',exact=True);time.sleep(.6);shot('51a-saga-map-publication')
+assert any('Mappa verticale della saga' in n.get('content-desc','') for n in dump().iter('node')), 'Saga map missing'
+# Each volume card says its number, state and where the position comes from.
+assert any(n.get('content-desc','').startswith('Numero ') for n in dump().iter('node')), 'Numbered volumes missing on the map'
+tap('Pubblicazione',exact=True);time.sleep(.6);shot('51a-saga-map-publication')
+tap('Cambia l’ordine',exact=True);time.sleep(.6);shot('51b-saga-order-editor')
+assert visible('Il tuo ordine'), 'Order editor missing'
+tap('Annulla',exact=True);tap('Saga',exact=True)
 tap('Elenco',exact=True);time.sleep(.6);shot('51b-full-saga-list')
 assert any('Golden Son' in n.get('text','') for n in dump().iter('node')), 'Full saga does not list Golden Son'
 tap('Chiudi',exact=True)

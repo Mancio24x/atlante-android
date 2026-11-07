@@ -20,6 +20,10 @@ data class ShelfItem(
     /** Other titles of the same work (original, Italian, without the saga prefix): used to avoid duplicates. */
     val alsoKnownAs: List<String> = emptyList(),
     val workId: Long? = null,
+    /** "volume", "novella", "prequel"… as the source gives it. */
+    val membership: String = "volume",
+    /** Where the position comes from: "hardcover", "wikidata", "manual". */
+    val source: String = "",
 )
 
 data class SagaShelf(
@@ -27,6 +31,8 @@ data class SagaShelf(
     val subseries: List<String>, val universe: String?,
     /** Sub-series name → indexes of [items] that belong to it (Red Rising Trilogy → 0, 1, 2). */
     val lanes: Map<String, List<Int>> = emptyMap(),
+    /** Your own order of the volumes (work ids), when you set one: it wins over every source. */
+    val manualOrder: List<Long>? = null,
 )
 
 /**
@@ -57,13 +63,20 @@ class Suggestions(
                 ?: books.firstOrNull { b -> titlesOf(v.work).any { t -> BookMatcher.same(Book().apply { title = t; author = authors.ifBlank { b.author } }, b) } }
             val title = owned?.title ?: v.work.italianTitle ?: v.work.originalTitle
             ShelfItem(title, owned?.author ?: authors, v.work.firstPublished, v.ordinal, owned?.id, owned?.status == Book.READ,
-                null, v.work.openLibraryId, "$title ${authors.substringBefore(" & ")}".trim(), titlesOf(v.work), v.work.id)
+                null, v.work.openLibraryId, "$title ${authors.substringBefore(" & ")}".trim(), titlesOf(v.work), v.work.id, v.membership, v.source)
         }
+        val manual = dao.overrides("series", seriesId.toString()).firstOrNull { it.field == "order" }?.value
+            ?.split(',')?.mapNotNull { it.trim().toLongOrNull() }?.takeIf { it.isNotEmpty() }
         val universe = series.universeId?.let { dao.universe(it)?.name }
         val subs = dao.subseries(seriesId)
         val lanes = subs.associate { sub -> val ids = dao.volumes(sub.id).map { it.work.id }.toSet(); sub.name to items.indices.filter { items[it].workId in ids } }
             .filterValues { it.isNotEmpty() }
-        SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, subs.map { it.name }, universe, lanes)
+        SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, subs.map { it.name }, universe, lanes, manual)
+    }
+
+    /** Saves your order of a saga's volumes (work ids, top to bottom); null goes back to the sources' order. */
+    suspend fun saveOrder(seriesId: Long, workIds: List<Long>?) = withContext(Dispatchers.IO) {
+        dao.putOverride(app.atlante.library.saga.db.UserOverride("series", seriesId.toString(), "order", workIds?.joinToString(",") ?: "", now()))
     }
 
     /**
