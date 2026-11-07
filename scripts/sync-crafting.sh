@@ -26,5 +26,5 @@ python3 scripts/package-source.py >/dev/null
 commit="$(git rev-parse --short HEAD)"
 leggimi=../android-release/LEGGIMI.txt
 # Only the version lines (title, APK, checksum, release link) and the commit change; the notes stay as written.
-sed -i '' -E "1s/1\.0\.[0-9]+/$version/; /^(APK installabile|Checksum verificato|Release):/s/1\.0\.[0-9]+/$version/g; s/\(commit [0-9a-f]+\)/(commit $commit)/" "$leggimi"
+sed -i '' -E "1s/1\.0\.[0-9]+/$version/; /^(APK installabile|Checksum verificato|Release):/s/1\.0\.[0-9]+/$version/g; s/\(commit [0-9a-f]+([,;)])/(commit $commit\1/" "$leggimi"
 echo "Cartella crafting aggiornata a $version (commit $commit). Aggiorna a mano le novità in LEGGIMI.txt se servono."
