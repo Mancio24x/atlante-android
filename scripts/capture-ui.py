@@ -82,7 +82,7 @@ tap('Anna Costa');time.sleep(.6);shot('09a-map-authors')
 # Design 7c: authors as chips; the search button lists them all.
 tap('Cerca un autore');time.sleep(.8);tap('Luca Moretti',exact=True);time.sleep(.6)
 shot('09b-map-author')
-assert any('Luca Moretti' in n.get('text','') for n in dump().iter('node')), 'Map author not selected'
+assert any(n.get('content-desc','')=='Luca Moretti, selezionato' for n in dump().iter('node')), 'Map author not selected'
 tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 # The persisted theme must survive a process restart.
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
