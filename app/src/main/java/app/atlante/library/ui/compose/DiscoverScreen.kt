@@ -115,14 +115,14 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
             }
         }
         LazyRow(Modifier.padding(top = 12.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
-            item { GenreChip("Più letti", genre == null) { genre = null; page = 0 } }
+            item { GenreChip("Popolari", genre == null) { genre = null; page = 0 } }
             items(Discover.GENRES) { g -> GenreChip(g.label, genre == g) { genre = g; page = 0 } }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.Bottom) {
-            Text(genre?.label ?: "I più letti", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))
+            Text(genre?.label ?: "I più popolari", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))
             Text("pagina ${page + 1}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
-        Text(if (genre == null) "I più desiderati su Open Library, con un’edizione italiana." else "I più letti del genere, un libro per autore.",
+        Text(if (genre == null) "Popolari tra i lettori di Open Library e Hardcover, con un’edizione italiana. Non sono classifiche di vendita." else "I più popolari del genere tra i lettori, un libro per autore.",
             Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 14.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
 
         // The fade is between loading / empty / grid only: a cover switching to its Italian edition must not
@@ -208,7 +208,7 @@ private fun PickCard(p: Discover.Pick?, host: SagaHost, saved: Boolean, onSave: 
         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
             val url = p?.coverUrl
             // Same book in this place (workKey): the Italian cover replaces the first one only when it is ready.
-            BookCover(p?.workKey, url, p?.title ?: "", Modifier.fillMaxSize().then(if (p != null) Modifier.clickable { host.openWork(p.title, p.author) }
+            BookCover(p?.workKey, url, p?.title ?: "", Modifier.fillMaxSize().then(if (p != null) Modifier.clickable { host.openWork(p.title, p.author, p.workKey) }
                 .semantics { contentDescription = "${p.title} di ${p.author}" } else Modifier)) {
                 url?.let { u -> SuggestionCovers.bytes(u)?.let { CoverImages.decode(it, null, 360) } }?.also { DiscoverPerf.cover() }
             }

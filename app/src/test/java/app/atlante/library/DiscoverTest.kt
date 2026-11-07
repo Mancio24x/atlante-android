@@ -86,4 +86,10 @@ class DiscoverTest {
         assertTrue(titles.toString(), titles.none { it == "1984" || it.startsWith("Lolita") || it.startsWith("Il signore delle mosche") })
         assertTrue(picks.all { it.italian && it.coverUrl!!.startsWith("http") && it.workKey.startsWith("hc:") })
     }
+
+    /** Scopri speaks the library's language: every genre chip has the name of a genre of the taxonomy. */
+    @Test fun genresHaveTheTaxonomyNames() {
+        val names = app.atlante.library.saga.Genres.main
+        Discover.GENRES.forEach { assertTrue(it.label, it.label in names) }
+    }
 }

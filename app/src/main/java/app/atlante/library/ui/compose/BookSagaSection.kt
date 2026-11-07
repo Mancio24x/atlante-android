@@ -39,6 +39,8 @@ interface SagaHost {
     fun searchOnline(query: String)
     /** A book not in the library (Scopri, carousels, catalog): its sheet opens directly; the search only when it is not found. */
     fun openWork(title: String, author: String)
+    /** Same, with the work's id when known (Open Library "OL…W", Hardcover "hc:…"): the edition must be of that work. */
+    fun openWork(title: String, author: String, workKey: String?) = openWork(title, author)
     /** Writes the saga in the book's record; [chosen] = picked by the user (otherwise only fills an empty field). */
     fun applySeries(bookId: String, name: String, ordinal: String?, chosen: Boolean)
     fun coverFile(bookId: String): String?

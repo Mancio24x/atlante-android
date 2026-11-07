@@ -118,10 +118,10 @@ class Discover(
         val GENRES = listOf(
             Genre("Fantasy", "fantasy", words = listOf("fantasy", "magic", "wizard", "dragon"), hardcover = listOf("Fantasy")),
             Genre("Fantascienza", "science_fiction", words = listOf("science_fiction", "sci-fi", "dystopi", "space_opera", "cyberpunk"), hardcover = listOf("Science Fiction")),
-            Genre("Gialli", "mystery", words = listOf("mystery", "detective", "crime", "murder", "giall", "polizies"), hardcover = listOf("Mystery", "Crime")),
+            Genre("Giallo", "mystery", words = listOf("mystery", "detective", "crime", "murder", "giall", "polizies"), hardcover = listOf("Mystery", "Crime")),
             Genre("Thriller", "thrillers", words = listOf("thriller", "suspense", "spy"), hardcover = listOf("Thriller")),
             Genre("Horror", "horror", words = listOf("horror", "ghost", "vampire", "zombie", "supernatural", "gothic"), hardcover = listOf("Horror")),
-            Genre("Romanzi storici", "historical_fiction", words = listOf("historical_fiction", "history_fiction", "romanzo_storico"), hardcover = listOf("Historical Fiction", "Historical")),
+            Genre("Romanzo storico", "historical_fiction", words = listOf("historical_fiction", "history_fiction", "romanzo_storico"), hardcover = listOf("Historical Fiction", "Historical")),
             Genre("Rosa", "romance", words = listOf("romance", "love_stor", "romantic"), hardcover = listOf("Romance")),
             Genre("Classici", "classic_literature", null, hardcover = listOf("Classics")),
             Genre("Ragazzi", "young_adult_fiction", words = listOf("young_adult", "juvenile", "children", "teen"), minShare = 0.1, hardcover = listOf("Young Adult")),

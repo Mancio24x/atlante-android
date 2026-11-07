@@ -6,6 +6,9 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Correzioni**: anello di Home centrato con i numeri al centro; nello Scaffale torna il pulsante della vista.
+  **Scopri**: «Popolari» (popolarità tra i lettori, non vendite), generi con gli stessi nomi della biblioteca
+  (Giallo, Romanzo storico), edizione della scheda confermata con l'id dell'opera di Open Library.
 - **Scheda unica a tutta pagina** per ogni libro non in biblioteca (Scopri, saghe, mappa, catalogo, ricerca online):
   si apre subito, poi edizione, copertina e trama; una risposta arrivata tardi per un altro libro è ignorata.
   **Trame sicure**: solo da Wikipedia dell'opera o da record della stessa edizione (stesso ISBN), mai per solo

@@ -17,4 +17,17 @@ class DiscoverTapTest {
         assertNull(BibliographicEngine.sameWorkIn(listOf(other), wanted, null))
         assertFalse(BibliographicEngine.different(mine, wanted))
     }
+
+    /** With the work id from Scopri, an Open Library record of another work is never the sheet's edition. */
+    @Test fun theWorkIdConfirmsTheEdition() {
+        val right = Book().apply { title = "Dune"; author = "Frank Herbert"; source = "/works/OL893415W" }
+        val other = Book().apply { title = "Dune"; author = "Frank Herbert"; source = "/works/OL999W" }
+        val sbn = Book().apply { title = "Dune"; author = "Frank Herbert"; source = "sbn:IT\\ICCU\\X" }
+        assertSame(right, MainActivity.confirmWork(other, listOf(other, right), "OL893415W"))
+        assertNull(MainActivity.confirmWork(other, listOf(other), "OL893415W"))
+        assertSame(sbn, MainActivity.confirmWork(sbn, listOf(sbn, right), "OL893415W"))
+        assertSame(right, MainActivity.confirmWork(null, listOf(other, right), "/works/OL893415W"))
+        assertSame(other, MainActivity.confirmWork(other, listOf(other), null))
+        assertSame(other, MainActivity.confirmWork(other, listOf(other), "hc:123"))
+    }
 }

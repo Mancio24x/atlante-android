@@ -1473,7 +1473,8 @@ public final class MainActivity extends AppCompatActivity {
     private final app.atlante.library.ui.compose.SagaHost sagaHost = new app.atlante.library.ui.compose.SagaHost() {
         @Override public void openBook(String id) { Book x = store.find(id); if (x != null) details(x); }
         @Override public void searchOnline(String q) { searchFor(q); }
-        @Override public void openWork(String title, String author) { openDiscovered(title, author); }
+        @Override public void openWork(String title, String author) { openDiscovered(title, author, null); }
+        @Override public void openWork(String title, String author, String workKey) { openDiscovered(title, author, workKey); }
         @Override public void applySeries(String id, String name, String ordinal, boolean chosen) {
             Book x = store.find(id); if (x == null || (!chosen && !x.series.isEmpty())) return;
             double n = 0; try { if (ordinal != null) n = Double.parseDouble(ordinal.replace(',', '.')); } catch (NumberFormatException ignored) { }
@@ -1955,7 +1956,8 @@ public final class MainActivity extends AppCompatActivity {
      * book is ignored (each opening has its own number). The same work already in the library opens its own page.
      */
     private Book onlineBook; private int sheetRequest;
-    private void openDiscovered(String title, String author) {
+    private void openDiscovered(String title, String author) { openDiscovered(title, author, null); }
+    private void openDiscovered(String title, String author, String workKey) {
         Book wanted = new Book(); wanted.title = title; wanted.author = author.isEmpty() ? "Autore sconosciuto" : author;
         Book mine = app.atlante.library.catalog.BibliographicEngine.sameWorkIn(store.snapshot(), wanted, catalogDao());
         if (mine != null) { details(mine); return; }
@@ -1974,6 +1976,7 @@ public final class MainActivity extends AppCompatActivity {
                     if (score > top) { top = score; found = c; }
                 }
                 if (top < BookMatcher.SAME_TITLE_AND_AUTHOR) found = null;
+                found = confirmWork(found, results, workKey);
                 if (found != null) { if (found.source.startsWith("sbn:")) SbnCatalog.enrich(found); else OnlineCatalog.enrich(found, "ita"); app.atlante.library.online.PlotFinder.fill(found, catalogDao()); }
             } catch (Exception ignored) { found = null; }
             final Book book = found;
@@ -1982,6 +1985,19 @@ public final class MainActivity extends AppCompatActivity {
                 if (book != null) onlineSheet(book, false, true, request); else onlineSheet(wanted, false, false, request);
             });
         });
+    }
+    /**
+     * With the work's Open Library id: an Open Library record of another work is refused, and the record of this
+     * very work is taken when the best match was not sure. Italian library records (SBN) have no work id: they
+     * keep the title-and-author check. Without an id, the choice stays as it was.
+     */
+    static Book confirmWork(Book found, List<Book> results, String workKey) {
+        if (workKey == null) return found;
+        String key = workKey.replaceFirst("^/works/", "");
+        if (!key.matches("OL[0-9]+W")) return found;
+        Book same = null; for (Book c : results) if (c.source.equals("/works/" + key)) { same = c; break; }
+        if (found != null && found.source.matches("/works/OL[0-9]+W") && !found.source.equals("/works/" + key)) return same;
+        return found != null ? found : same;
     }
     /** Online search result: the same sheet, filled with the edition's data and plot. */
     private void openOnline(Book candidate, String language) {
