@@ -11,6 +11,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -106,202 +107,263 @@ object StatisticsView {
         }
 }
 
-@Composable
-fun StatisticsScreen(data: StatsData, palette: ThemePalette, motion: Boolean, onGoals: () -> Unit) {
-    var shown by remember { mutableStateOf(!motion) }
-    LaunchedEffect(Unit) { shown = true }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 28.dp)) {
-        Text("Ogni pagina conta.", style = MaterialTheme.typography.headlineSmall)
-        Text("Le tue letture, un giorno alla volta.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(16.dp))
-        Section("IL TUO VIAGGIO") {
-            Row(Modifier.fillMaxWidth()) {
-                Metric(Modifier.weight(1f), if (shown) data.pages.toInt() else 0, "pagine registrate", motion)
-                Metric(Modifier.weight(1f), if (shown) data.minutes.toInt() else 0, "minuti di lettura", motion)
-                Metric(Modifier.weight(1f), if (shown) data.streak else 0, "giorni di fila", motion)
-            }
-        }
-        GoalCard(data, shown, motion, onGoals)
-        Headline("Calendario di lettura")
-        Calendar(data, palette, motion)
-        Headline("La tua biblioteca")
-        Section("") {
-            data.byState.forEach { (state, count) ->
-                val share by animateFloatAsState(if (shown && data.total > 0) count.toFloat() / data.total else 0f, if (motion) tween(700) else tween(0), label = "state")
-                Text("$state · $count", style = MaterialTheme.typography.bodyLarge)
-                LinearProgressIndicator(progress = { share }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 14.dp))
-            }
-        }
-        Headline("Generi nella tua biblioteca")
-        if (data.genres.isNotEmpty()) Section("") { GenreSection(data.books, shown, motion) }
-    }
-}
+private val Serif = androidx.compose.ui.text.font.FontFamily.Serif
+private val Round20 = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+private fun finishedOn(b: Book): LocalDate? = runCatching { LocalDate.parse(b.finished) }.getOrNull()?.takeIf { b.status == Book.READ }
 
 /**
- * Horizontal bars, one per main genre, longest first: one series, so one colour (the theme's primary) and no
- * legend; the count sits at the end of each bar in text colour. "Altri generi" and "Genere non indicato" are
- * not genres: they recede in the outline colour. Each row reads as one sentence for TalkBack.
+ * Statistiche (design 4b): pick the period (Settimana · Mese · Anno) and see its pages with the trend, then la tua
+ * rotta month by month, a calendar coloured by intensity with the day's details inline, the library and its genres.
  */
 @Composable
-fun GenreBars(genres: List<Pair<String, Int>>, total: Int, shown: Boolean, motion: Boolean) {
-    val max = genres.maxOf { it.second }.coerceAtLeast(1)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        genres.forEach { (genre, count) ->
-            val share by animateFloatAsState(if (shown) count.toFloat() / max else 0f, if (motion) tween(700) else tween(0), label = "genre")
-            val percent = if (total > 0) count * 100 / total else 0
-            val muted = genre == OTHER_GENRES || genre == NO_GENRE
-            Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "$genre: $count libri, $percent per cento" },
-                verticalAlignment = Alignment.CenterVertically) {
-                Text(genre, Modifier.width(118.dp), style = MaterialTheme.typography.bodyMedium, maxLines = 2,
-                    color = if (muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    if (share > 0f) Box(Modifier.weight(share.coerceAtLeast(0.001f)).height(16.dp)
-                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
-                        .background(if (muted) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary))
-                    Text("$count", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface)
-                    if (share < 1f) Spacer(Modifier.weight((1f - share).coerceAtLeast(0.001f)))
+fun StatisticsScreen(data: StatsData, palette: ThemePalette, motion: Boolean, onGoals: () -> Unit) {
+    var period by remember { mutableStateOf("Settimana") }
+    val colors = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxSize()) {
+        // Period switch, a segmented pill under the title.
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp).height(40.dp).clip(Round20).background(colors.outlineVariant).padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            listOf("Settimana", "Mese", "Anno").forEach { p ->
+                val on = p == period
+                Box(Modifier.weight(1f).fillMaxHeight().clip(androidx.compose.foundation.shape.RoundedCornerShape(17.dp)).background(if (on) colors.surface else androidx.compose.ui.graphics.Color.Transparent)
+                    .clickable { period = p }.semantics { contentDescription = p + if (on) ", selezionato" else "" }, contentAlignment = Alignment.Center) {
+                    Text(p, style = MaterialTheme.typography.labelLarge, color = if (on) colors.onSurface else colors.onSurfaceVariant)
+                }
+            }
+        }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PeriodCard(data, period, palette)
+            RouteCard(data, palette, onGoals)
+            HeatCalendar(data, palette, motion)
+            LibraryCard(data, palette)
+            GenreCard(data)
+        }
+    }
+}
+
+private fun pagesOn(data: StatsData, day: LocalDate) = data.sessions[day].orEmpty().sumOf { it.pages }
+private fun minutesOn(data: StatsData, day: LocalDate) = data.sessions[day].orEmpty().sumOf { it.minutes }
+private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minutes / 60} h" + if (minutes % 60 > 0) " ${minutes % 60}′" else ""
+
+@Composable private fun Card(content: @Composable ColumnScope.() -> Unit) {
+    OutlinedCard(Modifier.fillMaxWidth(), shape = Round20, colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(18.dp), content = content)
+    }
+}
+@Composable private fun Kicker(text: String) = Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+@Composable private fun PeriodCard(data: StatsData, period: String, palette: ThemePalette) {
+    val colors = MaterialTheme.colorScheme; val today = LocalDate.now()
+    val from: LocalDate; val to: LocalDate; val label: String; val bars: List<Triple<String, Int, Boolean>>; var compare: Pair<LocalDate, LocalDate>? = null; val against: String
+    val it = Locale.ITALIAN
+    when (period) {
+        "Settimana" -> { from = today.minusDays(today.dayOfWeek.value - 1L); to = from.plusDays(6)
+            label = "SETTIMANA · ${from.dayOfMonth} – ${to.format(DateTimeFormatter.ofPattern("d MMMM", it))}".uppercase(it)
+            bars = (0..6).map { d -> val day = from.plusDays(d.toLong()); Triple(listOf("L", "M", "M", "G", "V", "S", "D")[d], pagesOn(data, day), day == today) }
+            compare = from.minusDays(7) to today.minusDays(7); against = "la settimana scorsa" }
+        "Mese" -> { from = today.withDayOfMonth(1); to = today.withDayOfMonth(today.lengthOfMonth())
+            label = (today.format(DateTimeFormatter.ofPattern("MMMM yyyy", it)) + " · fino a oggi").uppercase(it)
+            bars = (0 until today.lengthOfMonth()).map { d -> val day = from.plusDays(d.toLong()); Triple(if (d % 7 == 0) "${d + 1}" else "", pagesOn(data, day), day == today) }
+            compare = from.minusMonths(1) to today.minusMonths(1); against = "gli stessi giorni del mese scorso" }
+        else -> { from = today.withDayOfYear(1); to = today.withDayOfYear(today.lengthOfYear())
+            label = "${today.year} · DA GENNAIO A OGGI"
+            bars = (1..12).map { m -> val start = LocalDate.of(today.year, m, 1); val p = if (m > today.monthValue) 0 else (0 until start.lengthOfMonth()).sumOf { d -> pagesOn(data, start.plusDays(d.toLong())) }
+                Triple(listOf("G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D")[m - 1], p, m == today.monthValue) }
+            against = "" }
+    }
+    val end = if (to.isAfter(today)) today else to
+    val days = generateSequence(from) { d -> d.plusDays(1) }.takeWhile { d -> !d.isAfter(end) }.toList()
+    val pages = days.sumOf { d -> pagesOn(data, d) }; val minutes = days.sumOf { d -> minutesOn(data, d) }; val active = days.count { d -> !data.sessions[d].isNullOrEmpty() }
+    val finished = data.books.count { b -> finishedOn(b)?.let { d -> !d.isBefore(from) && !d.isAfter(end) } == true }
+    val previous = compare?.let { (a, b) -> generateSequence(a) { d -> d.plusDays(1) }.takeWhile { d -> !d.isAfter(b) }.sumOf { d -> pagesOn(data, d) } } ?: 0
+    Card {
+        Kicker(label)
+        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.Bottom) {
+            Text("$pages", style = MaterialTheme.typography.displaySmall.copy(fontFamily = Serif))
+            Text("pagine", Modifier.padding(start = 8.dp, bottom = 6.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+        }
+        val trend = when {
+            compare == null -> if (active > 0) "In media ${pages / active} pagine nei giorni in cui leggi" else "Nessuna lettura registrata quest’anno"
+            previous == 0 -> if (pages > 0) "Nessuna pagina registrata ne${if (period == "Mese") "gli stessi giorni" else "lla settimana"} prima" else "Nessuna lettura ancora"
+            else -> { val delta = (pages - previous) * 100 / previous; (if (delta >= 0) "↑ $delta%" else "↓ ${-delta}%") + " rispetto a $against" }
+        }
+        Text(trend, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = if (trend.startsWith("↓")) palette.warmColor else colors.primary)
+        val max = bars.maxOf { b -> b.second }.coerceAtLeast(1)
+        Row(Modifier.fillMaxWidth().height(120.dp).padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(if (bars.size > 12) 2.dp else if (bars.size > 7) 5.dp else 10.dp),
+            verticalAlignment = Alignment.Bottom) {
+            bars.forEach { (l, p, now) ->
+                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
+                    Box(Modifier.widthIn(max = 28.dp).fillMaxWidth().height((4 + 76 * p / max).dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(if (bars.size > 12) 3.dp else 6.dp))
+                        .background(if (now) palette.warmColor else if (p > 0) colors.primary else colors.outlineVariant))
+                    Text(l, Modifier.padding(top = 6.dp).height(14.dp), style = MaterialTheme.typography.labelSmall, color = if (now) palette.warmColor else colors.onSurfaceVariant, maxLines = 1)
+                }
+            }
+        }
+        HorizontalDivider(Modifier.padding(vertical = 16.dp), color = colors.outlineVariant)
+        Row(Modifier.fillMaxWidth()) {
+            listOf(hours(minutes) to "di lettura", "$active / ${days.size}" to "giorni attivi", "$finished" to (if (finished == 1) "libro finito" else "libri finiti")).forEach { (v, l) ->
+                Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }) {
+                    Text(v, style = MaterialTheme.typography.titleLarge.copy(fontFamily = Serif)); Text(l, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
             }
         }
     }
 }
 
-/** Genres of the library, of the books read, being read or to read; every genre of each book, or its main one. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun GenreSection(books: List<Book>, shown: Boolean, motion: Boolean) {
-    var state by remember { mutableStateOf<String?>(null) }
-    var membership by remember { mutableStateOf(true) }
-    val chosen = remember(books, state) { if (state == null) books else books.filter { it.status == state } }
-    val genres = remember(chosen, membership) { genreCounts(chosen, membership) }
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(null to "Tutti", Book.READ to "Letti", Book.READING to "In lettura", Book.TO_READ to "Da leggere").forEach { (s, label) ->
-            FilterChip(state == s, { state = s }, label = { Text(label) })
-        }
-    }
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        SegmentedButton(membership, { membership = true }, SegmentedButtonDefaults.itemShape(0, 2)) { Text("Tutti i generi", maxLines = 1) }
-        SegmentedButton(!membership, { membership = false }, SegmentedButtonDefaults.itemShape(1, 2)) { Text("Genere principale", maxLines = 1) }
-    }
-    Text(if (membership) "Un libro con più generi conta in ognuno: le percentuali sono sui ${chosen.size} libri e insieme possono superare il 100%."
-        else "Ogni libro conta una volta, nel suo genere principale: le percentuali sui ${chosen.size} libri fanno 100%.",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Spacer(Modifier.height(10.dp))
-    if (genres.isEmpty()) Text("Nessun libro in questo stato.", style = MaterialTheme.typography.bodyMedium)
-    else GenreBars(genres, chosen.size, shown, motion)
-    if (genres.any { it.first == NO_GENRE }) Text("Per i libri senza genere: Impostazioni › Operazioni in background › Indicizza i generi.",
-        Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable private fun Headline(text: String) {
-    Spacer(Modifier.height(8.dp)); Text(text, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.height(14.dp))
-}
-
-@Composable private fun Section(label: String, content: @Composable ColumnScope.() -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-        Column(Modifier.padding(18.dp)) {
-            if (label.isNotEmpty()) {
-                Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-            }
-            content()
-        }
-    }
-}
-
-/** A number that counts up to its value (or appears at once when animations are off). */
-@Composable private fun Metric(modifier: Modifier, value: Int, label: String, motion: Boolean) {
-    val shown by animateIntAsState(value, if (motion) tween(900) else tween(0), label = label)
-    Column(modifier.semantics { contentDescription = "$value $label" }) {
-        Text("$shown", style = MaterialTheme.typography.headlineMedium)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable private fun GoalCard(data: StatsData, shown: Boolean, motion: Boolean, onGoals: () -> Unit) {
-    val target = if (shown) (data.yearDone.toFloat() / maxOf(1, data.yearGoal)).coerceAtMost(1f) else 0f
-    val progress by animateFloatAsState(target, if (motion) spring(dampingRatio = 0.8f, stiffness = 60f) else tween(0), label = "goal")
-    Section("LA TUA ROTTA · ${LocalDate.now().year}") {
+@Composable private fun RouteCard(data: StatsData, palette: ThemePalette, onGoals: () -> Unit) {
+    val colors = MaterialTheme.colorScheme; val today = LocalDate.now()
+    val goal = data.yearGoal; val done = data.yearDone
+    val share = if (goal > 0) (done.toFloat() / goal).coerceAtMost(1f) else 0f
+    val projected = done * today.lengthOfYear() / today.dayOfYear.coerceAtLeast(1)
+    Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(progress = { progress }, modifier = Modifier.size(74.dp).semantics { contentDescription = "${data.yearDone} libri su ${data.yearGoal}" }, strokeWidth = 7.dp)
-            Column(Modifier.padding(start = 18.dp)) {
-                Text(if (data.yearGoal > 0) "${data.yearDone} / ${data.yearGoal} libri" else "${data.yearDone} libri", style = MaterialTheme.typography.headlineSmall)
-                Text("Quest’anno", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(6.dp))
-                Text(if (data.monthGoal > 0) "${data.monthDone} / ${data.monthGoal} questo mese" else "${data.monthDone} questo mese", color = MaterialTheme.colorScheme.primary)
+            Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(progress = { share }, modifier = Modifier.fillMaxSize(), strokeWidth = 8.dp, trackColor = colors.outlineVariant,
+                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round)
+                Text(if (goal > 0) "${(share * 100).toInt()}%" else "$done", style = MaterialTheme.typography.titleMedium.copy(fontFamily = Serif))
+            }
+            Column(Modifier.padding(start = 16.dp).weight(1f)) {
+                Kicker("LA TUA ROTTA · ${today.year}")
+                Text(if (goal > 0) "$done di $goal libri" else "$done " + if (done == 1) "libro" else "libri", Modifier.padding(top = 4.dp), style = MaterialTheme.typography.titleLarge.copy(fontFamily = Serif))
+                if (goal > 0 && done < goal) {
+                    val weeks = ((today.lengthOfYear() - today.dayOfYear) / 7.0).coerceAtLeast(1.0)
+                    Text("Al tuo ritmo arrivi a $projected: servono " + String.format(Locale.ITALIAN, "%.1f", (goal - done) / weeks) + " libri a settimana.",
+                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                } else if (goal > 0) Text("★ Obiettivo annuale raggiunto!", style = MaterialTheme.typography.bodySmall, color = palette.warmColor)
             }
         }
-        if (data.monthHistory.isNotEmpty()) {
-            Text("Mesi precedenti", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleSmall)
-            data.monthHistory.forEach { (m, p) ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                    Text(m.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ITALIAN).replaceFirstChar { it.uppercase() } + " ${m.year}",
-                        Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    Text("${p.done} / ${p.goal}" + if (p.reached) "  ✓" else "", style = MaterialTheme.typography.bodyMedium,
-                        color = if (p.reached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        // Month by month: reached the monthly goal (or finished something, without a goal), this month, months to come.
+        val month = data.monthGoal; var reached = 0
+        Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            (1..12).forEach { m ->
+                val count = data.books.count { b -> finishedOn(b)?.let { d -> d.year == today.year && d.monthValue == m } == true }
+                val hit = if (month > 0) count >= month else count > 0
+                if (m < today.monthValue && hit) reached++
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    val shape = androidx.compose.foundation.shape.RoundedCornerShape(5.dp)
+                    Box(Modifier.fillMaxWidth().height(22.dp).clip(shape).background(when { m > today.monthValue -> androidx.compose.ui.graphics.Color.Transparent; m == today.monthValue -> palette.warmColor.copy(alpha = .18f); hit -> colors.primary; else -> colors.outlineVariant })
+                        .then(if (m > today.monthValue) Modifier.border(1.dp, colors.outlineVariant, shape) else if (m == today.monthValue) Modifier.border(1.dp, palette.warmColor, shape) else Modifier))
+                    Text(listOf("G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D")[m - 1], Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
                 }
             }
         }
-        if (data.yearGoal > 0 && data.yearDone >= data.yearGoal) Text("★ Obiettivo annuale raggiunto!", Modifier.padding(top = 10.dp), color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.titleMedium)
-        TextButton(onClick = onGoals, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Imposta obiettivi") }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (month > 0) "Obiettivo mensile ($month) raggiunto in $reached mesi su ${today.monthValue - 1}" else "Mesi con almeno un libro finito: $reached",
+                Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            TextButton(onClick = onGoals) { Text("Modifica") }
+        }
     }
 }
 
-/** Month calendar: slides left or right when changing month; a tap on a day lists its sessions. */
-@Composable private fun Calendar(data: StatsData, palette: ThemePalette, motion: Boolean) {
+@Composable private fun HeatCalendar(data: StatsData, palette: ThemePalette, motion: Boolean) {
+    val colors = MaterialTheme.colorScheme; val today = LocalDate.now()
     var month by remember { mutableStateOf(YearMonth.now()) }
-    var forward by remember { mutableStateOf(true) }
-    var opened by remember { mutableStateOf<LocalDate?>(null) }
-    Section("") {
+    var selected by remember { mutableStateOf(today) }
+    val levels = listOf(colors.outlineVariant.copy(alpha = .5f), colors.primary.copy(alpha = .25f), colors.primary.copy(alpha = .5f), colors.primary.copy(alpha = .78f), colors.primary)
+    fun level(p: Int) = when { p <= 0 -> 0; p < 15 -> 1; p < 28 -> 2; p < 42 -> 3; else -> 4 }
+    Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { forward = false; month = month.minusMonths(1) }) { Text("‹", style = MaterialTheme.typography.titleLarge) }
-            Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ITALIAN)).replaceFirstChar { it.uppercase() },
-                Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = { forward = true; month = month.plusMonths(1) }) { Text("›", style = MaterialTheme.typography.titleLarge) }
+            IconButton(onClick = { month = month.minusMonths(1) }) { Text("‹", style = MaterialTheme.typography.titleLarge, color = colors.primary) }
+            Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ITALIAN)).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleMedium.copy(fontFamily = Serif))
+            IconButton(onClick = { if (month < YearMonth.now()) month = month.plusMonths(1) }, enabled = month < YearMonth.now()) { Text("›", style = MaterialTheme.typography.titleLarge, color = colors.primary) }
         }
-        AnimatedContent(month, transitionSpec = {
-            if (!motion) slideInHorizontally(tween(0)) { 0 } togetherWith slideOutHorizontally(tween(0)) { 0 }
-            else if (forward) slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
-            else slideInHorizontally { -it } togetherWith slideOutHorizontally { it }
-        }, label = "month") { shownMonth ->
-            Column {
-                Row { listOf("L", "M", "M", "G", "V", "S", "D").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-                val blanks = shownMonth.atDay(1).dayOfWeek.value - 1
-                val cells = List(blanks) { null } + (1..shownMonth.lengthOfMonth()).map { shownMonth.atDay(it) }
-                cells.chunked(7).forEach { week ->
-                    Row {
-                        week.forEach { day -> DayCell(Modifier.weight(1f), day, day?.let { data.sessions[it] }, palette) { opened = it } }
-                        repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+        Row(Modifier.padding(top = 4.dp, bottom = 6.dp)) { listOf("L", "M", "M", "G", "V", "S", "D").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant) } }
+        val blanks = month.atDay(1).dayOfWeek.value - 1
+        val cells = List(blanks) { null } + (1..month.lengthOfMonth()).map { month.atDay(it) }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            cells.chunked(7).forEach { week ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    week.forEach { day ->
+                        if (day == null) Spacer(Modifier.weight(1f)) else {
+                            val future = day.isAfter(today); val p = pagesOn(data, day); val l = level(p)
+                            val shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+                            Box(Modifier.weight(1f).aspectRatio(1f).clip(shape).background(if (future) androidx.compose.ui.graphics.Color.Transparent else levels[l])
+                                .then(if (day == selected) Modifier.border(2.dp, palette.warmColor, shape) else Modifier)
+                                .clickable(enabled = !future) { selected = day }
+                                .semantics { contentDescription = day.format(DateTimeFormatter.ofPattern("d MMMM", Locale.ITALIAN)) + if (p > 0) ", $p pagine" else ", nessuna lettura" },
+                                contentAlignment = Alignment.Center) {
+                                Text("${day.dayOfMonth}", style = MaterialTheme.typography.bodySmall, fontWeight = if (day == today) FontWeight.Bold else FontWeight.Normal,
+                                    color = when { future -> colors.outline; l >= 3 -> colors.onPrimary; else -> colors.onSurface })
+                            }
+                        }
+                    }
+                    repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Text("meno ", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            levels.forEach { c -> Box(Modifier.padding(horizontal = 2.dp).size(12.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(3.dp)).background(c)) }
+            Text(" più", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+        }
+        // The chosen day, inline under the calendar.
+        val list = data.sessions[selected].orEmpty()
+        HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 12.dp), color = colors.outlineVariant)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text((if (selected == today) "Oggi, " else "") + selected.format(DateTimeFormatter.ofPattern("d MMMM", Locale.ITALIAN)), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontFamily = Serif))
+            Text(if (list.isEmpty()) "Nessuna lettura" else "${list.sumOf { it.pages }} pagine · ${hours(list.sumOf { it.minutes })}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+        list.forEach { s -> Column(Modifier.padding(top = 8.dp)) { Text(s.title, style = MaterialTheme.typography.titleSmall); Text("${s.pages} pagine · ${s.minutes} min", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) } }
+    }
+}
+
+@Composable private fun LibraryCard(data: StatsData, palette: ThemePalette) {
+    val colors = MaterialTheme.colorScheme
+    val parts = listOf(Triple("In lettura", Book.READING, colors.primary), Triple("In pausa", Book.PAUSED, palette.warmColor),
+        Triple("Da leggere", Book.TO_READ, colors.primary.copy(alpha = .3f)), Triple("Letti", Book.READ, colors.onSurface))
+        .map { (l, s, c) -> Triple(l, data.byState.firstOrNull { it.first == s }?.second ?: 0, c) }
+    Card {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("La tua biblioteca", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge.copy(fontFamily = Serif))
+            Text("${data.total} " + if (data.total == 1) "libro" else "libri", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+        Row(Modifier.fillMaxWidth().height(14.dp).padding(top = 0.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            parts.filter { it.second > 0 }.forEach { (_, n, c) -> Box(Modifier.weight(n.toFloat()).fillMaxHeight().clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).background(c)) }
+        }
+        Spacer(Modifier.height(14.dp))
+        parts.chunked(2).forEach { pair ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                pair.forEach { (l, n, c) ->
+                    Row(Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = "$l: $n" }, verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(3.dp)).background(c))
+                        Text(l, Modifier.padding(start = 8.dp).weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        Text("$n", style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
         }
-        Text("Un punto segna i giorni con sessioni. Tocca un giorno per i dettagli.", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    opened?.let { day ->
-        val list = data.sessions[day].orEmpty()
-        AlertDialog(onDismissRequest = { opened = null }, confirmButton = { TextButton(onClick = { opened = null }) { Text("Chiudi") } },
-            title = { Text(day.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ITALIAN))) },
-            text = {
-                Column {
-                    Text("${list.sumOf { it.pages }} pagine · ${list.sumOf { it.minutes }} minuti", style = MaterialTheme.typography.titleMedium)
-                    if (list.isEmpty()) Text("Nessuna sessione registrata.", Modifier.padding(top = 8.dp))
-                    list.forEach { Text("${it.title} · ${it.pages} pagine · ${it.minutes} min", Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
-            })
     }
 }
 
-@Composable private fun DayCell(modifier: Modifier, day: LocalDate?, sessions: List<DaySession>?, palette: ThemePalette, onOpen: (LocalDate) -> Unit) {
-    if (day == null) { Spacer(modifier.height(48.dp)); return }
-    val today = day == LocalDate.now(); val active = !sessions.isNullOrEmpty()
-    Column(modifier.height(48.dp).padding(2.dp).clip(CircleShape)
-        .background(if (active) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
-        .clickable { onOpen(day) }
-        .semantics { contentDescription = day.format(DateTimeFormatter.ofPattern("d MMMM", Locale.ITALIAN)) + if (active) ", con letture" else ", nessuna sessione" },
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("${day.dayOfMonth}", color = if (today) palette.warmColor else MaterialTheme.colorScheme.onSurface, fontWeight = if (today) FontWeight.Bold else FontWeight.Normal)
-        if (active) Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+@Composable private fun GenreCard(data: StatsData) {
+    val colors = MaterialTheme.colorScheme
+    var read by remember { mutableStateOf(false) }
+    val chosen = remember(read) { if (read) data.books.filter { it.status == Book.READ } else data.books }
+    val genres = remember(chosen) { genreCounts(chosen, membership = false) }
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Generi", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge.copy(fontFamily = Serif))
+            listOf(false to "Biblioteca", true to "Letti").forEach { (v, l) ->
+                Box(Modifier.padding(start = 4.dp).height(32.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).background(if (read == v) colors.onSurface else androidx.compose.ui.graphics.Color.Transparent)
+                    .clickable { read = v }.padding(horizontal = 12.dp).semantics { contentDescription = l + if (read == v) ", selezionato" else "" }, contentAlignment = Alignment.Center) {
+                    Text(l, style = MaterialTheme.typography.labelLarge, color = if (read == v) colors.surface else colors.primary)
+                }
+            }
+        }
+        if (genres.isEmpty()) Text("Nessun libro letto ancora.", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium)
+        val max = genres.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
+        genres.take(8).forEach { (g, n) ->
+            val muted = g == OTHER_GENRES || g == NO_GENRE
+            Column(Modifier.padding(top = 12.dp).semantics(mergeDescendants = true) { contentDescription = "$g: $n libri" }) {
+                Row { Text(g, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = if (muted) colors.onSurfaceVariant else colors.onSurface)
+                    Text("$n · ${if (chosen.isEmpty()) 0 else n * 100 / chosen.size}%", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant) }
+                Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).background(colors.outlineVariant.copy(alpha = .5f))) {
+                    Box(Modifier.fillMaxWidth(n.toFloat() / max).fillMaxHeight().clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).background(if (muted) colors.outline else colors.primary))
+                }
+            }
+        }
+        if (genres.any { it.first == NO_GENRE }) Text("Per i libri senza genere: Impostazioni › Libreria e catalogo › Indicizza i generi.",
+            Modifier.padding(top = 10.dp), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
     }
 }

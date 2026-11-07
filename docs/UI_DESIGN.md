@@ -13,6 +13,13 @@ Mappa, Autori, Saghe, Universi, scaffali). La scheda del libro (`details`) è un
 schermo Compose (`Dialog` con `usePlatformDefaultWidth = false`) servono per copertine, saga completa, operazioni.
 Sopra la barra in basso, quando c'è un lavoro in background, compare la barra di avanzamento (`RepairViews.bar`).
 
+## Grafica 2026-11 (Claude Design)
+
+Riferimento: progetto Claude Design «Atlante» (scelte 1b, 3a, 4b, 5a, 6a, 7a–7d). Elementi comuni, in `MainActivity`:
+`pageHeading` (occhiello + titolo serif), `sectionHeader`, `listCard` + `listRow` (righe con icona, dettaglio e
+freccia), `iconTile`, `pillChip` (chip piena color inchiostro quando scelta), `coverView`, `blend`. In Compose gli
+stessi elementi usano `colorScheme.onSurface` per le chip scelte e card `OutlinedCard` con raggio 20.
+
 ## Tema
 
 - Palette in `ui/ThemePalette.java` (Atlante crema/petrolio/rame, Rosa petalo, Lavanda, Salvia, Blu polvere, Sabbia,

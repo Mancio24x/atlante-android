@@ -18,7 +18,7 @@ Riassume le specifiche date nella sessione del 7 novembre (stabilizzazione, Scop
 
 ## 1. Biblioteca meno affollata (Priorità 4 della specifica di stabilizzazione)
 
-**Stato: da fare.** Oggi in alto: riga [ricerca][Genere][Autore], suggerimento, striscia del catalogo, chip degli
+**Stato: in parte** (design 3a: ricerca + «Filtri e ordine» + chip degli stati con il numero; manca il foglio dal basso in Compose). Oggi in alto: riga [ricerca][Genere][Autore], suggerimento, striscia del catalogo, chip degli
 stati + «Altri filtri e ordine» + «Azzera filtri» (`MainActivity.libraryHeader`, `libraryFilters`).
 **Da fare:**
 - Barra: ricerca + un solo pulsante «Filtri» (con contatore dei filtri attivi) + ordinamento.

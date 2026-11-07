@@ -6,6 +6,19 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Nuova grafica** (progetto Claude Design «Atlante», scelte 1b, 3a, 4b, 5a, 6a, 7a–7d): intestazione compatta con
+  occhiello e titolo serif; barra in basso con voci non scelte in grigio e filetto in alto.
+  **Home** (1b): una card «Oggi» con anello delle pagine, minuti, giorni di fila, settimana e rotta; il comodino come
+  carosello con «Leggi» (timer) e «+10» pagine; barra della sessione in corso; attività recente in una card.
+  **Biblioteca** (3a): ricerca in alto con «Filtri e ordine» e «+», stati come chip con il numero, griglia di sole
+  copertine a 3·4·5 colonne con avanzamento, spunta e numero di saga sulla copertina; tieni premuto per le azioni.
+  **Scopri** (4b): campo di ricerca, chip dei generi, segnalibro «Da leggere» sulla copertina (con Annulla),
+  «Mostra altri 6», classifiche e collezioni come righe. **Statistiche** (4b): periodo Settimana/Mese/Anno con
+  andamento, rotta mese per mese, calendario per intensità con il giorno sotto, biblioteca in una barra, generi.
+  **Sync** (5a): stato in cima con «Sincronizza tutto» e conflitti, servizi come righe che si aprono, importa/esporta,
+  fonti. **Impostazioni** (6a): indice con ricerca e pagine dedicate. **Menu** (7a): senza «Autori», con i numeri.
+  **Saghe** (7b): card con una barra per volume e il prossimo da leggere, mappa verticale della saga. **Mappa** (7c):
+  autori come chip e card dell'autore. **Universi** (7d): card con anello e una barra per saga.
 - **Scopri**: un tocco su un libro apre subito la sua scheda (crash corretto: il libro cercato non ha ancora un id);
   ricerca delle copertine in background con notifica; anello grande dell'obiettivo di oggi nelle Impostazioni.
 - **Scheda di un libro online**: «Aggiungi alla mia libreria» sotto la copertina, spazio fisso per la copertina,

@@ -25,6 +25,11 @@ class SettingsTimerTest {
     @Test fun settingsHaveOneImportAndNoCatalogBackupEntries() {
         val controller=Robolectric.buildActivity(MainActivity::class.java).setup();val a=controller.get()
         call(a,"settings")
+        val index=labels(a.window.decorView).map{it.text.toString()}
+        assertFalse(index.any{it=="Importa catalogo"||it=="Catalogo e backup"||it=="Esporta backup"||it=="Ripristina o importa un catalogo"})
+        // The import lives in the "Libreria e catalogo" page of the settings index (design 6a).
+        MainActivity::class.java.getDeclaredField("settingsSection").apply{isAccessible=true}.set(a,"libreria")
+        call(a,"showCompanion")
         val texts=labels(a.window.decorView).map{it.text.toString()}
         assertEquals(1,texts.count{it=="Importa eBook"})
         assertFalse(texts.any{it=="Importa catalogo"||it=="Catalogo e backup"||it=="Esporta backup"||it=="Ripristina o importa un catalogo"})

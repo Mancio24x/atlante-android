@@ -65,9 +65,9 @@ adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.
 tap('Biblioteca',exact=True);shot('01-library')
 tap('Apri menu laterale');shot('02-drawer');tap('Chiudi menu laterale')
 # The preset themes are in a section that opens and closes ("Temi predefiniti").
-tap('Impostazioni');shot('03-settings');tap('Temi predefiniti',True);shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
+tap('Impostazioni');shot('03-settings');tap('Aspetto',True);shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
 for theme,name in [('Lavanda','06-lavender'),('Blu polvere','07-blue'),('AMOLED nero','08-amoled')]:
-    tap('Impostazioni');tap('Temi predefiniti',True);tap(theme,True);shot(name)
+    tap('Impostazioni');tap('Aspetto',True);tap(theme,True);shot(name)
 tap('Apri menu laterale');tap('Mappa');shot('09-map-amoled')
 # The map is full screen with an author search on top.
 tap('Anna Costa');time.sleep(.6);shot('09a-map-authors')
@@ -79,7 +79,7 @@ assert any('Luca Moretti' in n.get('text','') for n in dump().iter('node')), 'Ma
 tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 # The persisted theme must survive a process restart.
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
-tap('Impostazioni');tap('Temi predefiniti',True)
+tap('Impostazioni');tap('Aspetto',True)
 state=dump()
 def visible(fragment, scroll=False):
     for _ in range(8 if scroll else 1):
@@ -168,10 +168,10 @@ for _ in range(40):
     if any(n.get('text','')=='Consigliati · Fantasy' for n in dump().iter('node')) and sum(1 for n in dump().iter('node') if ' di ' in n.get('content-desc',''))>=6: break
     time.sleep(1.5)
 shot('18a-discover-fantasy')
-tap('Cerca un libro per titolo, autore o ISBN')
+tap('Cerca titolo, autore o ISBN')
 assert not any(n.get('text','') in ('Fantasy','Fantascienza') and n.get('class','').endswith('EditText') for n in dump().iter('node')), 'Search opened with a genre written in it'
 shot('18b-discover-search');tap('Chiudi',exact=True)
-tap('Sync',exact=True);shot('19-sync');tap('Collega Calibre',True);shot('19a-calibre-settings');tap('Annulla',exact=True)
+tap('Sync',exact=True);shot('19-sync');tap('Calibre',True);tap('Collega Calibre',True);shot('19a-calibre-settings');tap('Annulla',exact=True)
 tap('Home',exact=True);shot('20-home-restored')
 print('Navigation, themes, reading states, progress wheels, chapters, manual entry, list view, bottom navigation and Sync completed.')
 
@@ -181,8 +181,8 @@ tap('Sync',exact=True)
 # Sync keeps its scroll position: scroll back to the top, where KOReader is the first section.
 for _ in range(4): adb('shell','input','swipe','540','600','540','1500','300')
 time.sleep(.4);shot('30-sync-koreader')
-assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'KOReader not first/visible in Sync'
-tap('Configura KOReader');shot('31-koreader-settings');tap('Annulla',exact=True)
+assert any(n.get('text','')=='KOReader' for n in dump().iter('node')), 'KOReader not visible in Sync'
+tap('KOReader',True);tap('Impostazioni di KOReader',True);shot('31-koreader-settings');tap('Annulla',exact=True)
 tap('Impostazioni');shot('32-settings-page')
 assert any('La tua biblioteca, come piace a te.' in n.get('text','') for n in dump().iter('node')), 'Settings is not a dedicated page'
 back();assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'Back did not restore Sync'
@@ -254,18 +254,18 @@ for node in dump().iter('node'):
     if node.get('text','')=='Letti':
         b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));y=str((b[1]+b[3])//2)
         adb('shell','input','swipe','900',y,'100',y,'300');time.sleep(.5);break
-tap('Altri filtri');shot('52b-filters')
+tap('Filtri e ordine');tap('Altri filtri');shot('52b-filters')
 assert visible('Tutte le lingue') and visible('Tutti gli anni') and visible('Tutti gli universi'), 'Language / year / universe filters missing'
 tap('Annulla',exact=True)
 # [Barra ricerca] [Genere] [Autore]: the two quick filters open their lists.
-tap('Filtra per genere');time.sleep(.5);shot('52d-genre-filter');tap('Chiudi',exact=True)
-tap('Filtra per autore');time.sleep(.5);shot('52e-author-filter')
+tap('Filtri e ordine');tap('Filtra per genere');time.sleep(.5);shot('52d-genre-filter');tap('Chiudi',exact=True)
+tap('Filtri e ordine');tap('Filtra per autore');time.sleep(.5);shot('52e-author-filter')
 assert visible('Tutti gli autori'), 'Author filter missing'
 tap('Chiudi',exact=True)
 print('Saga carousels completed.')
 
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.
-back();tap('Impostazioni');tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
+back();tap('Impostazioni');tap('Libreria e catalogo',True);tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
 assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
 # Qualità del catalogo: every check with its count (its button is above the cache section: scroll back up first).
 for _ in range(4): adb('shell','input','swipe','540','600','540','1400','250');time.sleep(.3)
@@ -283,7 +283,7 @@ print('Cache settings completed.')
 # Operazioni in background. The library itself is unchanged except empty saga fields.
 before=len(catalog())
 back();tap('Home',exact=True);tap('Impostazioni')   # Settings has no bottom bar: back, Home, then the top of the settings
-tap('Ripara saghe e mappe',True,exact=True)   # opens the section
+tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)   # opens the section
 time.sleep(.6);adb('shell','input','swipe','540','1250','540','750','300');time.sleep(.6)
 buttons=[n for n in dump().iter('node') if n.get('text','')=='Ripara saghe']
 b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
@@ -291,7 +291,7 @@ adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
 time.sleep(2);shot('54-repair-sagas-started')
 # The app is usable meanwhile: the library opens, the progress bar is above the navigation.
 back();tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')   # Settings has no bottom bar
-tap('Home',exact=True);tap('Impostazioni');tap('Ripara saghe e mappe',True,exact=True)
+tap('Home',exact=True);tap('Impostazioni');tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)
 tap('Operazioni in background',True)
 for _ in range(120):
     if any(n.get('text','')=='Completata' or n.get('text','').startswith('Completata ·') for n in dump().iter('node')): break
@@ -323,7 +323,7 @@ assert any(n.get('text','').startswith('Avvia il timer') for n in dump().iter('n
 print('Bookcase completed.')
 
 # Custom theme: colours chosen by touch in a square and a hue bar, no colour codes; saved and applied.
-back();tap('Impostazioni');tap('I miei temi',True);time.sleep(.6)
+back();tap('Impostazioni');tap('Aspetto',True);tap('I miei temi',True);time.sleep(.6)
 assert not any('#RRGGBB' in n.get('text','') or re.fullmatch(r'#[0-9A-Fa-f]{6}',n.get('text','')) for n in dump().iter('node')), 'Colour codes still shown'
 tap('Modifica il colore Accento',True);time.sleep(.4)
 square=[n for n in dump().iter('node') if n.get('content-desc','').startswith('Saturazione e luminosità')]

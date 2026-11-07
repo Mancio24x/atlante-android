@@ -89,60 +89,112 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
         }
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 28.dp)) {
-        Text("La prossima storia.", style = MaterialTheme.typography.headlineSmall)
-        Text("Libri da scoprire, scelti dai lettori di Open Library. La scelta è tua: niente viene aggiunto da solo.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = { host.searchOnline("") }, Modifier.fillMaxWidth()) { Text("Cerca un libro per titolo, autore o ISBN") }
-        Spacer(Modifier.height(16.dp))
-
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            item { FilterChip(genre == null, { genre = null; page = 0 }, label = { Text("Più letti") }) }
-            items(Discover.GENRES) { g -> FilterChip(genre == g, { genre = if (genre == g) null else g; page = 0 }, label = { Text(g.label) }) }
+    val colors = MaterialTheme.colorScheme
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var saved by remember { mutableStateOf(setOf<String>()) }
+    // Bookmark: Da leggere straight from the grid (a choice of yours; Annulla takes it back).
+    val toggle: (Discover.Pick) -> Unit = { p ->
+        val on = host.toggleToRead(p.title, p.author, p.coverUrl)
+        saved = if (on) saved + p.workKey else saved - p.workKey
+        if (on) scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            if (snackbar.showSnackbar("«${p.title}» in Da leggere", "Annulla", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
+                if (!host.toggleToRead(p.title, p.author, p.coverUrl)) saved = saved - p.workKey
+            }
         }
-        Spacer(Modifier.height(12.dp))
-        Text(genre?.let { "Consigliati · ${it.label}" } ?: "I più letti", style = MaterialTheme.typography.titleLarge)
-        Text(if (genre == null) "I libri più desiderati su Open Library, tra quelli con un’edizione italiana." else "I più letti di questo genere, uno per autore.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(12.dp))
+    }
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 28.dp)) {
+        // Design 4b: a real search field first.
+        Surface(onClick = { host.searchOnline("") }, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), color = colors.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant), modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 4.dp)) {
+            Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(androidx.compose.ui.res.painterResource(app.atlante.library.R.drawable.ic_search), null, Modifier.size(22.dp), tint = colors.onSurfaceVariant)
+                Text("Cerca titolo, autore o ISBN", Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant, maxLines = 1)
+            }
+        }
+        LazyRow(Modifier.padding(top = 12.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
+            item { GenreChip("Più letti", genre == null) { genre = null; page = 0 } }
+            items(Discover.GENRES) { g -> GenreChip(g.label, genre == g) { genre = g; page = 0 } }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.Bottom) {
+            Text(genre?.label ?: "I più letti", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))
+            Text("pagina ${page + 1}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+        Text(if (genre == null) "I più desiderati su Open Library, con un’edizione italiana." else "I più letti del genere, un libro per autore.",
+            Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 14.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
 
         // The fade is between loading / empty / grid only: a cover switching to its Italian edition must not
         // fade (and recompose) the whole grid.
         val list = picks
         Crossfade(when { list == null -> 0; list.isEmpty() -> 1; else -> 2 }, label = "grid") { state ->
             when (state) {
-                0 -> Grid(List(6) { null }, host)
+                0 -> Grid(List(6) { null }, host, saved, toggle)
                 1 -> Column {
                     Text("Nessun consiglio disponibile: serve la connessione a Internet.", style = MaterialTheme.typography.bodyLarge)
                     TextButton(onClick = { attempt++ }) { Text("Riprova") }
                 }
-                else -> Grid(picks ?: emptyList(), host)
+                else -> Grid(picks ?: emptyList(), host, saved, toggle)
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            if (page > 0) TextButton(onClick = { page-- }) { Text("‹ Precedenti") } else Spacer(Modifier)
-            if (picks?.let { discover.hasMore(it.size, page) } == true) TextButton(onClick = { page++ }) { Text("Altri 6 ›") }
+        val more = picks?.let { discover.hasMore(it.size, page) } == true
+        Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (page > 0) OutlinedIconButton(onClick = { page-- }, Modifier.size(48.dp).semantics { contentDescription = "Precedenti" }) { Text("‹", style = MaterialTheme.typography.titleLarge, color = colors.primary) }
+            if (more) FilledTonalButton(onClick = { page++ }, Modifier.weight(1f).height(48.dp)) { Text("Mostra altri 6") }
         }
 
-        Spacer(Modifier.height(20.dp))
-        Text("Classifiche italiane", style = MaterialTheme.typography.titleMedium)
-        Text("Le classifiche aggiornate delle librerie, sul loro sito.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onLink("https://www.ibs.it/classifica/libri") }) { Text("IBS ↗") }
-            OutlinedButton(onClick = { onLink("https://www.lafeltrinelli.it/classifica/libri") }) { Text("laFeltrinelli ↗") }
+        // Charts and collections as rows.
+        OutlinedCard(Modifier.fillMaxWidth().padding(top = 24.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = colors.surface)) {
+            Text("CLASSIFICHE ITALIANE", Modifier.padding(start = 16.dp, top = 14.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium, color = colors.primary)
+            listOf(Triple("IBS", "Classifica libri, aggiornata ogni giorno", "https://www.ibs.it/classifica/libri"),
+                Triple("laFeltrinelli", "I più venduti in libreria", "https://www.lafeltrinelli.it/classifica/libri")).forEach { (name, sub, url) ->
+                HorizontalDivider(color = colors.outlineVariant)
+                Row(Modifier.fillMaxWidth().clickable { onLink(url) }.padding(horizontal = 16.dp, vertical = 10.dp).heightIn(min = 40.dp)
+                    .semantics { contentDescription = "$name ↗, $sub" }, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text(name, style = MaterialTheme.typography.titleSmall); Text(sub, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) }
+                    Icon(androidx.compose.ui.res.painterResource(app.atlante.library.R.drawable.ic_open_in_new), null, Modifier.size(20.dp), tint = colors.primary)
+                }
+            }
         }
-        Spacer(Modifier.height(16.dp))
-        TextButton(onClick = onCollections) { Text("Le tue collezioni") }
+        OutlinedCard(onClick = onCollections, modifier = Modifier.fillMaxWidth().padding(top = 12.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = colors.surface)) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Le tue collezioni", style = MaterialTheme.typography.titleMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))
+                    Text(if (saved.isEmpty()) "Saghe, autori e liste che hai creato" else "${saved.size} " + (if (saved.size == 1) "libro salvato" else "libri salvati") + " da Scopri",
+                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+                Icon(androidx.compose.ui.res.painterResource(app.atlante.library.R.drawable.ic_chevron_right), null, tint = colors.primary)
+            }
+        }
+        Text("Consigli dai lettori di Open Library. Niente viene aggiunto da solo.", Modifier.fillMaxWidth().padding(top = 16.dp),
+            style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+    }
+}
+
+/** A genre chip: filled with the ink colour when chosen, a hairline otherwise. */
+@Composable
+private fun GenreChip(label: String, on: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(onClick = onClick, shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp), color = if (on) colors.onSurface else androidx.compose.ui.graphics.Color.Transparent,
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (on) colors.onSurface else colors.outlineVariant), modifier = Modifier.height(36.dp)
+            .semantics { contentDescription = label + if (on) ", selezionato" else "" }) {
+        Box(Modifier.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = if (on) colors.surface else colors.onSurface)
+        }
     }
 }
 
 @Composable
-private fun Grid(items: List<Discover.Pick?>, host: SagaHost) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+private fun Grid(items: List<Discover.Pick?>, host: SagaHost, saved: Set<String>, onSave: (Discover.Pick) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         items.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { p -> PickCard(p, host, Modifier.weight(1f)) }
+                row.forEach { p -> PickCard(p, host, p != null && p.workKey in saved, onSave, Modifier.weight(1f)) }
                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
@@ -150,16 +202,29 @@ private fun Grid(items: List<Discover.Pick?>, host: SagaHost) {
 }
 
 @Composable
-private fun PickCard(p: Discover.Pick?, host: SagaHost, modifier: Modifier) {
-    Column(modifier.then(if (p != null) Modifier.clickable { host.openWork(p.title, p.author) }.semantics { contentDescription = "${p.title} di ${p.author}" } else Modifier)) {
-        val url = p?.coverUrl
-        // Same book in this place (workKey): the Italian cover replaces the first one only when it is ready.
-        BookCover(p?.workKey, url, p?.title ?: "", Modifier.fillMaxWidth().aspectRatio(0.66f)) {
-            url?.let { u -> SuggestionCovers.bytes(u)?.let { CoverImages.decode(it, null, 360) } }?.also { DiscoverPerf.cover() }
+private fun PickCard(p: Discover.Pick?, host: SagaHost, saved: Boolean, onSave: (Discover.Pick) -> Unit, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Column(modifier) {
+        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
+            val url = p?.coverUrl
+            // Same book in this place (workKey): the Italian cover replaces the first one only when it is ready.
+            BookCover(p?.workKey, url, p?.title ?: "", Modifier.fillMaxSize().then(if (p != null) Modifier.clickable { host.openWork(p.title, p.author) }
+                .semantics { contentDescription = "${p.title} di ${p.author}" } else Modifier)) {
+                url?.let { u -> SuggestionCovers.bytes(u)?.let { CoverImages.decode(it, null, 360) } }?.also { DiscoverPerf.cover() }
+            }
+            if (p != null) Box(Modifier.align(Alignment.BottomEnd).size(44.dp).clickable { onSave(p) }
+                .semantics { contentDescription = if (saved) "Togli da Da leggere" else "Aggiungi a Da leggere" }, contentAlignment = Alignment.Center) {
+                Surface(shape = androidx.compose.foundation.shape.CircleShape, color = if (saved) colors.primary else colors.surface, shadowElevation = 2.dp, modifier = Modifier.size(32.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(androidx.compose.ui.res.painterResource(if (saved) app.atlante.library.R.drawable.ic_bookmark_filled else app.atlante.library.R.drawable.ic_bookmark), null,
+                            Modifier.size(18.dp), tint = if (saved) colors.onPrimary else colors.primary)
+                    }
+                }
+            }
         }
-    if (p != null) {
-            Text(p.title, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(p.author, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (p != null) {
+            Text(p.title, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(p.author, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
