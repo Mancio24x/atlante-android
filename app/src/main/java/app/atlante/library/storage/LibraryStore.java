@@ -176,6 +176,8 @@ public final class LibraryStore implements SyncStore {
         ArrayList<Book> added = new ArrayList<>();
         try {
             for (Book book : incoming) {
+                // Never a path as id: "../" would point the restore at folders outside the book's own one.
+                if (book.id == null || !book.id.matches("[0-9a-f]{64}")) continue;
                 if (find(book.id) != null) continue;
                 File source = new File(staging, book.id), target = directory(book);
                 if (source.isDirectory()) {

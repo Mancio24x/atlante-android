@@ -1816,77 +1816,30 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void readBackup(Uri source) {
-        busy = true;
-        AlertDialog loading = loading("Ripristino", "Lettura del backup…");
+    /**
+     * Ripristino e importazione (backup ZIP, CSV, JSON, cataloghi): the file is copied into the app's own folder
+     * (the permission on the chosen file does not last) and imported in the background, with the notification and
+     * the bar; nothing heavy runs here. Only new works are added; the report is in Operazioni in background.
+     */
+    private void startImport(Uri source) {
+        String name = store.name(source);
+        Toast.makeText(this, "Importazione di «" + name + "» avviata in background: puoi continuare a usare l’app.", Toast.LENGTH_LONG).show();
         worker.execute(() -> {
-            try (InputStream in = getContentResolver().openInputStream(source)) {
-                if (in == null) throw new IOException("File non disponibile");
-                BackupArchive.Contents contents = CatalogImport.read(in, store.name(source));
-                runOnUiThread(() -> { loading.dismiss(); busy = false; if (!isFinishing() && !isDestroyed()) confirmRestore(source, contents); });
-            } catch (Exception e) { runOnUiThread(() -> { loading.dismiss(); busy = false; if (!isFinishing() && !isDestroyed()) error(e); }); }
-        });
-    }
-
-    private void confirmRestore(Uri source, BackupArchive.Contents contents) {
-        // Already in the library: same identifier, or (for other apps' lists) same ISBN or same title and author.
-        ArrayList<Book> library = store.snapshot();
-        LinkedHashMap<String, Book> fresh = new LinkedHashMap<>();
-        for (Book b : contents.books) {
-            boolean present = store.find(b.id) != null;
-            if (!present) for (Book known : library) if (BookMatcher.same(known, b)) { present = true; break; }
-            if (!present) fresh.put(b.id, b);
-        }
-        int kept = contents.books.size() - fresh.size();
-        String date = contents.createdAt > 0 ? " del " + java.text.DateFormat.getDateTimeInstance().format(new Date(contents.createdAt)) : "";
-        int read = 0, rated = 0, covers = 0;
-        for (Book b : fresh.values()) { if (b.status.equals(Book.READ)) read++; if (b.rating > 0) rated++; if (contents.covers.containsKey(b.id)) covers++; }
-        String summary = "Formato riconosciuto: " + contents.kind + date + "\n" + contents.books.size() + " libri nel file\n" + fresh.size() + " da aggiungere\n"
-            + kept + " già presenti: restano come sono sul telefono"
-            + (contents.atlante ? "" : "\n\nVerranno aggiunti come schede, senza file dei libri" + (read > 0 ? " · " + read + " già letti" : "")
-                + (rated > 0 ? " · " + rated + " con voto" : "") + (covers > 0 ? " · " + covers + " copertine" : "") + ".");
-        if (fresh.isEmpty()) { dialogBuilder().setTitle("Niente da aggiungere").setMessage(summary).setPositiveButton("OK", null).show(); return; }
-        dialogBuilder().setTitle(contents.atlante ? "Ripristinare il backup?" : "Importare i libri?").setMessage(summary + "\n\nNessun libro già presente verrà modificato o rimosso.")
-            .setNegativeButton("Annulla", null).setPositiveButton(contents.atlante ? "Ripristina" : "Importa", (d, w) -> applyRestore(source, contents, fresh)).show();
-    }
-
-    private void applyRestore(Uri source, BackupArchive.Contents contents, LinkedHashMap<String, Book> fresh) {
-        busy = true;
-        AlertDialog loading = loading(contents.atlante ? "Ripristino" : "Importazione", "Aggiunta di " + fresh.size() + " libri…");
-        worker.execute(() -> {
-            File staging = store.staging();
-            Exception failure = null; int added = 0, missing = 0;
-            try {
-                LibraryStore.clear(staging);
-                Set<String> withFiles = new HashSet<>();
-                // Covers and book files of an Atlante backup are inside the ZIP; other formats carry their covers in contents.
-                if (contents.atlante && contents.fromZip) {
-                    try (InputStream in = getContentResolver().openInputStream(source)) {
-                        if (in == null) throw new IOException("File non disponibile");
-                        withFiles = BackupArchive.extract(in, fresh, staging, contents.nested, contents.prefix);
-                    }
+            File folder = new File(getFilesDir(), "imports"); folder.mkdirs();
+            File copy = new File(folder, System.currentTimeMillis() + "-" + name.replaceAll("[^A-Za-z0-9._-]", "_"));
+            try (InputStream in = getContentResolver().openInputStream(source); OutputStream out = new FileOutputStream(copy)) {
+                if (in == null) throw new IOException("Il file scelto non è leggibile");
+                byte[] buffer = new byte[64 * 1024]; long total = 0; int n;
+                while ((n = in.read(buffer)) > 0) {
+                    total += n;
+                    if (total > 2L * 1024 * 1024 * 1024) throw new IOException("File troppo grande (oltre 2 GB)");
+                    out.write(buffer, 0, n);
                 }
-                for (Map.Entry<String, byte[]> cover : contents.covers.entrySet()) {
-                    if (!fresh.containsKey(cover.getKey())) continue;
-                    File folder = new File(staging, cover.getKey());
-                    if (!folder.isDirectory() && !folder.mkdirs()) continue;
-                    try (OutputStream out = new FileOutputStream(new File(folder, "cover"))) { out.write(cover.getValue()); }
-                }
-                for (Book b : fresh.values()) if (!b.format.equals("CATALOGO") && !withFiles.contains(b.id)) missing++;
-                added = store.restore(new ArrayList<>(fresh.values()), staging);
-            } catch (Exception e) { failure = e; }
-            finally { LibraryStore.clear(staging); }
-            final Exception result = failure; final int count = added, withoutFile = missing;
+            } catch (Exception e) { copy.delete(); runOnUiThread(() -> { if (!isFinishing() && !isDestroyed()) error(e); }); return; }
             runOnUiThread(() -> {
-                loading.dismiss(); busy = false; if (isFinishing() || isDestroyed()) return;
-                covers.clear(); app.atlante.library.ui.compose.CoverImages.clear(); showLibrary();
-                if (result != null) { error(result); return; }
-                int withoutCover = 0; for (Book b : fresh.values()) if (store.find(b.id) != null && !store.cover(b).isFile()) withoutCover++;
-                if (withoutCover > 0) fetchMissingCovers(new ArrayList<>(fresh.values()), false);
-                dialogBuilder().setTitle(contents.atlante ? "Ripristino completato" : "Importazione completata").setMessage(count + " libri aggiunti alla biblioteca."
-                    + (withoutCover > 0 ? "\n\nCerco in background le " + withoutCover + " copertine mancanti su Open Library (per ISBN, oppure titolo e autore). Le vedrai comparire man mano." : "")
-                    + (withoutFile > 0 ? "\n\n" + withoutFile + " libri sono senza file: per leggerli reimportali da ☰ › Importa ebook. Note e avanzamento restano collegati." : ""))
-                    .setPositiveButton("OK", null).show();
+                if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},9);
+                app.atlante.library.catalog.RepairWorker.startImport(this, copy.getPath(), name); watchRepairs();
             });
         });
     }
@@ -2494,7 +2447,7 @@ public final class MainActivity extends AppCompatActivity {
             return;
         }
         if (request == BACKUP && data.getData() != null) { writeBackup(data.getData()); return; }
-        if (request == RESTORE && data.getData() != null) { if (!busy) readBackup(data.getData()); return; }
+        if (request == RESTORE && data.getData() != null) { startImport(data.getData()); return; }
         if (request == CLIPPINGS && data.getData() != null) { if (!busy) readClippings(data.getData()); return; }
         if (request == IMPORT) {
             ArrayList<Uri> uris = new ArrayList<>();

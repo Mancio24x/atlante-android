@@ -63,6 +63,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 MAPS -> maps(store)
                 METADATA -> metadata(c, store)
                 COVERS -> covers(c, store, inputData.getBoolean(EVERYTHING, false))
+                IMPORT -> import(c, store)
             }
             job = job.copy(state = "done", phase = "Completato", finishedAt = System.currentTimeMillis())
             save(force = true); finished(c)
@@ -75,11 +76,18 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             job = job.copy(state = if (byYou) "cancelled" else "queued",
                 phase = if (byYou) "Annullato" else "In pausa", finishedAt = System.currentTimeMillis(),
                 message = if (byYou) "Interrotta da te: le modifiche già applicate restano" else "Interrotta da Android: riprende da sola")
+            if (byYou) dropImportFile()
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { save(force = true) }
             throw e
         } catch (e: Exception) {
             job = job.copy(state = "failed", phase = "Errore", finishedAt = System.currentTimeMillis(), message = e.message ?: e.javaClass.simpleName, errors = job.errors + 1)
-            save(force = true); finished(c)
+            save(force = true); finished(c); dropImportFile()
+            Result.failure()
+        } catch (e: OutOfMemoryError) {
+            // A file too big for this phone: reported as such, the library is untouched (nothing was saved yet).
+            job = job.copy(state = "failed", phase = "Errore", finishedAt = System.currentTimeMillis(), errors = job.errors + 1,
+                message = "Il file è troppo grande per la memoria di questo telefono: nessun libro è stato modificato")
+            save(force = true); finished(c); dropImportFile()
             Result.failure()
         }
     }
@@ -269,6 +277,52 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         app.atlante.library.widget.Widgets.libraryChanged(c)
     }
 
+    /**
+     * Importazione (backup ZIP di Atlante, CSV, JSON, catalogo HTML, libreria Calibre), from a copy of the file in the
+     * app's own folder. Only new works are added (ImportPlanner: same id, ISBN, file, or title and author already
+     * here → left exactly as it is on the phone); the same file imported twice adds nothing. One save for all the
+     * books, with their files and covers; a damaged file ends with its reason, the library untouched.
+     */
+    private suspend fun import(c: Context, store: LibraryStore) {
+        val file = java.io.File(inputData.getString(PATH) ?: throw java.io.IOException("File da importare non trovato"))
+        if (!file.isFile) throw java.io.IOException("Il file da importare non è più disponibile: sceglilo di nuovo")
+        phase("Lettura del file")
+        val contents = java.io.FileInputStream(file).use { app.atlante.library.storage.CatalogImport.read(it, inputData.getString(FILE_NAME) ?: file.name) }
+        job = job.copy(total = contents.books.size); save(force = true)
+        phase("Confronto con la biblioteca")
+        LibraryIndex.syncNow(c)
+        val plan = ImportPlanner.plan(contents.books, store.snapshot())
+        job = job.copy(done = contents.books.size, duplicates = plan.reconciled, found = plan.fresh.size); save(force = true)
+        if (isStopped) throw CancellationException()
+        phase("Aggiunta dei libri")
+        val fresh = LinkedHashMap<String, Book>(); for (b in plan.fresh) fresh[b.id] = b
+        val staging = store.staging()
+        var added = 0; var withoutFile = 0
+        try {
+            app.atlante.library.storage.LibraryStore.clear(staging)
+            var withFiles: Set<String> = emptySet()
+            if (contents.atlante && contents.fromZip && fresh.isNotEmpty())
+                withFiles = java.io.FileInputStream(file).use { app.atlante.library.storage.BackupArchive.extract(it, fresh, staging, contents.nested, contents.prefix) }
+            for ((id, bytes) in contents.covers) if (id in fresh) java.io.File(staging, id).apply { mkdirs() }.resolve("cover").writeBytes(bytes)
+            withoutFile = fresh.values.count { it.format != "CATALOGO" && it.id !in withFiles }
+            if (fresh.isNotEmpty()) added = store.restore(ArrayList(fresh.values), staging)
+        } finally { app.atlante.library.storage.LibraryStore.clear(staging) }
+        val result = JSONObject().put("import", JSONObject().put("kind", contents.kind).put("analyzed", contents.books.size).put("added", added)
+            .put("present", plan.sameRecord).put("reconciled", plan.reconciled).put("repeated", plan.repeatedInFile).put("withoutFile", withoutFile)
+            .put("addedIds", JSONArray(fresh.keys.toList())))
+        job = job.copy(applied = added, result = result.toString(), message = "${contents.kind}: $added libri aggiunti · ${plan.sameRecord + plan.reconciled} già presenti" +
+            (if (plan.reconciled > 0) " (${plan.reconciled} riconosciuti per ISBN o titolo e autore)" else "") +
+            (if (plan.repeatedInFile > 0) " · ${plan.repeatedInFile} ripetuti nel file" else "") +
+            (if (withoutFile > 0) " · $withoutFile senza file (reimportali da Importa eBook)" else ""))
+        save(force = true)
+        dropImportFile()
+        // Covers of the new books next, in their own job (an extra: the import is complete without it).
+        if (added > 0) { LibraryIndex.syncNow(c); app.atlante.library.widget.Widgets.libraryChanged(c); runCatching { start(c, COVERS, false) } }
+    }
+
+    /** The copy of the imported file is removed once the import is over (kept only to resume after Android stops it). */
+    private fun dropImportFile() { if (inputData.getString(TYPE) == IMPORT) inputData.getString(PATH)?.let { java.io.File(it).delete() } }
+
     private fun proposal(p: BibliographicEngine.Pair) = JSONObject().put("keep", p.keep.id).put("other", p.other.id)
         .put("keepLine", line(p.keep)).put("otherLine", line(p.other)).put("confidence", p.confidence.label)
         .put("reasons", JSONArray(p.reasons)).put("conflicts", JSONArray(p.conflicts))
@@ -319,13 +373,14 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             fun n(x: Int) = "%,d".format(java.util.Locale.ITALY, x)
             return if (j.total > 0) "${n(j.done)} / ${n(j.total)} libri analizzati — ${j.done * 100 / j.total}%" else j.phase.ifEmpty { "Preparazione" }
         }
-        const val LIBRARY = "library"; const val HARDCOVER = "hardcover"; const val SAGAS = "sagas"; const val MAPS = "maps"; const val METADATA = "metadata"; const val COVERS = "covers"
+        const val LIBRARY = "library"; const val HARDCOVER = "hardcover"; const val SAGAS = "sagas"; const val MAPS = "maps"; const val METADATA = "metadata"; const val COVERS = "covers"; const val IMPORT = "import"
+        const val PATH = "path"; const val FILE_NAME = "fileName"
         const val NAME = "atlante-repair"; const val TAG = "repair"
         private const val CHANNEL = "repair"; private const val NOTICE = 4201; private const val DONE = 4202
 
         @JvmStatic fun title(type: String) = when (type) {
             LIBRARY -> "Ripara duplicati della libreria"; HARDCOVER -> "Ripara duplicati Hardcover"; SAGAS -> "Ripara saghe"
-            MAPS -> "Ripara mappe delle saghe"; METADATA -> "Completa metadati"; COVERS -> "Ricerca delle copertine"; else -> "Riparazione"
+            MAPS -> "Ripara mappe delle saghe"; METADATA -> "Completa metadati"; COVERS -> "Ricerca delle copertine"; IMPORT -> "Importazione libreria"; else -> "Riparazione"
         }
 
         private fun channel(c: Context) {
@@ -345,6 +400,15 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             // Shown at once as "In attesa" in the bar and in "Operazioni in background".
             val app = c.applicationContext
             Thread { kotlinx.coroutines.runBlocking { AtlanteDatabase.get(app).saga().putJob(RepairJob(request.id.toString(), type, "queued", "In attesa", System.currentTimeMillis())) } }.start()
+            return request.id
+        }
+
+        /** An import of the file at [path] (a copy in the app's folder), queued like every repair. */
+        @JvmStatic fun startImport(c: Context, path: String, name: String): java.util.UUID {
+            val request = OneTimeWorkRequestBuilder<RepairWorker>().setInputData(workDataOf(TYPE to IMPORT, PATH to path, FILE_NAME to name)).addTag(TAG).build()
+            WorkManager.getInstance(c).enqueueUniqueWork(NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+            val app = c.applicationContext
+            Thread { kotlinx.coroutines.runBlocking { AtlanteDatabase.get(app).saga().putJob(RepairJob(request.id.toString(), IMPORT, "queued", "In attesa", System.currentTimeMillis())) } }.start()
             return request.id
         }
 

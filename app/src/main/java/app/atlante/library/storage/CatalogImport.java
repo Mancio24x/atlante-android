@@ -137,7 +137,11 @@ public final class CatalogImport {
         BackupArchive.Contents c = new BackupArchive.Contents(); c.kind = kind; c.atlante = true;
         HashSet<String> seen = new HashSet<>();
         for (int i = 0; i < array.length(); i++) {
-            Book b = Book.from(array.getJSONObject(i));
+            JSONObject record = array.optJSONObject(i);
+            if (record == null) continue;
+            Book b = Book.from(record);
+            // The id names the book's folder on the phone: only Atlante's own form (64 hex) is accepted, never a path.
+            if (b.id == null || !b.id.matches("[0-9a-f]{64}")) continue;
             if (seen.add(b.id)) c.books.add(b);
         }
         return c;
