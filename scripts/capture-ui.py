@@ -265,7 +265,7 @@ tap('Chiudi',exact=True)
 print('Saga carousels completed.')
 
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.
-back();tap('Impostazioni');tap('Libreria e catalogo',True);tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
+back();tap('Apri menu laterale');tap('Impostazioni');tap('Libreria e catalogo',True);tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
 assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
 # Qualità del catalogo: every check with its count (its button is above the cache section: scroll back up first).
 for _ in range(4): adb('shell','input','swipe','540','600','540','1400','250');time.sleep(.3)
@@ -323,7 +323,7 @@ assert any(n.get('text','').startswith('Avvia il timer') for n in dump().iter('n
 print('Bookcase completed.')
 
 # Custom theme: colours chosen by touch in a square and a hue bar, no colour codes; saved and applied.
-back();tap('Impostazioni');tap('Aspetto',True);tap('I miei temi',True);time.sleep(.6)
+back();tap('Apri menu laterale');tap('Impostazioni');tap('Aspetto',True);tap('I miei temi',True);time.sleep(.6)
 assert not any('#RRGGBB' in n.get('text','') or re.fullmatch(r'#[0-9A-Fa-f]{6}',n.get('text','')) for n in dump().iter('node')), 'Colour codes still shown'
 tap('Modifica il colore Accento',True);time.sleep(.4)
 square=[n for n in dump().iter('node') if n.get('content-desc','').startswith('Saturazione e luminosità')]

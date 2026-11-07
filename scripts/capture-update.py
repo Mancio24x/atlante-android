@@ -62,7 +62,7 @@ adb('shell','run-as',package,'cp','/data/local/tmp/update.json','files/library.j
 adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(2)
 def back(): adb('shell','input','keyevent','4');time.sleep(.5)
 def catalog(): return json.loads(adb('exec-out','run-as',package,'cat','files/library.json'))
-tap('Biblioteca',exact=True);tap('Impostazioni');shot('update-settings')
+tap('Biblioteca',exact=True);tap('Apri menu laterale');tap('Impostazioni');shot('update-settings')
 texts=set()
 for _ in range(12):
     texts.update(n.get('text','') for n in dump().iter('node'))

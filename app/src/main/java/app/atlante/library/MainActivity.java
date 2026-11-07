@@ -814,6 +814,7 @@ public final class MainActivity extends AppCompatActivity {
         int active = activeFilters();
         MaterialButton tune = iconButton(R.drawable.ic_tune, active > 0 ? "Filtri e ordine, " + active + (active == 1 ? " attivo" : " attivi") : "Filtri e ordine", this::libraryMenu);
         tune.setIconTint(android.content.res.ColorStateList.valueOf(active > 0 ? COPPER : SAGE)); pill.addView(tune, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        line.addView(iconButton(listView || shelfView ? R.drawable.ic_grid : R.drawable.ic_list, listView || shelfView ? "Griglia" : "Elenco", this::chooseView));
         line.addView(iconButton(R.drawable.ic_add, "Aggiungi libro", this::manualBook));
         Chip suggestion = new Chip(this); suggestion.setVisibility(View.GONE); suggestion.setChipIconResource(R.drawable.ic_tune); suggestion.setChipIconVisible(true);
         header.addView(suggestion, new LinearLayout.LayoutParams(-2, -2));
@@ -1198,7 +1199,6 @@ public final class MainActivity extends AppCompatActivity {
                 seg.addView(t, new LinearLayout.LayoutParams(dp(30), dp(26))); }
             header.addView(seg);
         }
-        if (statusPage()) header.addView(iconButton(listView ? R.drawable.ic_grid : R.drawable.ic_list, listView ? "Griglia" : "Elenco", this::chooseView));
         return header;
     }
     private void chooseView() {
@@ -3352,11 +3352,12 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout top=row(); box.addView(top);
         int daily=goals.getDailyPagesOn()?goals.getDailyPages():0;
         FrameLayout ring=new FrameLayout(this); top.addView(ring,new LinearLayout.LayoutParams(dp(92),dp(92)));
-        CircularProgressIndicator circle=new CircularProgressIndicator(this); circle.setIndeterminate(false); circle.setIndicatorSize(dp(92)); circle.setTrackThickness(dp(9)); circle.setTrackCornerRadius(dp(5));
+        CircularProgressIndicator circle=new CircularProgressIndicator(this); circle.setIndeterminate(false); circle.setIndicatorInset(0); circle.setIndicatorSize(dp(92)); circle.setTrackThickness(dp(9)); circle.setTrackCornerRadius(dp(5));
         circle.setTrackColor(LINE); circle.setIndicatorColor(SAGE); circle.setProgressCompat(daily>0?(int)Math.min(100,100*totals[0]/daily):0,motion());
         ring.addView(circle,new FrameLayout.LayoutParams(-2,-2,Gravity.CENTER));
         LinearLayout center=column(); center.setGravity(Gravity.CENTER); ring.addView(center,new FrameLayout.LayoutParams(-1,-1));
-        center.addView(text(Long.toString(totals[0]),26,INK,true)); center.addView(text(daily>0?"di "+daily+" pag.":"pagine",11,MUTED,false));
+        TextView pagesToday=text(Long.toString(totals[0]),26,INK,true); pagesToday.setGravity(Gravity.CENTER); center.addView(pagesToday,new LinearLayout.LayoutParams(-2,-2));
+        TextView of=text(daily>0?"di "+daily+" pag.":"pagine",11,MUTED,false); of.setGravity(Gravity.CENTER); center.addView(of,new LinearLayout.LayoutParams(-2,-2));
         ring.setContentDescription(totals[0]+" pagine oggi"+(daily>0?" su "+daily:""));
         LinearLayout stats=column(); stats.setPadding(dp(18),0,0,0); top.addView(stats,new LinearLayout.LayoutParams(0,-2,1));
         LinearLayout two=row(); stats.addView(two,new LinearLayout.LayoutParams(-1,-2));

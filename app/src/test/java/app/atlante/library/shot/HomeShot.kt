@@ -1,0 +1,41 @@
+package app.atlante.library.shot
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import app.atlante.library.MainActivity
+import app.atlante.library.model.Book
+import app.atlante.library.model.ReadingJournal
+import app.atlante.library.storage.LibraryStore
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.FileOutputStream
+
+/** Draws pages to PNG files when SHOT_DIR is set (a visual check without an emulator); does nothing otherwise. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk=[34], qualifiers="w411dp-h891dp-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class HomeShot {
+    private fun shot(a: MainActivity, out: String, name: String) {
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        val v = a.window.decorView; val bm = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888); v.draw(Canvas(bm))
+        FileOutputStream("$out/$name.png").use { bm.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+    @Test fun pages() {
+        val out = System.getenv("SHOT_DIR") ?: return
+        val c = Robolectric.buildActivity(MainActivity::class.java).setup(); val a = c.get()
+        val store = MainActivity::class.java.getDeclaredField("store").apply { isAccessible = true }.get(a) as LibraryStore
+        val b = Book().apply { id = "h".repeat(64); title = "Il nome della rosa"; author = "Umberto Eco"; format = "CATALOGO"; totalPages = 503; currentPage = 214; status = Book.READING }
+        ReadingJournal.session(b, 196, 214, 24 * 60, java.time.LocalDate.now())
+        store.addCatalog(b)
+        MainActivity::class.java.getDeclaredMethod("showCompanion").apply { isAccessible = true }.invoke(a)
+        shot(a, out, "home")
+        MainActivity::class.java.getDeclaredField("destination").apply { isAccessible = true }.set(a, "Biblioteca")
+        MainActivity::class.java.getDeclaredField("shelfView").apply { isAccessible = true }.setBoolean(a, true)
+        MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a)
+        shot(a, out, "shelf")
+        c.pause().stop().destroy()
+    }
+}
