@@ -290,7 +290,7 @@ b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
 adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
 time.sleep(2);shot('54-repair-sagas-started')
 # The app is usable meanwhile: the library opens, the progress bar is above the navigation.
-tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')
+back();tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')   # Settings has no bottom bar
 tap('Home',exact=True);tap('Impostazioni');tap('Ripara saghe e mappe',True,exact=True)
 tap('Operazioni in background',True)
 for _ in range(120):

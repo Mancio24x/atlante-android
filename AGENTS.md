@@ -71,6 +71,10 @@ Ogni push su `main` che tocca l'app genera una release firmata `1.0.<run>` (work
 installa con Obtainium. Dopo una release: `bash scripts/sync-crafting.sh` e aggiornare le novità in
 `../android-release/LEGGIMI.txt`.
 
+## Lavoro in sospeso
+
+I punti ancora da fare, con file e verifiche: [docs/da-fare/README.md](docs/da-fare/README.md).
+
 ## Altri documenti
 
 [ARCHITECTURE](docs/ARCHITECTURE.md) · [FEATURES](docs/FEATURES.md) · [DATABASE](docs/DATABASE.md) ·

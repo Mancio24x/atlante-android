@@ -319,7 +319,7 @@ public final class MainActivity extends AppCompatActivity {
                 if (w == 0) noCover.add(b); else if (w < 300 && !source.equals("gallery") && !source.equals("online")) smallCover.add(b);
                 if (b.author.isEmpty() || b.author.equals("Autore sconosciuto")) noAuthor.add(b);
                 if (BookMatcher.isbns(b.isbn).isEmpty()) noIsbn.add(b);
-                if (b.genre.isEmpty()) noGenre.add(b);
+                if (app.atlante.library.saga.Genres.of(b).isEmpty()) noGenre.add(b);
                 if (b.totalPages == 0) noPages.add(b);
                 if (!b.series.isEmpty() && b.number == 0) noNumber.add(b);
                 if (uncertain.contains(b.id)) sagaCheck.add(b);
@@ -346,7 +346,8 @@ public final class MainActivity extends AppCompatActivity {
                 qualityRow(panel, dialog, "Copertina piccola o sfocata", "Meno di 300 pixel; le copertine scelte da te non sono contate.", smallCover, "Migliora le copertine", () -> { dialog.dismiss(); improveCovers(smallCover, true, true); });
                 qualityRow(panel, dialog, "Autore mancante", "", noAuthor, null, null);
                 qualityRow(panel, dialog, "Senza ISBN", "Senza ISBN il riconoscimento delle edizioni usa titolo e autore.", noIsbn, null, null);
-                qualityRow(panel, dialog, "Senza genere", "", noGenre, null, null);
+                qualityRow(panel, dialog, "Senza genere riconosciuto", "Dal catalogo offline, da Hardcover o dalla classificazione delle biblioteche; mai inventato.", noGenre,
+                    "Indicizza i generi", () -> { dialog.dismiss(); startRepair(app.atlante.library.catalog.RepairWorker.GENRES); });
                 qualityRow(panel, dialog, "Senza numero di pagine", "", noPages, null, null);
                 panel.addView(button("Completa metadati (catalogo offline, poi online)", false, () -> { dialog.dismiss(); startRepair(app.atlante.library.catalog.RepairWorker.METADATA); }));
                 panel.addView(text("Riempie solo i campi vuoti: quello che hai scritto, la tua edizione e la copertina scelta restano. Per un solo libro: apri il libro › «Completa i dati online».", 12, MUTED, false));
@@ -769,7 +770,7 @@ public final class MainActivity extends AppCompatActivity {
         for (Book b : store.snapshot()) {
             for (String a : app.atlante.library.model.SearchIndex.authors(b)) authors.merge(a, 1, Integer::sum);
             if (!b.series.isEmpty()) sagas.merge(b.series, 1, Integer::sum);
-            String g = app.atlante.library.saga.Genres.normalize(b.genre); if (g != null) genres.merge(g, 1, Integer::sum);
+            for (String g : app.atlante.library.saga.Genres.of(b)) genres.merge(g, 1, Integer::sum);
         }
         for (Object[] kind : new Object[][]{{"Autore", authors, filterAuthor}, {"Saga", sagas, filterSaga}, {"Genere", genres, filterGenre}}) {
             @SuppressWarnings("unchecked") Map<String, Integer> names = (Map<String, Integer>) kind[1];
@@ -788,12 +789,12 @@ public final class MainActivity extends AppCompatActivity {
     /** Genere: the normalized main genres of the library, with the number of books. */
     private void chooseGenre() {
         Map<String, Integer> count = new HashMap<>(); int other = 0;
-        for (Book b : store.snapshot()) { String g = app.atlante.library.saga.Genres.normalize(b.genre); if (g != null) count.merge(g, 1, Integer::sum); else if (!b.genre.isEmpty()) other++; }
+        for (Book b : store.snapshot()) { java.util.List<String> gs = app.atlante.library.saga.Genres.of(b); for (String g : gs) count.merge(g, 1, Integer::sum); if (gs.isEmpty() && !b.genre.isEmpty()) other++; }
         ArrayList<String> values = new ArrayList<>(); ArrayList<String> labels = new ArrayList<>();
         values.add(""); labels.add("Tutti i generi");
         Map<String, TreeMap<String, Integer>> subs = new HashMap<>();
-        for (Book b : store.snapshot()) { String g = app.atlante.library.saga.Genres.normalize(b.genre);
-            if (g != null && !b.genre.trim().equalsIgnoreCase(g)) subs.computeIfAbsent(g, k -> new TreeMap<>(String.CASE_INSENSITIVE_ORDER)).merge(b.genre.trim(), 1, Integer::sum); }
+        for (Book b : store.snapshot()) { String g = app.atlante.library.saga.Genres.mainOf(b);
+            if (g != null && !b.genre.trim().equalsIgnoreCase(g) && !b.genre.matches(".*[,;/|].*") && b.genre.trim().length() <= 40) subs.computeIfAbsent(g, k -> new TreeMap<>(String.CASE_INSENSITIVE_ORDER)).merge(b.genre.trim(), 1, Integer::sum); }
         for (String g : app.atlante.library.saga.Genres.INSTANCE.getMain()) if (count.containsKey(g)) {
             values.add(g); labels.add(g + " · " + count.get(g));
             // Sub-genres as written in the sheets ("Epic Fantasy"): a filter of their own, under their genre.
@@ -854,7 +855,7 @@ public final class MainActivity extends AppCompatActivity {
         LinkedHashSet<String> genres = new LinkedHashSet<>(); boolean other = false;
         TreeSet<String> sagas = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         for (Book book : store.snapshot()) {
-            String main = app.atlante.library.saga.Genres.normalize(book.genre);
+            String main = app.atlante.library.saga.Genres.mainOf(book);
             if (main != null) genres.add(main); else if (!book.genre.isEmpty()) other = true;
             if (!book.series.isEmpty()) sagas.add(book.series);
             java.util.Set<String> known = LibraryQuery.graphSagas.get(book.id); if (known != null) sagas.addAll(known);   // sub-series and parent sagas too

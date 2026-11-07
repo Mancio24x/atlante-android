@@ -64,6 +64,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 METADATA -> metadata(c, store)
                 COVERS -> covers(c, store, inputData.getBoolean(EVERYTHING, false))
                 IMPORT -> import(c, store)
+                GENRES -> genres(c, store)
             }
             job = job.copy(state = "done", phase = "Completato", finishedAt = System.currentTimeMillis())
             save(force = true); finished(c)
@@ -320,6 +321,57 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         if (added > 0) { LibraryIndex.syncNow(c); app.atlante.library.widget.Widgets.libraryChanged(c); runCatching { start(c, COVERS, false) } }
     }
 
+    /**
+     * Indicizza i generi: every book gets its canonical genres (meta.genres, several allowed) from its own label;
+     * books without a recognizable genre get them from reliable sources only, local first: the offline catalog
+     * (Wikidata P136), then Hardcover (genres voted by readers, if connected), then the Dewey class (SBN).
+     * Free-form subjects are never used (an adaptation is not the book's genre). The label you wrote is kept; an
+     * empty one is filled with the genres found.
+     */
+    private suspend fun genres(c: Context, store: LibraryStore) {
+        phase("Analisi locale")
+        LibraryIndex.syncNow(c)
+        val catalog = runCatching { CatalogDatabase.get(c).catalog() }.getOrNull()
+        val links = dao.catalogLinks().associate { it.bookId to it.catalogWork.toLongOrNull() }
+        val books = store.snapshot().sortedBy { it.id }
+        job = job.copy(total = books.size); save(force = true)
+        var indexed = job.applied; var online = job.offline; var none = job.found
+        val changed = ArrayList<Book>()
+        for ((i, b) in books.withIndex()) {
+            if (i < job.checkpoint) continue
+            if (isStopped) throw CancellationException()
+            var found = app.atlante.library.saga.Genres.all(b.genre); var source = "etichetta della scheda"
+            if (found.isEmpty()) links[b.id]?.let { catalog?.work(it) }?.let { w ->
+                found = app.atlante.library.saga.Genres.all(w.genres.ifBlank { w.genre ?: "" }); source = "catalogo offline (Wikidata)" }
+            if (found.isEmpty() && app.atlante.library.saga.Hardcover.enabled) {
+                phase("Recupero online")
+                found = app.atlante.library.saga.Genres.all(runCatching { app.atlante.library.saga.Hardcover.genresFor(b) }.getOrDefault(emptyList()).joinToString(", "))
+                if (found.isNotEmpty()) { source = "Hardcover (generi votati dai lettori)"; online++ }
+            }
+            if (found.isEmpty() && inputData.getBoolean(ONLINE, true)) {
+                phase("Recupero online")
+                val g = runCatching { app.atlante.library.online.MetadataEngine.lookup(b, app.atlante.library.online.MetadataEngine.Settings()) { }.fields.firstOrNull { it.key == "genre" } }.getOrNull()
+                if (g != null) { found = app.atlante.library.saga.Genres.all(g.proposed); if (found.isNotEmpty()) { source = g.source; online++ } }
+            }
+            val before = app.atlante.library.saga.Genres.of(b)
+            if (found.isEmpty()) none++
+            else if (found != before || b.meta.optJSONArray("genres") == null) {
+                val copy = Book.from(b.json())
+                copy.meta.put("genres", JSONArray(found))
+                val sources = copy.meta.optJSONObject("sources") ?: JSONObject(); sources.put("genres", source); copy.meta.put("sources", sources)
+                if (copy.genre.isBlank()) copy.genre = found.joinToString(", ")
+                changed += copy; indexed++
+            }
+            if (changed.size >= 50) { store.replaceAll(changed); changed.clear() }
+            job = job.copy(done = i + 1, checkpoint = if (changed.isEmpty()) i + 1 else job.checkpoint, applied = indexed, offline = online, found = none); save()
+            if (job.phase != "Analisi locale") phase("Analisi locale")
+        }
+        if (changed.isNotEmpty()) store.replaceAll(changed)
+        job = job.copy(done = books.size, checkpoint = books.size, message = "$indexed libri indicizzati" + (if (online > 0) " ($online con fonti online)" else "") +
+            if (none > 0) " · $none senza un genere affidabile: restano senza, nessun genere inventato" else "")
+        save(force = true)
+    }
+
     /** The copy of the imported file is removed once the import is over (kept only to resume after Android stops it). */
     private fun dropImportFile() { if (inputData.getString(TYPE) == IMPORT) inputData.getString(PATH)?.let { java.io.File(it).delete() } }
 
@@ -373,14 +425,14 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             fun n(x: Int) = "%,d".format(java.util.Locale.ITALY, x)
             return if (j.total > 0) "${n(j.done)} / ${n(j.total)} libri analizzati — ${j.done * 100 / j.total}%" else j.phase.ifEmpty { "Preparazione" }
         }
-        const val LIBRARY = "library"; const val HARDCOVER = "hardcover"; const val SAGAS = "sagas"; const val MAPS = "maps"; const val METADATA = "metadata"; const val COVERS = "covers"; const val IMPORT = "import"
+        const val LIBRARY = "library"; const val HARDCOVER = "hardcover"; const val SAGAS = "sagas"; const val MAPS = "maps"; const val METADATA = "metadata"; const val COVERS = "covers"; const val IMPORT = "import"; const val GENRES = "genres"
         const val PATH = "path"; const val FILE_NAME = "fileName"
         const val NAME = "atlante-repair"; const val TAG = "repair"
         private const val CHANNEL = "repair"; private const val NOTICE = 4201; private const val DONE = 4202
 
         @JvmStatic fun title(type: String) = when (type) {
             LIBRARY -> "Ripara duplicati della libreria"; HARDCOVER -> "Ripara duplicati Hardcover"; SAGAS -> "Ripara saghe"
-            MAPS -> "Ripara mappe delle saghe"; METADATA -> "Completa metadati"; COVERS -> "Ricerca delle copertine"; IMPORT -> "Importazione libreria"; else -> "Riparazione"
+            MAPS -> "Ripara mappe delle saghe"; METADATA -> "Completa metadati"; COVERS -> "Ricerca delle copertine"; IMPORT -> "Importazione libreria"; GENRES -> "Indicizza i generi"; else -> "Riparazione"
         }
 
         private fun channel(c: Context) {

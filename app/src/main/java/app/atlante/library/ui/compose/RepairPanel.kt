@@ -105,7 +105,7 @@ fun Operations(jobs: List<RepairJob>, host: OperationsHost, dao: app.atlante.lib
                         Text("Avvia una riparazione: continua anche se chiudi questa pagina o l’app, con la notifica dell’avanzamento.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
-                        listOf(RepairWorker.LIBRARY, RepairWorker.HARDCOVER, RepairWorker.SAGAS, RepairWorker.MAPS, RepairWorker.METADATA, RepairWorker.COVERS).forEach { t ->
+                        listOf(RepairWorker.LIBRARY, RepairWorker.HARDCOVER, RepairWorker.SAGAS, RepairWorker.MAPS, RepairWorker.METADATA, RepairWorker.GENRES, RepairWorker.COVERS).forEach { t ->
                             OutlinedButton(onClick = { host.start(t) }, Modifier.fillMaxWidth()) { Text(RepairWorker.title(t)) }
                         }
                         TextButton(onClick = { scope.launch { notice = withContext(Dispatchers.IO) { host.undoLastMerge() } } }) { Text("Annulla l’ultima unione") }

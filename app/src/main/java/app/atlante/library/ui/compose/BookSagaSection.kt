@@ -115,7 +115,7 @@ fun BookSagaSection(book: Book, repo: SagaRepository, suggestions: Suggestions, 
             }
         }
         interest?.takeIf { it.isNotEmpty() }?.let {
-            Carousel("Potrebbero interessarti", it, host, "Stesso genere (${Genres.normalize(book.genre)}), i più pubblicati. Nessuno viene aggiunto da solo.")
+            Carousel("Potrebbero interessarti", it, host, "Stesso genere (${Genres.mainOf(book)}), i più pubblicati. Nessuno viene aggiunto da solo.")
         }
     }
 

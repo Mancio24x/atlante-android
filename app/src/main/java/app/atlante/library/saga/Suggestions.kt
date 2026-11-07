@@ -111,14 +111,14 @@ class Suggestions(
      * excludes owned books, this author and the other carousels. Same input, same list.
      */
     suspend fun mayInterest(book: Book, exclude: List<ShelfItem> = emptyList()): List<ShelfItem> = withContext(Dispatchers.Default) {
-        val subject = Genres.subjectFor(book.genre) ?: return@withContext emptyList()
+        val subject = Genres.mainOf(book)?.let { Genres.subjectFor(it) } ?: return@withContext emptyList()
         val year = Regex("\\d{4}").find(book.year)?.value?.toInt()
         val (from, to) = if (year != null) (year - 30) to (year + 30) else 1980 to 2100
         val owned = TitleIndex(library()) { it.title }
         val surnames = BookMatcher.surnames(book.author)
         val perAuthor = HashMap<String, Int>()
         // Only works whose own genre it is (Discover.fits): not Wuthering Heights among comics because of an adaptation.
-        val main = Genres.normalize(book.genre)
+        val main = Genres.mainOf(book)
         val genre = Discover.GENRES.firstOrNull { Genres.normalize(it.label) == main }
         cachedSearch("subject2", "$subject:$from-$to", "q=" + URLEncoder.encode("subject:$subject first_publish_year:[$from TO $to]", "UTF-8"))
             .filter { w -> genre == null || w.subjects.isEmpty() || Discover.fits(genre, w.subjects) }

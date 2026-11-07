@@ -34,10 +34,11 @@ public final class LibraryQuery {
     /** Genre filter on the normalized genre ("Epic Fantasy" counts as Fantasy); a raw label still matches itself. */
     public static boolean genreMatches(Book b, String genre) {
         if (genre.isEmpty()) return true;
-        if (genre.equalsIgnoreCase(b.genre)) return true;
-        String main = app.atlante.library.saga.Genres.normalize(b.genre);
-        if (genre.equals(OTHER_GENRE)) return main == null;
-        return genre.equals(main);
+        if (genre.equalsIgnoreCase(b.genre.trim())) return true;
+        java.util.List<String> all = app.atlante.library.saga.Genres.of(b);
+        if (genre.equals(OTHER_GENRE)) return all.isEmpty() && !b.genre.isEmpty();
+        // Every genre of the book counts (a fantasy adventure is found under Fantasy and under Avventura).
+        return all.contains(genre);
     }
     public static final String OTHER_GENRE = "Altri generi";
 

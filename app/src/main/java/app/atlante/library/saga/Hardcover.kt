@@ -244,6 +244,15 @@ object Hardcover {
     /** Hardcover's id of Italian (filtering editions by language code times out on big lists; by id it takes 2 s). */
     private const val ITALIAN = 76
 
+    /** The genres its readers voted most for this book on Hardcover (identified by ISBN or title and author), or empty. */
+    fun genresFor(book: Book, n: Int = 3): List<String> {
+        val id = BookMatcher.isbns(book.isbn).firstOrNull { it.length == 13 }?.let { editionByIsbn(it)?.optJSONObject("book")?.optInt("id")?.takeIf { x -> x > 0 } }
+            ?: search(book)?.takeIf { it.second >= 88 }?.first ?: return emptyList()
+        val b = api.call("query(\$id:Int!){ books(where:{id:{_eq:\$id}}) { cached_tags(path:\"Genre\") } }", JSONObject().put("id", id))
+            .optJSONArray("books")?.optJSONObject(0) ?: return emptyList()
+        return topGenres(b, n)
+    }
+
     /** The genres most voted by readers (at most [n]): a book tagged "Horror" by a few is not a horror book. */
     fun topGenres(book: JSONObject, n: Int = 3): List<String> {
         // Asked with path:"Genre" the field is the genre list itself (a quarter of the bytes); the whole object also works.

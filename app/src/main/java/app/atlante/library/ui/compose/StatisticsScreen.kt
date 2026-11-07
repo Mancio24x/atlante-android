@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -38,10 +39,24 @@ import java.util.Locale
 const val OTHER_GENRES = "Altri generi"
 const val NO_GENRE = "Genere non indicato"
 
-fun genreCounts(books: List<Book>): List<Pair<String, Int>> =
-    books.groupingBy { app.atlante.library.saga.Genres.normalize(it.genre) ?: if (it.genre.isBlank()) NO_GENRE else OTHER_GENRES }.eachCount()
-        .entries.sortedWith(compareBy<Map.Entry<String, Int>>({ it.key == OTHER_GENRES || it.key == NO_GENRE }, { it.key == NO_GENRE }, { -it.value }, { it.key }))
+fun genreCounts(books: List<Book>): List<Pair<String, Int>> = genreCounts(books, membership = false)
+
+/**
+ * Books per genre from the genre index (Genres.of: "Indicizza i generi", else the sheet's label).
+ * [membership]: a book with several genres counts in each (the bars add up to more than the books);
+ * otherwise only its main genre (exclusive: the bars add up to the books). Unknown labels go to "Altri generi",
+ * books without any genre last.
+ */
+fun genreCounts(books: List<Book>, membership: Boolean): List<Pair<String, Int>> {
+    val counts = HashMap<String, Int>()
+    for (b in books) {
+        val all = app.atlante.library.saga.Genres.of(b)
+        val keys = when { all.isEmpty() -> listOf(if (b.genre.isBlank()) NO_GENRE else OTHER_GENRES); membership -> all; else -> listOf(all.first()) }
+        for (k in keys) counts[k] = (counts[k] ?: 0) + 1
+    }
+    return counts.entries.sortedWith(compareBy<Map.Entry<String, Int>>({ it.key == OTHER_GENRES || it.key == NO_GENRE }, { it.key == NO_GENRE }, { -it.value }, { it.key }))
         .map { it.key to it.value }
+}
 
 /** A reading session as shown in the calendar. */
 data class DaySession(val title: String, val pages: Int, val minutes: Long)
@@ -59,6 +74,8 @@ class StatsData(books: List<Book>, val yearGoal: Int, val monthGoal: Int, today:
      * labels no main genre recognizes go together in "Altri generi", books without a genre last.
      */
     val genres: List<Pair<String, Int>> = genreCounts(books)
+    /** The books themselves, for the genre section's own filters (state, membership or main genre). */
+    val books: List<Book> = books
     val sessions: Map<LocalDate, List<DaySession>>
     /** Previous months against their monthly goal (empty when the monthly goal is off). */
     var monthHistory: List<Pair<java.time.YearMonth, app.atlante.library.model.ReadingGoals.Progress>> = emptyList()
@@ -116,7 +133,7 @@ fun StatisticsScreen(data: StatsData, palette: ThemePalette, motion: Boolean, on
             }
         }
         Headline("Generi nella tua biblioteca")
-        if (data.genres.isNotEmpty()) Section("") { GenreBars(data.genres, data.total, shown, motion) }
+        if (data.genres.isNotEmpty()) Section("") { GenreSection(data.books, shown, motion) }
     }
 }
 
@@ -148,6 +165,33 @@ fun GenreBars(genres: List<Pair<String, Int>>, total: Int, shown: Boolean, motio
             }
         }
     }
+}
+
+/** Genres of the library, of the books read, being read or to read; every genre of each book, or its main one. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GenreSection(books: List<Book>, shown: Boolean, motion: Boolean) {
+    var state by remember { mutableStateOf<String?>(null) }
+    var membership by remember { mutableStateOf(true) }
+    val chosen = remember(books, state) { if (state == null) books else books.filter { it.status == state } }
+    val genres = remember(chosen, membership) { genreCounts(chosen, membership) }
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(null to "Tutti", Book.READ to "Letti", Book.READING to "In lettura", Book.TO_READ to "Da leggere").forEach { (s, label) ->
+            FilterChip(state == s, { state = s }, label = { Text(label) })
+        }
+    }
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        SegmentedButton(membership, { membership = true }, SegmentedButtonDefaults.itemShape(0, 2)) { Text("Tutti i generi", maxLines = 1) }
+        SegmentedButton(!membership, { membership = false }, SegmentedButtonDefaults.itemShape(1, 2)) { Text("Genere principale", maxLines = 1) }
+    }
+    Text(if (membership) "Un libro con più generi conta in ognuno: le percentuali sono sui ${chosen.size} libri e insieme possono superare il 100%."
+        else "Ogni libro conta una volta, nel suo genere principale: le percentuali sui ${chosen.size} libri fanno 100%.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Spacer(Modifier.height(10.dp))
+    if (genres.isEmpty()) Text("Nessun libro in questo stato.", style = MaterialTheme.typography.bodyMedium)
+    else GenreBars(genres, chosen.size, shown, motion)
+    if (genres.any { it.first == NO_GENRE }) Text("Per i libri senza genere: Impostazioni › Operazioni in background › Indicizza i generi.",
+        Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable private fun Headline(text: String) {

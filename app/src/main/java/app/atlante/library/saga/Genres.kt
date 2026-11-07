@@ -21,7 +21,13 @@ object Genres {
         "Ragazzi" to listOf("ragazz", "young adult", "juvenile", "children", "bambini"),
         "Poesia" to listOf("poesi", "poetry", "poems"),
         "Avventura" to listOf("avventur", "adventure", "western", "pirat"),
-        "Saggistica" to listOf("saggi", "nonfiction", "non-fiction", "storia", "history", "filosofi", "philosophy", "scienz", "science", "biografi", "biography"),
+        // Non-fiction by subject; "Saggistica" stays for the rest (essays, generic non-fiction).
+        "Biografia" to listOf("biografi", "biography", "memoir", "autobiograf"),
+        "Filosofia" to listOf("filosofi", "philosoph"),
+        "Religione" to listOf("religio", "teolog", "theolog", "spiritual"),
+        "Storia" to listOf("history", "storia", "world war", "guerra mondiale"),
+        "Scienza" to listOf("scienz", "science", "matemat", "mathemat", "physics", "fisica", "biolog", "astronom"),
+        "Saggistica" to listOf("saggi", "nonfiction", "non-fiction", "essay"),
         "Narrativa" to listOf("narrativa", "fiction", "romanz", "novel", "letteratura"),
     )
 
@@ -40,6 +46,31 @@ object Genres {
     }
 
     fun subjectFor(label: String?) = normalize(label)?.let { SUBJECT[it] }
+
+    /** Generic labels that only count when nothing more specific is known ("Fiction" next to "Fantasy" is noise). */
+    private val GENERIC = setOf("Narrativa", "Classici")
+
+    /**
+     * Every main genre of a label made of several ("Fiction, Science fiction, Dystopias" → Fantascienza; "Fantasy;
+     * Adventure" → Fantasy, Avventura), in the order written; each part is normalized on its own, so "Science
+     * fiction" is Fantascienza and never also Scienza. Generic labels only when they are alone.
+     */
+    @JvmStatic fun all(label: String?): List<String> {
+        if (label.isNullOrBlank()) return emptyList()
+        val found = label.split(Regex("[,;/|·]+|\\s+-\\s+")).mapNotNull { normalize(it) }.distinct()
+        val specific = found.filter { it !in GENERIC }
+        return specific.ifEmpty { found }.ifEmpty { listOfNotNull(normalize(label)) }
+    }
+
+    /** The genres indexed for a book: the canonical list saved by "Indicizza i generi", else those of its label. */
+    @JvmStatic fun of(b: app.atlante.library.model.Book): List<String> {
+        val saved = b.meta.optJSONArray("genres")
+        if (saved != null && saved.length() > 0) return (0 until saved.length()).map { saved.optString(it) }.filter { it.isNotBlank() }.distinct()
+        return all(b.genre)
+    }
+
+    /** The main genre of a book (the first of [of]), or null. */
+    @JvmStatic fun mainOf(b: app.atlante.library.model.Book): String? = of(b).firstOrNull()
 
     private fun fold(s: String) = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
 }
