@@ -282,7 +282,7 @@ print('Cache settings completed.')
 # Ripara saghe: runs in the background on the whole sample library; the app stays usable; the result is in
 # Operazioni in background. The library itself is unchanged except empty saga fields.
 before=len(catalog())
-tap('Home',exact=True);tap('Impostazioni')   # back to the top of the settings
+back();tap('Home',exact=True);tap('Impostazioni')   # Settings has no bottom bar: back, Home, then the top of the settings
 tap('Ripara saghe e mappe',True,exact=True)   # opens the section
 time.sleep(.6);adb('shell','input','swipe','540','1250','540','750','300');time.sleep(.6)
 buttons=[n for n in dump().iter('node') if n.get('text','')=='Ripara saghe']
