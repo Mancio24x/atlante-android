@@ -1905,6 +1905,8 @@ public final class MainActivity extends AppCompatActivity {
         if(hcOn) hc.addView(button("Sincronizza ora",true,this::runHardcover),new LinearLayout.LayoutParams(-1,-2));
         hc.addView(button(hcOn?"Impostazioni di Hardcover":"Collega Hardcover",hcOn?R.style.Atlante_Button_Text:0,this::hardcoverSettings),new LinearLayout.LayoutParams(-1,-2));
         if(hcOn) hc.addView(button("Ripara duplicati Hardcover",R.style.Atlante_Button_Text,this::repairHardcoverDuplicates),new LinearLayout.LayoutParams(-1,-2));
+        int conflicts=hardcoverConflicts().length();
+        if(hcOn&&conflicts>0) hc.addView(button("Conflitti con Hardcover · "+conflicts,true,this::resolveHardcoverConflicts),new LinearLayout.LayoutParams(-1,-2));
 
         LinearLayout cal=surface(p,"CALIBRE · STATO, PAGINA E CAPITOLO");
         boolean calOn=!prefs.getString("calibreUrl","").isEmpty();
@@ -2094,16 +2096,47 @@ public final class MainActivity extends AppCompatActivity {
         for(int i=0;i<found.size();i++) labels[i]="Copia da Hardcover:\n"+duplicateLine(found.get(i).copy)+"\n\nResta il tuo libro:\n"+duplicateLine(found.get(i).original);
         dialogBuilder().setTitle(found.size()+" possibili duplicati")
             .setMultiChoiceItems(labels,chosen,(d,w,c)->chosen[w]=c)
-            .setNegativeButton("Annulla",null)
-            .setPositiveButton("Unisci selezionati",(d,w)->{
-                List<HardcoverSync.Duplicate> pick=new ArrayList<>(); for(int i=0;i<found.size();i++) if(chosen[i]) pick.add(found.get(i));
-                if(pick.isEmpty()) return;
+            // Spuntato: stesso libro (unito). Non spuntato: libri diversi (ricordato, non viene più proposto). "Verifica dopo": niente cambia.
+            .setNegativeButton("Verifica dopo",null)
+            .setPositiveButton("Conferma",(d,w)->{
+                List<HardcoverSync.Duplicate> pick=new ArrayList<>(), apart=new ArrayList<>();
+                for(int i=0;i<found.size();i++) (chosen[i]?pick:apart).add(found.get(i));
                 worker.execute(()->{
-                    try { HardcoverSync.merge(store,pick); runOnUiThread(()->{ Toast.makeText(this,pick.size()+" duplicati uniti: restano i tuoi libri, con il collegamento a Hardcover.",Toast.LENGTH_LONG).show(); renderContent(); }); }
+                    try {
+                        HardcoverSync.merge(store,pick); HardcoverSync.markDifferent(store,apart);
+                        runOnUiThread(()->{ Toast.makeText(this,pick.size()+" uniti (resta il tuo libro)"+(apart.isEmpty()?"":", "+apart.size()+" ricordati come libri diversi"),Toast.LENGTH_LONG).show(); renderContent(); });
+                    }
                     catch(Exception e){ runOnUiThread(()->error(e)); }
                 });
             }).show();
-        Toast.makeText(this,"Resta sempre il tuo libro con note, voto e progressi; dalla copia prende solo ciò che gli manca.",Toast.LENGTH_LONG).show();
+        Toast.makeText(this,"Spunta quelli che sono lo stesso libro: resta il tuo, con note, voto e progressi. Quelli non spuntati sono ricordati come libri diversi.",Toast.LENGTH_LONG).show();
+    }
+
+    private org.json.JSONArray hardcoverConflicts() {
+        try { return new org.json.JSONArray(getPreferences(MODE_PRIVATE).getString("hardcoverConflicts","[]")); } catch (Exception e) { return new org.json.JSONArray(); }
+    }
+
+    private static String snapshotLine(org.json.JSONObject s) {
+        String status=s.optString("status"); int page=s.optInt("page"); double rating=s.optDouble("rating",0);
+        return status+((status.equals(Book.READING)||status.equals(Book.PAUSED))&&page>0?" · pagina "+page:"")+(rating>0?" · voto "+(rating==Math.floor(rating)?String.valueOf((int)rating):String.valueOf(rating)):"");
+    }
+
+    /** One conflict at a time: the book changed here and on Hardcover; you keep one side, or decide later. */
+    private void resolveHardcoverConflicts() {
+        org.json.JSONArray all=hardcoverConflicts();
+        if(all.length()==0){ if(destination.equals("Sync")) showCompanion(); return; }
+        org.json.JSONObject c=all.optJSONObject(0);
+        Runnable next=()->{ org.json.JSONArray rest=new org.json.JSONArray(); for(int i=1;i<all.length();i++) rest.put(all.opt(i));
+            getPreferences(MODE_PRIVATE).edit().putString("hardcoverConflicts",rest.toString()).apply(); resolveHardcoverConflicts(); };
+        java.util.function.Consumer<Boolean> keep=here->worker.execute(()->{
+            try { app.atlante.library.sync.HardcoverSync.resolve(store,c,here); runOnUiThread(next); } catch(Exception e){ runOnUiThread(()->error(e)); }
+        });
+        dialogBuilder().setTitle("«"+c.optString("title")+"»")
+            .setMessage("Cambiato sia qui sia su Hardcover dall’ultima sincronizzazione.\n\nIn Atlante: "+snapshotLine(c.optJSONObject("here"))
+                +"\nSu Hardcover: "+snapshotLine(c.optJSONObject("there"))+"\n\n"+(all.length()>1?(all.length()-1)+" altri conflitti dopo questo.":""))
+            .setPositiveButton("Tieni Atlante",(d,w)->keep.accept(true))
+            .setNeutralButton("Tieni Hardcover",(d,w)->keep.accept(false))
+            .setNegativeButton("Dopo",(d,w)->{ if(destination.equals("Sync")) showCompanion(); }).show();
     }
 
     private boolean watchingHardcover;

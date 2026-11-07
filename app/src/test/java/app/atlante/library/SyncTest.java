@@ -228,6 +228,52 @@ public class SyncTest {
         assertEquals("each book is searched once", searches, api.searches);
     }
 
+    /** "Sono libri diversi" is remembered: the pair is not proposed again and the next sync does not merge it. */
+    @Test public void differentBooksDecisionIsRemembered() throws Exception {
+        MemoryStore store = new MemoryStore();
+        Book original = book("Quel che resta del giorno", "Kazuo Ishiguro", "", Book.TO_READ, 0, 0); original.addedAt = 1;
+        Book copy = book("The Remains of the Day", "Kazuo Ishiguro", "9780679731726", Book.READ, 0, 245); copy.addedAt = 2;
+        SyncCore.remember(copy, HardcoverSync.SERVICE, new JSONObject().put("id", 9).put("book", 90), SyncCore.Snapshot.of(copy));
+        store.books.add(original); store.books.add(copy);
+        FakeHardcover api = new FakeHardcover();
+        api.userBooks = new JSONArray().put(withItalian(userBook(9, 3, null, "The Remains of the Day", "Kazuo Ishiguro", "9780679731726", 0), "Quel che resta del giorno", "9788806219352"));
+        List<HardcoverSync.Duplicate> found = HardcoverSync.duplicates(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(1, found.size());
+        HardcoverSync.markDifferent(store, found);
+        assertTrue(HardcoverSync.duplicates(store, new HardcoverSync.Settings(), m -> { }, api).isEmpty());
+        HardcoverSync.Report r = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(0, r.merged); assertEquals(2, store.books.size()); assertEquals(0, r.created);
+    }
+
+    /** Case 8: changed here and on Hardcover differently. Nothing is overwritten; your choice is applied. */
+    @Test public void conflictsAreShownAndYourChoiceWins() throws Exception {
+        MemoryStore store = new MemoryStore();
+        Book b = book("Dune", "Frank Herbert", "", Book.READ, 0, 500);
+        SyncCore.remember(b, HardcoverSync.SERVICE, new JSONObject().put("id", 2).put("book", 20), new SyncCore.Snapshot(Book.TO_READ, 0, "", 0));
+        store.books.add(b);
+        FakeHardcover api = new FakeHardcover();
+        api.userBooks = new JSONArray().put(userBook(2, 2, 80, "Dune", "Frank Herbert", null, 0));     // Hardcover: in lettura, pagina 80
+        HardcoverSync.Report r = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(1, r.conflicts.size()); assertEquals(0, r.pushed); assertEquals(0, r.pulled);
+        assertTrue(api.mutations.toString(), api.mutations.isEmpty());
+        assertEquals(Book.READ, store.find(b.id).status);
+        // Keep Hardcover: applied here, nothing left to decide.
+        HardcoverSync.resolve(store, r.conflicts.get(0), false);
+        assertEquals(Book.READING, store.find(b.id).status); assertEquals(80, store.find(b.id).currentPage);
+        HardcoverSync.Report again = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertTrue(again.conflicts.isEmpty()); assertEquals(0, again.pushed); assertEquals(0, again.pulled);
+        // Keep Atlante instead: the next sync sends this phone's state.
+        Book local = Book.from(store.find(b.id).json()); local.status = Book.READ; store.replace(local);
+        api.userBooks = new JSONArray().put(userBook(2, 2, 120, "Dune", "Frank Herbert", null, 0));
+        HardcoverSync.Report third = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(1, third.conflicts.size());
+        HardcoverSync.resolve(store, third.conflicts.get(0), true);
+        api.mutations.clear();
+        HardcoverSync.Report fourth = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(1, fourth.pushed); assertTrue(fourth.conflicts.isEmpty());
+        assertEquals(Book.READ, store.find(b.id).status);
+    }
+
     @Test public void statusMapping() {
         assertEquals(Book.PAUSED, HardcoverSync.status(4)); assertEquals(Book.TO_READ, HardcoverSync.status(5));
         assertEquals(4, HardcoverSync.statusId(Book.PAUSED)); assertEquals(1, HardcoverSync.statusId(Book.TO_READ));

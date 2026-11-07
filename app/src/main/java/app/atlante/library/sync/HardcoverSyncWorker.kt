@@ -41,11 +41,12 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
             })
             val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("d MMM HH:mm", Locale.ITALIAN))
             val line = "$time · ${report.pushed} inviati, ${report.pulled} ricevuti, ${report.created + report.added} nuovi"
-            prefs.edit().putString("hardcoverUser", report.user).putString("hardcoverLast", "Ultima sincronizzazione: $line").apply()
+            prefs.edit().putString("hardcoverConflicts", org.json.JSONArray(report.conflicts).toString()).putString("hardcoverUser", report.user).putString("hardcoverLast", "Ultima sincronizzazione: $line").apply()
             val summary = "${report.remote} libri su Hardcover · ${report.linked} collegati\n${report.pushed} aggiornati su Hardcover · ${report.pulled} aggiornati in Atlante\n" +
                 "${report.added} aggiunti a Hardcover · ${report.created} nuove schede in Atlante" +
                 (if (report.recognized > 0) "\n${report.recognized} libri riconosciuti come già presenti: nessun doppione" else "") +
-                (if (report.merged > 0) "\n${report.merged} doppioni di sincronizzazioni precedenti uniti da soli (resta il tuo libro)" else "")
+                (if (report.merged > 0) "\n${report.merged} doppioni di sincronizzazioni precedenti uniti da soli (resta il tuo libro)" else "") +
+                (if (report.conflicts.isNotEmpty()) "\n${report.conflicts.size} libri cambiati sia qui sia su Hardcover: scegli tu in Sync › «Conflitti con Hardcover»" else "")
             finished(if (settings.cancelled) "Sincronizzazione interrotta" else "Hardcover sincronizzato", summary)
             Result.success(workDataOf(SUMMARY to summary, NOTES to report.notes.take(60).joinToString("\n").take(8000), STOPPED to settings.cancelled))
         } catch (e: Exception) {

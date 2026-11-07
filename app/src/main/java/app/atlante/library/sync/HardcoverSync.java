@@ -30,6 +30,8 @@ public final class HardcoverSync {
     public static final class Report {
         /** Doubles of earlier syncs merged automatically. */
         public int merged;
+        /** Books changed both here and on Hardcover since the last sync: left as they are, for you to choose. */
+        public final List<JSONObject> conflicts = new ArrayList<>();
         public String user = ""; public int remote, linked, pushed, pulled, created, added, onlyHere, recognized;
         public final List<String> notes = new ArrayList<>();
     }
@@ -181,6 +183,11 @@ public final class HardcoverSync {
             SyncCore.Snapshot there = snapshot(ub);
             JSONObject link = SyncCore.link(local, SERVICE);
             SyncCore.Snapshot synced = link == null || link.optInt("id") != ub.getInt("id") ? null : SyncCore.Snapshot.from(link.optJSONObject("synced"));
+            // Changed on both sides since the last sync, differently: nothing is overwritten, you choose.
+            if (synced != null && !here.same(there, false, true) && !here.same(synced, false, true) && !there.same(synced, false, true)) {
+                report.conflicts.add(new JSONObject().put("book", local.id).put("title", local.title).put("here", here.json()).put("there", there.json()));
+                continue;
+            }
             SyncCore.Action action = SyncCore.decide(here, there, synced, false, true);
             JSONObject newLink = new JSONObject().put("id", ub.getInt("id")).put("book", ub.optInt("book_id"));
             if (action == SyncCore.Action.PUSH) {
@@ -271,6 +278,7 @@ public final class HardcoverSync {
             List<Book> whole = wholeIdentities(ub);
             for (Book o : all) {
                 if (o == c || used.contains(o.id) || used.contains(c.id)) continue;
+                if (different(c, o)) continue;                                  // you said they are two books
                 JSONObject ol = SyncCore.link(o, SERVICE);
                 if (ol != null && ol.optInt("id") > 0 && ol.optInt("id") != ub.optInt("id")) continue;   // linked to another Hardcover book
                 Integer viaIsbn = bookIdOf(o, byIsbn);
@@ -286,6 +294,41 @@ public final class HardcoverSync {
             }
         }
         return out;
+    }
+
+    /**
+     * Your choice on a conflict. Keeping Atlante: the next sync sends it (Hardcover's side becomes the last agreed
+     * one, so only this phone changed). Keeping Hardcover: its state, page and rating are applied here now.
+     */
+    public static void resolve(SyncStore store, JSONObject conflict, boolean keepHere) throws Exception {
+        Book b = store.find(conflict.getString("book")); if (b == null) return;
+        Book copy = Book.from(b.json());
+        JSONObject link = SyncCore.link(copy, SERVICE); if (link == null) return;
+        SyncCore.Snapshot there = SyncCore.Snapshot.from(conflict.getJSONObject("there"));
+        if (!keepHere) SyncCore.apply(copy, there, false, true, LocalDate.now().toString());
+        JSONObject plain = new JSONObject(link.toString()); plain.remove("synced"); plain.remove("at");
+        SyncCore.remember(copy, SERVICE, plain, there);
+        store.replace(copy);
+    }
+
+    /** You said these two are different books: never proposed or merged again. */
+    static boolean different(Book a, Book b) {
+        JSONArray x = a.meta.optJSONArray("notSameAs"), y = b.meta.optJSONArray("notSameAs");
+        for (int i = 0; x != null && i < x.length(); i++) if (b.id.equals(x.optString(i))) return true;
+        for (int i = 0; y != null && i < y.length(); i++) if (a.id.equals(y.optString(i))) return true;
+        return false;
+    }
+
+    /** Remembers "Sono libri diversi" for these pairs (on the copy). */
+    public static void markDifferent(SyncStore store, List<Duplicate> pairs) throws Exception {
+        List<Book> changed = new ArrayList<>();
+        for (Duplicate d : pairs) {
+            Book c = store.find(d.copy.id); if (c == null) continue;
+            Book copy = Book.from(c.json());
+            JSONArray list = copy.meta.optJSONArray("notSameAs"); if (list == null) list = new JSONArray();
+            list.put(d.original.id); copy.meta.put("notSameAs", list); changed.add(copy);
+        }
+        store.replaceAll(changed);
     }
 
     /** A sheet with nothing of the user's own: no file, notes, sessions or highlights (only what Sync wrote). */
