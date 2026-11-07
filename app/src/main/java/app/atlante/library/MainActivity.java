@@ -735,7 +735,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout controls = column(); controls.setPadding(dp(8), dp(4), dp(8), 0); header.addView(controls);
         if (map) mapHeader(controls); else if (!place) libraryHeader(controls);
         if(destination.equals("Cerca")) controls.addView(button("Cerca anche online",R.style.Atlante_Button_Text,()->{lastOnlineQuery=query;prefillOnline=true;onlineSearch();}));
-        addLibraryStage(!map);
+        addLibraryStage(!place);   // Saghe, Mappa, Universi (designs 7b-7d) have no "Aggiungi libro" over them
     }
     /** The scrolling area under the library header; the extended button only where the top bar has no "+". */
     private void addLibraryStage(boolean fab) {
@@ -3185,6 +3185,8 @@ public final class MainActivity extends AppCompatActivity {
         nav.setItemIconTintList(tint); nav.setItemTextColor(tint);
         for(int i=0;i<names.length;i++) { nav.getMenu().add(0,i+1,i,names[i]).setIcon(icons[i]); if(names[i].equals(destination)) nav.setSelectedItemId(i+1); }
         nav.setOnItemSelectedListener(item -> { String next=names[item.getItemId()-1]; if(!destination.equals(next)) navigate(next); return true; });
+        // Biblioteca again from Saghe, Mappa, Universi or a search: back to the whole library.
+        nav.setOnItemReselectedListener(item -> { if(names[item.getItemId()-1].equals("Biblioteca") && destination.equals("Biblioteca") && (!statusPage() || !query.isEmpty())) { tab="Tutti i libri"; openSaga=""; query=""; showLibrary(); } });
         nav.setOnApplyWindowInsetsListener((v,insets)->insets); // root already pads for the system bars
         nav.setPadding(0,0,0,0);
         // Repairs in the background: a slim bar above the navigation (nothing when no repair runs or waits).

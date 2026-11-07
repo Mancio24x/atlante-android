@@ -68,7 +68,7 @@ class Discover(
         val best = italian.sortedWith(compareByDescending<JSONObject> { (it.optJSONArray("covers")?.optLong(0) ?: 0) > 0 }
             .thenByDescending { it.optString("title").split(' ').size }).firstOrNull() ?: return p
         val cover = best.optJSONArray("covers")?.optLong(0)?.takeIf { it > 0 }
-        val title = best.optString("title").substringBefore(" : ").trim().ifBlank { p.title }
+        val title = best.optString("title").substringBefore(" : ").trim().takeIf { it.isNotBlank() && looksItalian(it, p.title) } ?: return p
         return p.copy(title = title, coverUrl = OpenLibraryWorks.coverUrl(cover ?: 0) ?: p.coverUrl, italian = true)
     }
 
@@ -108,6 +108,18 @@ class Discover(
     }
 
     companion object {
+        private val ITALIAN_WORDS = setOf("il", "lo", "la", "i", "gli", "le", "l", "un", "uno", "una", "di", "del", "dello", "della", "dei", "degli", "delle",
+            "e", "ed", "che", "per", "in", "nel", "nello", "nella", "nei", "a", "al", "alla", "ai", "da", "dal", "dalla", "con", "su", "sul", "sulla", "non")
+        /**
+         * Open Library sometimes marks other languages as Italian ("Boxi Jiekexun yu shen huo zhi dao", a Chinese
+         * Percy Jackson): an "Italian" title is kept only with an Italian word in it, or a word of the original title.
+         */
+        @JvmStatic fun looksItalian(title: String, original: String): Boolean {
+            fun words(s: String) = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
+                .split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+            val w = words(title); val o = words(original).filter { it.length > 2 }.toSet()
+            return w.any { it in ITALIAN_WORDS } || w.any { it.length > 2 && it in o }
+        }
         /** The edition Open Library chose for lang=it, when it really is Italian. */
         private fun italianEdition(doc: JSONObject): JSONObject? {
             val e = doc.optJSONObject("editions")?.optJSONArray("docs")?.optJSONObject(0) ?: return null
@@ -180,7 +192,7 @@ class Discover(
                     val title = e.optString("title").substringBefore(" : ").trim()
                     val italianCover = e.optLong("cover_i").takeIf { it > 0 }
                     // Without its own cover the Italian edition is completed later by italian().
-                    if (title.isBlank() || italianCover == null) null
+                    if (title.isBlank() || italianCover == null || !looksItalian(title, pick.title)) null
                     else pick.copy(title = title, coverUrl = OpenLibraryWorks.coverUrl(italianCover), italian = true)
                 } ?: pick
             }.filter { it.title.isNotBlank() }

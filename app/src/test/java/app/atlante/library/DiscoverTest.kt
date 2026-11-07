@@ -92,4 +92,13 @@ class DiscoverTest {
         val names = app.atlante.library.saga.Genres.main
         Discover.GENRES.forEach { assertTrue(it.label, it.label in names) }
     }
+
+    /** A Chinese edition marked as Italian on Open Library is not shown as the Italian title. */
+    @Test fun aWrongItalianEditionIsRefused() {
+        assertFalse(Discover.looksItalian("Boxi Jiekexun yu shen huo zhi dao", "The Lightning Thief"))
+        assertTrue(Discover.looksItalian("Percy Jackson e gli dei dell'Olimpo. Il ladro di fulmini", "The Lightning Thief"))
+        assertTrue(Discover.looksItalian("Harry Potter e la pietra filosofale", "Harry Potter and the Philosopher's Stone"))
+        assertTrue(Discover.looksItalian("Dune", "Dune"))
+        assertTrue(Discover.looksItalian("Shining", "The Shining"))
+    }
 }

@@ -6,6 +6,9 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Dall'emulatore**: niente «Aggiungi libro» sopra Saghe, Mappa e Universi; il tasto Biblioteca in basso riporta alla
+  biblioteca intera da Saghe, Mappa, Universi o da una ricerca; Scopri scarta i titoli «italiani» che non lo sono
+  (un'edizione cinese di Percy Jackson segnata come italiana su Open Library).
 - **Ricerca online sempre vuota** all'apertura (dal menu e da Scopri); si riempie solo quando la apri per un libro
   preciso (volume mancante di una saga, «Cerca anche online»). **Trama**: da Wikipedia si prende la sezione «Trama»
   (o Sinossi, Riassunto) della voce, non l'introduzione che dice solo che libro è.
