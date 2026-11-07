@@ -255,7 +255,7 @@ for node in dump().iter('node'):
         b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));y=str((b[1]+b[3])//2)
         adb('shell','input','swipe','900',y,'100',y,'300');time.sleep(.5);break
 tap('Altri filtri');shot('52b-filters')
-assert visible('Lingua') or visible('Anno di pubblicazione'), 'Language / year filters missing'
+assert visible('Tutte le lingue') and visible('Tutti gli anni') and visible('Tutti gli universi'), 'Language / year / universe filters missing'
 tap('Annulla',exact=True)
 # [Barra ricerca] [Genere] [Autore]: the two quick filters open their lists.
 tap('Filtra per genere');time.sleep(.5);shot('52d-genre-filter');tap('Chiudi',exact=True)

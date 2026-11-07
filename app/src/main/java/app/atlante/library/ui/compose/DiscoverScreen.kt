@@ -66,8 +66,10 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
         // Already seen in this session: shown at once, no request (a new genre cancels the old one's work).
         DiscoverSession.shown.get(key)?.let { picks = it; return@LaunchedEffect }
         picks = null
+        DiscoverPerf.start()
         val found = try { discover.picks(genre, page) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { emptyList() }
         picks = found
+        DiscoverPerf.list(found.size)
         if (found.isNotEmpty()) DiscoverSession.shown.put(key, found)
         // Most picks already carry their Italian edition; the rest look for it one by one (children of this
         // effect: a new genre or page cancels them).
@@ -153,11 +155,28 @@ private fun PickCard(p: Discover.Pick?, host: SagaHost, modifier: Modifier) {
         val url = p?.coverUrl
         // Same book in this place (workKey): the Italian cover replaces the first one only when it is ready.
         BookCover(p?.workKey, url, p?.title ?: "", Modifier.fillMaxWidth().aspectRatio(0.66f)) {
-            url?.let { u -> SuggestionCovers.bytes(u)?.let { CoverImages.decode(it, null, 360) } }
+            url?.let { u -> SuggestionCovers.bytes(u)?.let { CoverImages.decode(it, null, 360) } }?.also { DiscoverPerf.cover() }
         }
     if (p != null) {
             Text(p.title, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(p.author, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
+}
+
+/**
+ * Real timings of Scopri on the phone (logcat, tag AtlantePerf): list, first cover, six and twelve covers, and the
+ * cover cache's counters. Read by scripts/capture-perf.py on the emulator; a few log lines, nothing else.
+ */
+object DiscoverPerf {
+    @Volatile private var t0 = 0L
+    private val covers = java.util.concurrent.atomic.AtomicInteger()
+    fun start() { t0 = System.nanoTime(); covers.set(0) }
+    fun list(n: Int) { if (t0 > 0) android.util.Log.i("AtlantePerf", "discover list ${ms()} ms ($n libri)") }
+    fun cover() {
+        if (t0 == 0L) return
+        val n = covers.incrementAndGet()
+        if (n == 1 || n == 6 || n == 12) android.util.Log.i("AtlantePerf", "discover cover $n ${ms()} ms · cache: ${CoverImages.hits} in memoria, ${CoverImages.loads} caricate, ${CoverImages.misses} non trovate")
+    }
+    private fun ms() = (System.nanoTime() - t0) / 1_000_000
 }
