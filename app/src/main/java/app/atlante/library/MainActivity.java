@@ -265,7 +265,7 @@ public final class MainActivity extends AppCompatActivity {
         sagas.addView(app.atlante.library.ui.compose.SagaRepairView.create(this, palette, sagaHost)); gap(sagas,8);
         sagas.addView(text("Proposte rapide dai titoli e dai metadati già presenti, senza connessione:",14,MUTED,false));
         sagas.addView(button("Riconosci saghe e ordine di lettura",false,this::recognizeSeries));
-        panel.addView(expander("Ripara saghe", sagas, false));
+        panel.addView(expander("Ripara saghe e mappe", sagas, false));
         panel.addView(expander("Cache e dati temporanei", app.atlante.library.ui.compose.CacheSettingsView.create(this, palette), false)); gap(panel,20);
 
         panel.addView(sectionLabel("LETTURA")); gap(panel,10);

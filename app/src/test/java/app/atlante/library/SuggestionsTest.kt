@@ -90,6 +90,26 @@ class SuggestionsTest {
         assertNull(suggestions.saga(BookLink("b9", ids[0], saga, 95, "auto"))!!.manualOrder)
     }
 
+    /** "Controlla le mappe": the sheet says n. 2, the source n. 1 → a proposal; "No" is remembered. */
+    @Test fun mapCheckProposesAndRemembersNo() = runBlocking {
+        val saga = dao.insertSeries(SeriesEntity(name = "Mistborn", wikidataId = "hc:1"))
+        val w1 = dao.insertWork(WorkEntity(originalTitle = "The Final Empire", italianTitle = "L'ultimo impero", firstPublished = "2006", wikidataId = "hcb:1"))
+        val w2 = dao.insertWork(WorkEntity(originalTitle = "The Well of Ascension", firstPublished = "2007", wikidataId = "hcb:2"))
+        val w4 = dao.insertWork(WorkEntity(originalTitle = "The Alloy of Law", firstPublished = "2011", wikidataId = "hcb:4"))
+        dao.replaceAutomaticEntries(saga, listOf(SeriesEntry(saga, w1, "1", 1.0, source = "hardcover"), SeriesEntry(saga, w2, "2", 2.0, source = "hardcover"),
+            SeriesEntry(saga, w4, "4", 4.0, source = "hardcover")))
+        library[0].series = "Mistborn"; library[0].number = 2.0
+        dao.putLink(BookLink("b1", w1, saga, 95, "auto"))
+        val repair = SagaRepair(dao, SagaRepository(dao))
+        val issues = repair.mapIssues(suggestions, library)
+        val proposal = issues.single { it.bookId == "b1" }
+        assertEquals("1", proposal.ordinal); assertTrue(proposal.text, proposal.text.contains("Hardcover"))
+        assertTrue(issues.any { it.text.contains("manca il n. 3") })
+        repair.refuse(proposal)
+        assertTrue(repair.mapIssues(suggestions, library).none { it.bookId == "b1" })
+        library[0].series = ""; library[0].number = 0.0
+    }
+
     @Test fun bundlesAreNotSuggested() {
         for (t in listOf("Red Rising 3-Book Box Set", "The Red Rising Series Collection", "Kızıl İsyan Serisi", "Mistborn Trilogy Boxed Set", "The Stormlight Archive Books 1-3", "Summary of Red Rising"))
             assertTrue(t, Suggestions.bundle(t))

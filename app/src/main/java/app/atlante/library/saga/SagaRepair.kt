@@ -51,4 +51,46 @@ class SagaRepair(private val dao: SagaDao, private val repo: SagaRepository) {
         dao.deleteExpired(System.currentTimeMillis())
         return report
     }
+
+    /**
+     * A problem of a saga map, found from the data only. [bookId] + [ordinal]: a proposal (your sheet says another
+     * number than the source); the rest is information (unnumbered volumes, the same number twice, missing numbers).
+     */
+    data class MapIssue(val series: String, val seriesId: Long, val text: String, val bookId: String? = null, val ordinal: String? = null, val source: String = "")
+
+    /** "Controlla le mappe": every saga of the library's books, through the same layout the map draws. */
+    suspend fun mapIssues(suggestions: Suggestions, books: List<Book>): List<MapIssue> {
+        val out = ArrayList<MapIssue>()
+        val byId = books.associateBy { it.id }
+        for (seriesId in dao.links().mapNotNull { it.seriesId }.distinct()) {
+            coroutineContext.ensureActive()
+            val shelf = suggestions.series(seriesId) ?: continue
+            if (shelf.owned == 0) continue
+            val name = shelf.series?.name ?: continue
+            val map = app.atlante.library.ui.compose.SagaLayout.layout(shelf.items, app.atlante.library.ui.compose.SagaLayout.Order.SAGA, null)
+            val refused = dao.overrides("series", seriesId.toString()).filter { it.field.startsWith("refused:") }.map { it.field.removePrefix("refused:") + "=" + it.value }.toSet()
+            for (n in map.nodes) {
+                val item = shelf.items[n.item]; val b = item.ownedBookId?.let { byId[it] } ?: continue
+                val mine = if (b.number > 0) Book.formatNumber(b.number) else ""
+                val theirs = item.ordinal ?: continue
+                // Only when the sheet speaks of this very saga (a book of a sub-series has another number in the main one).
+                val same = app.atlante.library.ui.MapGroups.seriesKey(b.series) == app.atlante.library.ui.MapGroups.seriesKey(name)
+                if (same && mine.isNotEmpty() && app.atlante.library.ui.compose.SagaLayout.number(mine) != app.atlante.library.ui.compose.SagaLayout.number(theirs) && "${b.id}=$theirs" !in refused)
+                    out += MapIssue(name, seriesId, "«${b.title}»: nella scheda è il n. $mine, per ${source(item.source)} è il n. $theirs", b.id, theirs, item.source)
+            }
+            val waiting = map.waiting.count { shelf.items[it.item].ownedBookId != null }
+            if (waiting > 0) out += MapIssue(name, seriesId, "$waiting tuoi libri senza posizione verificata: apri la mappa e mettili in ordine con «Cambia l’ordine»")
+            map.waiting.filter { it.reason.startsWith("stesso numero") }.forEach { out += MapIssue(name, seriesId, "«${shelf.items[it.item].title}»: ${it.reason} (forse un’edizione o un omnibus)") }
+            map.links.filter { it.type == app.atlante.library.ui.compose.SagaLayout.Edge.GAP }.forEach { out += MapIssue(name, seriesId, "Saga incompleta nelle fonti: ${it.note}") }
+        }
+        return out
+    }
+
+    private fun source(s: String) = when (s) { "hardcover" -> "Hardcover"; "wikidata" -> "Wikidata"; else -> "la fonte" }
+
+    /** "No" to a proposal: it is not proposed again. */
+    suspend fun refuse(issue: MapIssue) {
+        if (issue.bookId == null || issue.ordinal == null) return
+        dao.putOverride(app.atlante.library.saga.db.UserOverride("series", issue.seriesId.toString(), "refused:${issue.bookId}", issue.ordinal, System.currentTimeMillis()))
+    }
 }

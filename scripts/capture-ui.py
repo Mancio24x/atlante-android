@@ -274,7 +274,7 @@ print('Cache settings completed.')
 # Ripara saghe: runs on the whole sample library and reports; the library itself is unchanged except empty saga fields.
 before=len(catalog())
 tap('Home',exact=True);tap('Impostazioni')   # back to the top of the settings
-tap('Ripara saghe',True,exact=True)   # opens the section; its button has the same name
+tap('Ripara saghe e mappe',True,exact=True)   # opens the section
 time.sleep(.6);adb('shell','input','swipe','540','1250','540','750','300');time.sleep(.6)
 buttons=[n for n in dump().iter('node') if n.get('text','')=='Ripara saghe']
 b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
@@ -285,6 +285,13 @@ for _ in range(120):
 shot('54-repair-sagas')
 assert any(n.get('text','').startswith('Fatto:') for n in dump().iter('node')), 'Ripara saghe did not finish'
 assert len(catalog())==before, 'Ripara saghe changed the number of books'
+tap('Controlla le mappe',True)
+for _ in range(60):
+    if any(('mappe' in n.get('text','') and ('coerenti' in n.get('text','') or 'cose da guardare' in n.get('text',''))) for n in dump().iter('node')): break
+    time.sleep(1)
+shot('54a-check-maps')
+assert any(('coerenti' in n.get('text','') or 'cose da guardare' in n.get('text','')) for n in dump().iter('node')), 'Map check did not finish'
+assert len(catalog())==before, 'Map check changed the library'
 print('Repair completed.')
 
 # Bookcase: spines on shelves; a tap on a spine opens the book.

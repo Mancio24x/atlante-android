@@ -35,6 +35,8 @@ fun SagaRepairSection(repair: SagaRepair, host: SagaHost) {
     var status by remember { mutableStateOf<String?>(null) }
     var fraction by remember { mutableFloatStateOf(0f) }
     var report by remember { mutableStateOf<SagaRepair.Report?>(null) }
+    var issues by remember { mutableStateOf<List<SagaRepair.MapIssue>?>(null) }
+    var checking by remember { mutableStateOf(false) }
     val running = job?.isActive == true
 
     Column(Modifier.fillMaxWidth()) {
@@ -58,6 +60,31 @@ fun SagaRepairSection(repair: SagaRepair, host: SagaHost) {
                 }
             }
         }, Modifier.fillMaxWidth()) { Text("Ripara saghe") }
+        OutlinedButton(onClick = {
+            checking = true
+            scope.launch {
+                issues = runCatching { SuggestionCovers.suggestions?.let { repair.mapIssues(it, host.library()) } ?: emptyList() }.getOrDefault(emptyList())
+                checking = false
+            }
+        }, Modifier.fillMaxWidth(), enabled = !running && !checking) { Text(if (checking) "Controllo le mappe…" else "Controlla le mappe") }
+        issues?.let { list ->
+            Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (list.isEmpty()) "Le mappe delle tue saghe sono coerenti con le fonti ✓" else "${list.size} cose da guardare nelle mappe", style = MaterialTheme.typography.titleSmall)
+                    list.groupBy { it.series }.forEach { (series, found) ->
+                        Text(series, style = MaterialTheme.typography.labelLarge)
+                        found.forEach { issue ->
+                            Text(issue.text, style = MaterialTheme.typography.bodyMedium)
+                            if (issue.bookId != null && issue.ordinal != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // A proposal: applied only with your yes; "No" is remembered and not proposed again.
+                                Button(onClick = { host.applySeries(issue.bookId, series, issue.ordinal, true); issues = issues?.minus(issue) }) { Text("Usa il n. ${issue.ordinal}") }
+                                TextButton(onClick = { scope.launch { repair.refuse(issue) }; issues = issues?.minus(issue) }) { Text("No, tengo il mio") }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         report?.let { r ->
             Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Column(Modifier.padding(16.dp)) {
