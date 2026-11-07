@@ -55,8 +55,9 @@ class LibraryIndexTest {
         assertEquals(listOf(a.id), LibraryIndex.search(dao, "final empire"))
         assertEquals(listOf(a.id), LibraryIndex.search(dao, "L’ULTIMO"))
         assertTrue(LibraryIndex.search(dao, "rosa").isEmpty())
-        assertEquals(listOf("The Final Empire", "L'ultimo impero").map { app.atlante.library.model.SearchIndex.normalize(it) }.toSet(),
-            LibraryIndex.catalogTitles[a.id]!!.filter { it in setOf("the final empire", "l ultimo impero") }.toSet())
+        // The book is linked to its catalog work in the index itself (not through a shared in-memory map, which a
+        // background sync started by another test may replace at the same moment).
+        assertEquals(listOf(a.id to "2778373"), dao.catalogLinks().map { it.bookId to it.catalogWork })
     }
 
     @Test fun sameTitleOtherAuthorIsNotTheCatalogWork() = runBlocking {
