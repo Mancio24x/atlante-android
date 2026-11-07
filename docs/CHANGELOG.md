@@ -6,6 +6,8 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Impostazioni in Compose** (`SettingsScreen.kt`): indice con ricerca; Lettura con anteprima del lettore e cursore
+  del testo; Lingua dei libri come scelta che si salva da sola (via «Salva lingua»); Privacy e progetto.
 - **Sync in Compose** (`SyncScreen.kt`), stesso aspetto (5a) e stesse azioni; schede bianche come nei design in
   Scopri, Statistiche e Universi.
 - **Biblioteca più fluida**: le celle della griglia vengono riusate durante lo scorrimento invece di essere

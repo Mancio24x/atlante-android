@@ -191,7 +191,7 @@ time.sleep(.4);shot('30-sync-koreader')
 assert any(n.get('text','')=='KOReader' for n in dump().iter('node')), 'KOReader not visible in Sync'
 tap('KOReader',True);tap('Impostazioni di KOReader',True);shot('31-koreader-settings');tap('Annulla',exact=True)
 open_settings();shot('32-settings-page')
-assert any(n.get('text','')=='Libreria e catalogo' for n in dump().iter('node')), 'Settings is not a dedicated page'
+assert any(v.startswith('Libreria e catalogo') for n in dump().iter('node') for v in (n.get('text',''),n.get('content-desc',''))), 'Settings is not a dedicated page'
 back();assert any(n.get('text','')=='KOReader' for n in dump().iter('node')), 'Back did not restore Sync'
 
 # Multi-source metadata: the review page opens and lists the catalogs consulted (nothing is applied automatically).

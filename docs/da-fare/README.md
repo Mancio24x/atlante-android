@@ -60,7 +60,7 @@ ordine), workflow UI preview.
 - Scorrimento della Biblioteca: `BookAdapter` ora riusa le celle della griglia (`Cards.rebind`, `MainActivity.CoverCell`):
   nessuna vista nuova durante lo scorrimento. Da misurare su telefono vero (`dumpsys gfxinfo`).
 - `MainActivity.java`: spostare in Compose una schermata alla volta. **Sync fatto** (`ui/compose/SyncScreen.kt`,
-  `SyncState` + `SyncHost`, le azioni restano i metodi di prima); resta Impostazioni.
+  `SyncState` + `SyncHost`, le azioni restano i metodi di prima); **Impostazioni fatto** per l'indice e le pagine Lettura, Lingua dei libri, Privacy (`ui/compose/SettingsScreen.kt`); Aspetto, Obiettivi, Libreria e Hardcover usano ancora i loro componenti (temi, `GoalsView`, catalogo).
 - Transizioni degli stati: fatto, tutte le 16 combinazioni in `StatusMatrixTest` (pagina, percentuale, date).
 - Statistiche: fatto, `StatsAfterMergeTest` (unioni e riletture contano una volta sola; nessun errore trovato).
 

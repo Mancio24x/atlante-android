@@ -66,12 +66,12 @@ tap('Biblioteca',exact=True);tap('Apri menu laterale');tap('Impostazioni');shot(
 def page_texts():
     texts=set()
     for _ in range(12):
-        texts.update(n.get('text','') for n in dump().iter('node'))
+        for n in dump().iter('node'): texts.update(v for v in (n.get('text',''),n.get('content-desc','')) if v)
         adb('shell','input','swipe','540','1250','540','550','250');time.sleep(.2)
     return texts
 # Settings are an index (design 6a): no backup entries there; the import is in "Libreria e catalogo".
 texts=page_texts()
-assert 'Libreria e catalogo' in texts and 'Obiettivi di lettura' in texts, 'Settings index missing'
+assert any(t.startswith('Libreria e catalogo') for t in texts) and any(t.startswith('Obiettivi di lettura') for t in texts), 'Settings index missing'
 assert not any(x in texts for x in ['Importa catalogo','Catalogo e backup','Esporta backup','Ripristina o importa un catalogo'])
 tap('Libreria e catalogo',True);texts=page_texts()
 assert 'Importa eBook' in texts

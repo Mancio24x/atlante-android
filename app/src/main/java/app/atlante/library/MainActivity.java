@@ -282,7 +282,7 @@ public final class MainActivity extends AppCompatActivity {
             case "libreria": return R.drawable.ic_library_check; case "hardcover": return R.drawable.ic_link; default: return R.drawable.ic_info; }
     }
     private void settingsPage(LinearLayout panel) {
-        if (settingsSection.isEmpty()) { settingsIndex(panel); return; }
+        if (settingsSection.isEmpty()) { panel.addView(settingsCompose(""), new LinearLayout.LayoutParams(-1, -2)); return; }
         TextView back = text("‹ Tutte le impostazioni", 14, SAGE, false); back.setMinHeight(dp(44)); back.setGravity(Gravity.CENTER_VERTICAL); back.setPadding(dp(4), 0, dp(4), 0);
         back.setContentDescription("Torna a tutte le impostazioni"); back.setOnClickListener(v -> { settingsSection = ""; showCompanion(); }); panel.addView(back); gap(panel, 8);
         switch (settingsSection) {
@@ -296,25 +296,7 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(app.atlante.library.ui.compose.GoalsView.create(this, palette, getPreferences(MODE_PRIVATE), store.snapshot())); gap(panel,20);
 
                 break;
-            case "lettura": {
-        MaterialSwitch dark = new MaterialSwitch(this); dark.setText("Lettore scuro"); dark.setTextSize(16); dark.setChecked(readerDark); dark.setMinHeight(dp(48));
-        panel.addView(dark);
-        dark.setOnCheckedChangeListener((v, checked) -> { readerDark=checked; getPreferences(MODE_PRIVATE).edit().putBoolean("dark",checked).apply(); });
-        TextView label = text("Dimensione del testo · " + Math.round(fontSize),15,INK,false); panel.addView(label);
-        TextView sample=text("Il piacere di leggere, una pagina alla volta.",fontSize,INK,true); panel.addView(sample);
-        Slider font = new Slider(this); font.setValueFrom(8); font.setValueTo(80); font.setStepSize(1); font.setValue(Math.round(fontSize));
-        font.setContentDescription("Dimensione del testo del lettore"); panel.addView(font);
-        font.addOnChangeListener((slider, value, fromUser) -> { if (fromUser) { fontSize = value; sample.setTextSize(value); label.setText("Dimensione del testo · " + Math.round(fontSize)); getPreferences(MODE_PRIVATE).edit().putFloat("fontSize", fontSize).apply(); } });
-                break; }
-            case "lingua": {
-        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
-        ArrayList<String> languages=new ArrayList<>();
-        for(String[] l:OnlineCatalog.LANGUAGES) languages.add(l[2]);
-        Picker language=new Picker(panel,"Lingua preferita per le ricerche",languages,OnlineCatalog.languageName(prefs.getString("bookLanguage","ita")));
-        MaterialSwitch only=new MaterialSwitch(this); only.setText("Cerca solo libri nella lingua scelta"); only.setChecked(prefs.getBoolean("onlyLanguage",false)); panel.addView(only);
-        panel.addView(button("Salva lingua",false,()->{ prefs.edit().putString("bookLanguage",OnlineCatalog.LANGUAGES[language.position()][0]).putBoolean("onlyLanguage",only.isChecked()).apply(); Toast.makeText(this,"Lingua di ricerca salvata",Toast.LENGTH_SHORT).show(); }));
-        panel.addView(text("Lingua dell’interfaccia: italiano.",12,MUTED,false));
-                break; }
+            case "lettura": case "lingua": panel.addView(settingsCompose(settingsSection), new LinearLayout.LayoutParams(-1, -2)); break;
             case "libreria": {
         MaterialButton importBooks = (MaterialButton) button("Importa eBook", true, this::chooseBooks); importBooks.setIconResource(R.drawable.ic_add); importBooks.setEnabled(!busy);
         panel.addView(importBooks, new LinearLayout.LayoutParams(-1,-2));
@@ -334,43 +316,27 @@ public final class MainActivity extends AppCompatActivity {
 
                 break; }
             case "hardcover": hardcoverSection(panel); break;
-            default:
-        panel.addView(text("Le ricerche online (SBN, Open Library, Wikidata, Apple Books e Hardcover se hai inserito la chiave) inviano solo titolo, autore o ISBN. Libri e note personali restano sul dispositivo.",12,MUTED,false));
-        panel.addView(button("Progetto e aggiornamenti",false,() -> startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/Mancio24x/atlante-android")))));
+            default: panel.addView(settingsCompose("info"), new LinearLayout.LayoutParams(-1, -2));
                 break;
         }
     }
     private TextView hint(String value) { TextView t = text(value, 13, MUTED, false); t.setPadding(dp(4), 0, dp(4), dp(14)); return t; }
-    private void settingsIndex(LinearLayout panel) {
-        LinearLayout pill = row(); pill.setPadding(dp(14), 0, dp(14), 0); GradientDrawable shape = background(WHITE, LINE); shape.setCornerRadius(dp(24)); pill.setBackground(shape);
-        panel.addView(pill, new LinearLayout.LayoutParams(-1, dp(48)));
-        ImageView glass = new ImageView(this); glass.setImageResource(R.drawable.ic_search); glass.setColorFilter(MUTED); pill.addView(glass, new LinearLayout.LayoutParams(dp(20), dp(20)));
-        EditText search = new EditText(this); search.setBackground(null); search.setSingleLine(true); search.setTextSize(15); search.setTextColor(INK); search.setHintTextColor(MUTED);
-        search.setHint("Cerca nelle impostazioni"); search.setPadding(dp(10), 0, 0, 0); pill.addView(search, new LinearLayout.LayoutParams(0, -1, 1));
-        LinearLayout rows = column(); panel.addView(rows, new LinearLayout.LayoutParams(-1, -2));
-        Runnable fill = () -> {
-            rows.removeAllViews(); String q = search.getText().toString().trim().toLowerCase(Locale.ITALIAN);
-            String group = ""; LinearLayout list = null; int shown = 0;
-            for (String[] r : SETTINGS) {
-                String value = settingsValue(r[1]);
-                if (!q.isEmpty() && !(r[2] + " " + value + " " + r[3]).toLowerCase(Locale.ITALIAN).contains(q)) continue;
-                if (!r[0].equals(group)) { group = r[0]; TextView l = sectionLabel(group); l.setTextSize(11); l.setPadding(dp(4), dp(22), dp(4), dp(8)); rows.addView(l); list = listCard(rows); }
-                String key = r[1]; LinearLayout line = listRow(list, settingsIcon(key), r[2], value, () -> { settingsSection = key; showCompanion(); companionScroll.post(() -> companionScroll.scrollTo(0, 0)); });
-                if (key.equals("libreria")) { int problems = getPreferences(MODE_PRIVATE).getInt("qualityProblems", 0);
-                    if (problems > 0) { TextView badge = text(Integer.toString(problems), 12, ON_ACCENT, false); badge.setGravity(Gravity.CENTER); badge.setPadding(dp(7), 0, dp(7), 0); badge.setMinWidth(dp(22));
-                        GradientDrawable g = background(COPPER, Color.TRANSPARENT); g.setCornerRadius(dp(11)); badge.setBackground(g); line.addView(badge, line.getChildCount() - 1, new LinearLayout.LayoutParams(-2, dp(22))); } }
-                shown++;
-            }
-            if (shown == 0) { TextView none = text("Nessuna impostazione per «" + q + "».", 14, MUTED, false); none.setGravity(Gravity.CENTER); none.setPadding(0, dp(40), 0, 0); rows.addView(none, new LinearLayout.LayoutParams(-1, -2)); }
-        };
-        search.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence c, int a, int b, int d) { }
-            public void onTextChanged(CharSequence c, int a, int b, int d) { fill.run(); }
-            public void afterTextChanged(Editable e) { }
+    /** The Compose part of the settings (design 6a): the index and the Lettura, Lingua and Privacy pages. */
+    private View settingsCompose(String page) {
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        ArrayList<app.atlante.library.ui.compose.SettingsRow> rows = new ArrayList<>();
+        for (String[] r : SETTINGS) rows.add(new app.atlante.library.ui.compose.SettingsRow(r[0], r[1], r[2], settingsValue(r[1]), settingsIcon(r[1]), r[3], r[1].equals("libreria") ? prefs.getInt("qualityProblems", 0) : 0));
+        ArrayList<String> languages = new ArrayList<>(); int chosen = 0; String code = prefs.getString("bookLanguage", "ita");
+        for (int i = 0; i < OnlineCatalog.LANGUAGES.length; i++) { languages.add(OnlineCatalog.LANGUAGES[i][2]); if (OnlineCatalog.LANGUAGES[i][0].equals(code)) chosen = i; }
+        app.atlante.library.ui.compose.SettingsState state = new app.atlante.library.ui.compose.SettingsState(rows, readerDark, fontSize, languages, chosen, prefs.getBoolean("onlyLanguage", false));
+        return app.atlante.library.ui.compose.SettingsView.create(this, palette, page, state, new app.atlante.library.ui.compose.SettingsHost() {
+            @Override public void open(String key) { settingsSection = key; showCompanion(); if (companionScroll != null) companionScroll.post(() -> { if (companionScroll != null) companionScroll.scrollTo(0, 0); }); }
+            @Override public void setReaderDark(boolean dark) { readerDark = dark; prefs.edit().putBoolean("dark", dark).apply(); }
+            @Override public void setFontSize(float size) { fontSize = size; prefs.edit().putFloat("fontSize", size).apply(); }
+            @Override public void setLanguage(int index) { prefs.edit().putString("bookLanguage", OnlineCatalog.LANGUAGES[index][0]).apply(); }
+            @Override public void setOnlyLanguage(boolean only) { prefs.edit().putBoolean("onlyLanguage", only).apply(); }
+            @Override public void openProject() { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Mancio24x/atlante-android"))); }
         });
-        fill.run();
-        TextView version = text("Atlante · interfaccia in italiano", 12, MUTED, false); version.setGravity(Gravity.CENTER); version.setPadding(0, dp(24), 0, 0);
-        panel.addView(version, new LinearLayout.LayoutParams(-1, -2));
     }
 
     /**
