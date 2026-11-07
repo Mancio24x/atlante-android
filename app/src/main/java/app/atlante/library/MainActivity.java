@@ -1365,7 +1365,7 @@ public final class MainActivity extends AppCompatActivity {
 
     /** Changes the state with the obvious side effects on dates and pages. */
     private void changeStatus(Book b, String status) {
-        b.status = status; Book.applyStatusEffects(b, java.time.LocalDate.now().toString()); save();
+        Book.changeStatus(b, status, java.time.LocalDate.now().toString()); save();
     }
     /** Stars with an optional half: 3.5 → ★★★½☆. */
     static String stars(double rating) {
@@ -1400,8 +1400,9 @@ public final class MainActivity extends AppCompatActivity {
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String start = started.getText().toString().trim(), end = finished.getText().toString().trim();
             if (!start.isEmpty() && !end.isEmpty() && start.compareTo(end) > 0) { finished.setError("La fine precede l’inizio"); return; }
-            b.status = Book.STATES[states.indexOfChild(states.findViewById(states.getCheckedButtonId()))];
+            String chosen = Book.STATES[states.indexOfChild(states.findViewById(states.getCheckedButtonId()))];
             b.started = start; b.finished = end;
+            if (!chosen.equals(b.status)) Book.changeStatus(b, chosen, java.time.LocalDate.now().toString());
             b.rating = Math.round(rating.getValue()); ReadingJournal.put(b, "rating", (double) rating.getValue()); b.notes = notes.getText().toString();
             Book.applyStatusEffects(b, java.time.LocalDate.now().toString());
             try { store.replace(b); } catch (Exception e) { error(e); return; }
@@ -1456,11 +1457,13 @@ public final class MainActivity extends AppCompatActivity {
         Bitmap image = b.onlineCover == null ? cover(b) : decode(null, b.onlineCover, 700);
         ImageView previewCover = new ImageView(this); previewCover.setScaleType(ImageView.ScaleType.FIT_CENTER);
         previewCover.setContentDescription("Copertina di " + b.title);
-        if (image != null) {
-            previewCover.setImageBitmap(image); panel.addView(previewCover, new LinearLayout.LayoutParams(-1, dp(220)));
-        } else if (b.coverId > 0 || !b.isbn.isEmpty()) {
-            previewCover.setBackground(background(PAPER,LINE)); panel.addView(previewCover,new LinearLayout.LayoutParams(-1,dp(220)));
-        }
+        // Always the same place and size for the cover: one found later appears there, and nothing below moves.
+        if (image != null) previewCover.setImageBitmap(image); else previewCover.setBackground(background(PAPER,LINE));
+        panel.addView(previewCover, new LinearLayout.LayoutParams(-1, dp(220)));
+        // The main action right under the cover (not in the dialog's bar, which moved while the sheet loaded).
+        MaterialButton primary = (MaterialButton) button("Aggiungi alla mia libreria", true, () -> { });
+        LinearLayout.LayoutParams primaryParams = new LinearLayout.LayoutParams(-1, -2); primaryParams.topMargin = dp(12);
+        panel.addView(primary, primaryParams);
         // An imported file: title and author can be corrected before adding (a TXT has no metadata at all).
         boolean file = !b.format.equals("CATALOGO") && store.original(b).isFile();
         EditText titleField = null, authorField = null;
@@ -1491,9 +1494,8 @@ public final class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this); scroll.addView(panel);
         final EditText editedTitle = titleField, editedAuthor = authorField;
         AlertDialog.Builder builder = dialogBuilder().setTitle(file ? "Importa eBook" : "Anteprima del libro").setView(scroll).setNegativeButton(duplicate != null ? "Annulla" : "Non aggiungere", null);
-        if (duplicate == null) builder.setPositiveButton("Aggiungi alla mia libreria", null);
-        else if (canAttach) builder.setPositiveButton("Collega il file", null);
-        else builder.setPositiveButton("Aggiungi come edizione", null);
+        String action = duplicate == null ? "Aggiungi alla mia libreria" : canAttach ? "Collega il file" : "Aggiungi come edizione";
+        builder.setPositiveButton(action, null); primary.setText(action);
         if(file)builder.setNeutralButton("Cerca metadati online",null);
         AlertDialog dialog = builder.create();
         dialog.setOnShowListener(d -> {
@@ -1503,6 +1505,9 @@ public final class MainActivity extends AppCompatActivity {
                 dialog.dismiss();importMetadata(b,next,null);
             });
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> { store.discardCandidate(b); dialog.dismiss(); next.run(); });
+            // The bar keeps only "Non aggiungere"; the button under the cover does what the bar's button did.
+            Button barAction = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            if (barAction != null) { barAction.setVisibility(View.GONE); primary.setOnClickListener(v -> barAction.performClick()); }
             if (dialog.getButton(AlertDialog.BUTTON_POSITIVE) != null) dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 try {
                     if (editedTitle != null) {
@@ -1571,7 +1576,7 @@ public final class MainActivity extends AppCompatActivity {
                     if (score > top) { top = score; found = c; }
                 }
                 if (top < BookMatcher.SAME_TITLE_AND_AUTHOR) found = null;
-                if (found != null) { if (found.source.startsWith("sbn:")) SbnCatalog.enrich(found); else OnlineCatalog.enrich(found, "ita"); }
+                if (found != null) { if (found.source.startsWith("sbn:")) SbnCatalog.enrich(found); else OnlineCatalog.enrich(found, "ita"); app.atlante.library.online.PlotFinder.fill(found, catalogDao()); }
             } catch (Exception ignored) { found = null; }
             final Book book = found;
             runOnUiThread(() -> {
@@ -1646,6 +1651,7 @@ public final class MainActivity extends AppCompatActivity {
                                     try {
                                         if (candidate.source.startsWith("sbn:")) SbnCatalog.enrich(candidate);
                                         else OnlineCatalog.enrich(candidate, code.isEmpty() ? "ita" : code);
+                                        app.atlante.library.online.PlotFinder.fill(candidate, catalogDao());
                                         runOnUiThread(() -> { loading.dismiss(); if (!isFinishing() && !isDestroyed()) preview(candidate, () -> { dialog.dismiss(); showLibrary(); }); });
                                     } catch (Exception e) { runOnUiThread(() -> { loading.dismiss(); if (!isFinishing() && !isDestroyed()) error(e); }); }
                                 });

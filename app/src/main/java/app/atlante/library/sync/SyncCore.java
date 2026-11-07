@@ -70,7 +70,7 @@ public final class SyncCore {
 
     /** Applies a remote snapshot to a book, with the usual side effects of a state change. */
     public static void apply(Book b, Snapshot s, boolean chapters, boolean ratings, String today) {
-        b.status = s.status;
+        if (!s.status.equals(b.status)) Book.changeStatus(b, s.status, today);
         if (s.relevantPage() > 0) { b.currentPage = b.totalPages > 0 ? Math.min(s.page, b.totalPages) : s.page; if (b.totalPages > 0) b.percent = Math.round(100f * b.currentPage / b.totalPages); }
         if (chapters && !s.chapter.isEmpty()) ReadingJournal.put(b, "chapter", s.chapter);
         if (ratings && s.rating > 0) { ReadingJournal.put(b, "rating", s.rating); b.rating = (int) Math.round(s.rating); }

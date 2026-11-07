@@ -69,6 +69,31 @@ public final class Book {
     public int page;
 
     /** A book being read gets a start date, a finished one an end date and all its pages. */
+    /**
+     * A new reading state chosen by you (or by a sync), with what it implies:
+     * - back to "Da leggere": pages and percentage go to 0. A book marked read today is a mistaken tap, its
+     *   completion is undone; one read on an earlier day keeps that reading in its history (statistics stay).
+     * - from "Letto" to "In lettura" or "In pausa" the same day: the completion is undone.
+     */
+    public static void changeStatus(Book b, String status, String today) {
+        String before = b.status;
+        if (before.equals(READ) && !status.equals(READ) && !b.finished.isEmpty()) {
+            if (!b.finished.equals(today)) {
+                try {
+                    org.json.JSONArray a = ReadingJournal.array(b, "attempts");
+                    a.put(new JSONObject().put("number", ReadingJournal.attempt(b)).put("started", b.started).put("finished", b.finished)
+                        .put("page", b.currentPage).put("percent", b.percent));
+                    ReadingJournal.put(b, "attempts", a); ReadingJournal.put(b, "attempt", ReadingJournal.attempt(b) + 1);
+                } catch (JSONException e) { throw new IllegalArgumentException(e); }
+            }
+            b.finished = "";
+        }
+        if (status.equals(TO_READ)) { b.currentPage = 0; b.percent = 0; if (!before.equals(TO_READ)) b.started = ""; }
+        else if (before.equals(READ) && b.totalPages > 0 && b.currentPage >= b.totalPages) { b.currentPage = 0; b.percent = 0; }
+        b.status = status;
+        applyStatusEffects(b, today);
+    }
+
     public static void applyStatusEffects(Book b, String today) {
         if (b.status.equals(READING) && b.started.isEmpty()) b.started = today;
         if (b.status.equals(READ)) {

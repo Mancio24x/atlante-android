@@ -39,7 +39,7 @@ report = []
 def note(line): print(line); report.append(line)
 
 # 1. Scopri with an empty cache: the covers come from the network.
-adb('shell', 'run-as', package, 'sh', '-c', 'rm -rf cache/suggestion-covers cache/*')
+subprocess.call(['adb', 'shell', 'run-as', package, 'sh', '-c', 'rm -rf cache/suggestion-covers cache/* ; true'])
 start(); adb('logcat', '-c')
 tap('Scopri'); cold = perf_lines()
 note('Scopri, cache vuota:'); [note('  ' + l) for l in cold] or note('  (nessuna misura: rete non disponibile?)')
