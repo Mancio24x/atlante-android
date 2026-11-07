@@ -62,24 +62,31 @@ adb('shell','am','force-stop',package)
 adb('push',str(seed),'/data/local/tmp/atlante-sample.json')
 adb('shell','run-as',package,'cp','/data/local/tmp/atlante-sample.json','files/library.json')
 adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
+def leave_settings():
+    for _ in range(3):
+        if any(n.get('text','')=='Home' for n in dump().iter('node')): return
+        adb('shell','input','keyevent','4');time.sleep(.5)
+def open_settings():
+    # Home and Sync have the settings button in the top bar; the library (design 3a) reaches them from the menu.
+    if not any(n.get('content-desc','')=='Impostazioni' or n.get('text','')=='Impostazioni' for n in dump().iter('node')): tap('Apri menu laterale')
+    tap('Impostazioni')
 tap('Biblioteca',exact=True);shot('01-library')
 tap('Apri menu laterale');shot('02-drawer');tap('Chiudi menu laterale')
 # The preset themes are in a section that opens and closes ("Temi predefiniti").
-tap('Impostazioni');shot('03-settings');tap('Aspetto',True);shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
+open_settings();shot('03-settings');tap('Aspetto',True);shot('04-theme-picker');tap('Rosa petalo',True);shot('05-rose')
 for theme,name in [('Lavanda','06-lavender'),('Blu polvere','07-blue'),('AMOLED nero','08-amoled')]:
-    tap('Impostazioni');tap('Aspetto',True);tap(theme,True);shot(name)
+    open_settings();tap('Aspetto',True);tap(theme,True);shot(name)
 tap('Apri menu laterale');tap('Mappa');shot('09-map-amoled')
-# The map is full screen with an author search on top.
+# The map is full screen with the authors as chips on top.
 tap('Anna Costa');time.sleep(.6);shot('09a-map-authors')
-# The suggestion list is a separate popup window that uiautomator cannot see: choose with the keyboard.
-adb('shell','input','text','Luca');time.sleep(.8)
-adb('shell','input','keyevent','KEYCODE_DPAD_DOWN');adb('shell','input','keyevent','KEYCODE_ENTER');time.sleep(.6)
+# Design 7c: authors as chips; the search button lists them all.
+tap('Cerca un autore');time.sleep(.8);tap('Luca Moretti',exact=True);time.sleep(.6)
 shot('09b-map-author')
 assert any('Luca Moretti' in n.get('text','') for n in dump().iter('node')), 'Map author not selected'
 tap('Apri menu laterale');tap('Tutti i libri');shot('10-library-amoled')
 # The persisted theme must survive a process restart.
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1)
-tap('Impostazioni');tap('Aspetto',True)
+open_settings();tap('Aspetto',True)
 state=dump()
 def visible(fragment, scroll=False):
     for _ in range(8 if scroll else 1):
@@ -99,7 +106,7 @@ def status(title): return next(b for b in catalog() if b['title']==title)['statu
 # Reading states: chips filter the library; the full-screen book page changes state with one tap.
 # After the restart the app opens on Home: go to the library first.
 tap('Biblioteca',exact=True);time.sleep(.6)
-tap('In lettura',exact=True);shot('12a-chip-reading')
+tap('In lettura  ');shot('12a-chip-reading')
 tap('Il giardino delle storie');shot('12b-book-page')
 tap('Letto',exact=True);time.sleep(.8)
 book=next(b for b in catalog() if b['title']=='Il giardino delle storie')
@@ -109,7 +116,7 @@ tap('In pausa',True,exact=True);time.sleep(.6)
 assert status('Il giardino delle storie')=='In pausa', 'Paused state not saved'
 tap('Date, voto e note',True);shot('12e-paused-editor');tap('Salva',exact=True);time.sleep(.6)
 assert status('Il giardino delle storie')=='In pausa', 'Editor changed the paused state'
-back();tap('Tutti',exact=True)
+back();tap('Tutti  ')
 # Chapters: added with a wheel, then rated with stars and a comment.
 tap('Il sentiero di casa');tap('Capitoli',True);tap('Aggiungi capitoli',True);tap('Aggiungi',exact=True)
 tap('Capitolo 1',True,exact=True);shot('12f-chapter');tap('Salva',exact=True)
@@ -139,7 +146,7 @@ assert manual.get('isbn','')=='', 'Manual book unexpectedly requires ISBN'
 shot('13-manual-book');back()
 tap('Elenco');tap('Elenco',exact=True);shot('14-list-view')
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity')
-tap('Impostazioni');back()
+open_settings();back()
 tap('Biblioteca',exact=True);time.sleep(.6)   # after a restart the app opens on Home
 assert any('Griglia' in (n.get('text',''),n.get('content-desc','')) for n in dump().iter('node')), 'List preference was not restored'
 assert any(b['title']=='AtlanteManualeProva' for b in catalog()), 'Manual book lost after restart'
@@ -148,7 +155,7 @@ shot('15-manual-and-list-restored')
 tap('Home',exact=True);shot('16-home')
 tap('Statistiche',exact=True);shot('17-statistics')
 # Genres: one horizontal bar per main genre ("Epic Fantasy" and "Fantasy" together), counts at the end.
-assert visible('Generi nella tua biblioteca',True), 'Genre chart missing'
+assert visible('Generi',True), 'Genre chart missing'
 def has_bar():
     return any(n.get('content-desc','').startswith('Fantasy:') for n in dump().iter('node'))
 for _ in range(4):
@@ -165,7 +172,7 @@ shot('18-discover')
 assert sum(1 for n in dump().iter('node') if ' di ' in n.get('content-desc',''))>=6, 'Discover grid has fewer than six books'
 tap('Fantasy',exact=True)
 for _ in range(40):
-    if any(n.get('text','')=='Consigliati · Fantasy' for n in dump().iter('node')) and sum(1 for n in dump().iter('node') if ' di ' in n.get('content-desc',''))>=6: break
+    if any(n.get('text','')=='pagina 1' for n in dump().iter('node')) and sum(1 for n in dump().iter('node') if ' di ' in n.get('content-desc',''))>=6: break
     time.sleep(1.5)
 shot('18a-discover-fantasy')
 tap('Cerca titolo, autore o ISBN')
@@ -183,12 +190,12 @@ for _ in range(4): adb('shell','input','swipe','540','600','540','1500','300')
 time.sleep(.4);shot('30-sync-koreader')
 assert any(n.get('text','')=='KOReader' for n in dump().iter('node')), 'KOReader not visible in Sync'
 tap('KOReader',True);tap('Impostazioni di KOReader',True);shot('31-koreader-settings');tap('Annulla',exact=True)
-tap('Impostazioni');shot('32-settings-page')
-assert any('La tua biblioteca, come piace a te.' in n.get('text','') for n in dump().iter('node')), 'Settings is not a dedicated page'
-back();assert any('KOREADER' in n.get('text','') for n in dump().iter('node')), 'Back did not restore Sync'
+open_settings();shot('32-settings-page')
+assert any(n.get('text','')=='Libreria e catalogo' for n in dump().iter('node')), 'Settings is not a dedicated page'
+back();assert any(n.get('text','')=='KOReader' for n in dump().iter('node')), 'Back did not restore Sync'
 
 # Multi-source metadata: the review page opens and lists the catalogs consulted (nothing is applied automatically).
-tap('Biblioteca',exact=True);tap('Tutti',exact=True);tap('Il sentiero di casa',True)   # list view: the book may be further down
+tap('Biblioteca',exact=True);tap('Tutti  ');tap('Il sentiero di casa',True)   # list view: the book may be further down
 tap('Completa i dati online',True)
 for _ in range(60):
     if any('Fonti consultate' in n.get('text','') for n in dump().iter('node')): break
@@ -206,7 +213,7 @@ seed.write_text(json.dumps(records));adb('shell','am','force-stop',package)
 adb('push',str(seed),'/data/local/tmp/atlante-sample.json')
 adb('shell','run-as',package,'cp','/data/local/tmp/atlante-sample.json','files/library.json')
 adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(1.5)
-tap('Biblioteca',exact=True);tap('Tutti',exact=True);tap('Red Rising',True,exact=True)
+tap('Biblioteca',exact=True);tap('Tutti  ');tap('Red Rising',True,exact=True)
 found=False
 for _ in range(45):
     texts=[n.get('text','') for n in dump().iter('node')]
@@ -247,11 +254,11 @@ assert any(n.get('content-desc','').startswith('Copertina ') for n in dump().ite
 assert visible('Tutte ·'), 'Cover filters missing'
 tap('Chiudi',exact=True)
 back();tap('Apri menu laterale');tap('Universi',exact=True);time.sleep(1);shot('52a-universes')
-assert any(n.get('text','')=='Universi narrativi' for n in dump().iter('node')), 'Universes view missing'
-tap('Biblioteca',exact=True);tap('Tutti',exact=True)
+assert any(n.get('text','')=='Mondi narrativi' for n in dump().iter('node')), 'Universes view missing'
+tap('Biblioteca',exact=True);tap('Tutti  ')
 # The filter chip is at the end of the horizontal chip strip: scroll the strip sideways first.
 for node in dump().iter('node'):
-    if node.get('text','')=='Letti':
+    if node.get('text','').startswith('Letti'):
         b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));y=str((b[1]+b[3])//2)
         adb('shell','input','swipe','900',y,'100',y,'300');time.sleep(.5);break
 tap('Filtri e ordine');tap('Altri filtri');shot('52b-filters')
@@ -265,7 +272,7 @@ tap('Chiudi',exact=True)
 print('Saga carousels completed.')
 
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.
-back();tap('Apri menu laterale');tap('Impostazioni');tap('Libreria e catalogo',True);tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
+back();open_settings();tap('Libreria e catalogo',True);tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
 assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
 # Qualità del catalogo: every check with its count (its button is above the cache section: scroll back up first).
 for _ in range(4): adb('shell','input','swipe','540','600','540','1400','250');time.sleep(.3)
@@ -282,7 +289,7 @@ print('Cache settings completed.')
 # Ripara saghe: runs in the background on the whole sample library; the app stays usable; the result is in
 # Operazioni in background. The library itself is unchanged except empty saga fields.
 before=len(catalog())
-back();tap('Home',exact=True);tap('Impostazioni')   # Settings has no bottom bar: back, Home, then the top of the settings
+leave_settings();tap('Home',exact=True);open_settings()   # Settings has no bottom bar: back to the page under them, then Home
 tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)   # opens the section
 time.sleep(.6);adb('shell','input','swipe','540','1250','540','750','300');time.sleep(.6)
 buttons=[n for n in dump().iter('node') if n.get('text','')=='Ripara saghe']
@@ -290,8 +297,8 @@ b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
 adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
 time.sleep(2);shot('54-repair-sagas-started')
 # The app is usable meanwhile: the library opens, the progress bar is above the navigation.
-back();tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')   # Settings has no bottom bar
-tap('Home',exact=True);tap('Impostazioni');tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)
+leave_settings();tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')   # Settings has no bottom bar
+tap('Home',exact=True);open_settings();tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)
 tap('Operazioni in background',True)
 for _ in range(120):
     if any(n.get('text','')=='Completata' or n.get('text','').startswith('Completata ·') for n in dump().iter('node')): break
@@ -303,7 +310,7 @@ tap('Chiudi',exact=True)
 print('Repair completed.')
 
 # Bookcase: spines on shelves; a tap on a spine opens the book.
-back();tap('Biblioteca',exact=True);tap('Tutti',exact=True)
+leave_settings();tap('Biblioteca',exact=True);tap('Tutti  ')
 for node in dump().iter('node'):
     if node.get('content-desc','') in ('Griglia','Elenco'):
         b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2));break
@@ -323,7 +330,7 @@ assert any(n.get('text','').startswith('Avvia il timer') for n in dump().iter('n
 print('Bookcase completed.')
 
 # Custom theme: colours chosen by touch in a square and a hue bar, no colour codes; saved and applied.
-back();tap('Apri menu laterale');tap('Impostazioni');tap('Aspetto',True);tap('I miei temi',True);time.sleep(.6)
+back();open_settings();tap('Aspetto',True);tap('I miei temi',True);time.sleep(.6)
 assert not any('#RRGGBB' in n.get('text','') or re.fullmatch(r'#[0-9A-Fa-f]{6}',n.get('text','')) for n in dump().iter('node')), 'Colour codes still shown'
 tap('Modifica il colore Accento',True);time.sleep(.4)
 square=[n for n in dump().iter('node') if n.get('content-desc','').startswith('Saturazione e luminosità')]
