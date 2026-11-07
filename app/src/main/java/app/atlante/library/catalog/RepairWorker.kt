@@ -68,7 +68,9 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             Result.success()
         } catch (e: CancellationException) {
             // You stopped it: "cancelled"; Android stopped it: it will start again from the checkpoint.
-            val byYou = stopReason == WorkInfo.STOP_REASON_CANCELLED_BY_APP
+            // Android 12+ says why; before, WorkManager's own record says whether the work was cancelled.
+            val byYou = if (Build.VERSION.SDK_INT >= 31) stopReason == WorkInfo.STOP_REASON_CANCELLED_BY_APP
+                else runCatching { WorkManager.getInstance(c).getWorkInfoById(id).get(2, java.util.concurrent.TimeUnit.SECONDS)?.state == WorkInfo.State.CANCELLED }.getOrDefault(true)
             job = job.copy(state = if (byYou) "cancelled" else "queued",
                 phase = if (byYou) "Annullato" else "In pausa", finishedAt = System.currentTimeMillis(),
                 message = if (byYou) "Interrotta da te: le modifiche già applicate restano" else "Interrotta da Android: riprende da sola")
@@ -179,6 +181,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val books = store.snapshot().sortedBy { it.id }
         job = job.copy(total = books.size); save(force = true)
         var filled = job.found; var covers = 0; var offline = job.offline
+        val conflicts = runCatching { JSONObject(job.result).optJSONArray("fields") }.getOrNull() ?: JSONArray()
         val changed = ArrayList<Book>()
         for ((i, b) in books.withIndex()) {
             if (i < job.checkpoint) continue
@@ -189,7 +192,21 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 val copy = Book.from(b.json()); var any = false
                 if (copy.meta.optString("originalTitle").isEmpty() && work.originalTitle.isNotBlank() && app.atlante.library.model.SearchIndex.normalize(work.originalTitle) != app.atlante.library.model.SearchIndex.normalize(copy.title)) {
                     copy.meta.put("originalTitle", work.originalTitle); any = true }
-                if (copy.year.isEmpty() && work.year != null) { copy.year = work.year.toString(); any = true }
+                // The work's first publication (not your edition's year, which may be the Italian one).
+                if (copy.meta.optString("firstPublished").isEmpty() && work.year != null) { copy.meta.put("firstPublished", work.year.toString()); any = true }
+                val keepMine = copy.meta.optJSONArray("keepMine")?.let { k -> (0 until k.length()).map { k.optString(it) } }.orEmpty()
+                // Different from what you wrote: never changed here, proposed (and "Tieni il mio" is remembered).
+                if (copy.meta.optString("originalTitle").isNotEmpty() && work.originalTitle.isNotBlank() && "originalTitle" !in keepMine &&
+                    app.atlante.library.model.SearchIndex.normalize(copy.meta.optString("originalTitle")) != app.atlante.library.model.SearchIndex.normalize(work.originalTitle))
+                    conflicts.put(JSONObject().put("bookId", b.id).put("field", "originalTitle").put("value", work.originalTitle)
+                        .put("text", "«${b.title}»: titolo originale «${copy.meta.optString("originalTitle")}» nella scheda, «${work.originalTitle}» nel catalogo (Wikidata)"))
+                if (copy.series.isNotEmpty() && copy.number > 0 && "number" !in keepMine) catalog.entriesOf(work.id).forEach { e ->
+                    val s = catalog.series(e.seriesId) ?: return@forEach
+                    val same = app.atlante.library.ui.MapGroups.seriesKey(copy.series).let { k -> k == app.atlante.library.ui.MapGroups.seriesKey(s.name) || k == app.atlante.library.ui.MapGroups.seriesKey(s.italianName ?: "") }
+                    if (same && e.sortKey != null && e.sortKey != copy.number)
+                        conflicts.put(JSONObject().put("bookId", b.id).put("field", "number").put("value", e.ordinal).put("series", copy.series)
+                            .put("text", "«${b.title}»: n. ${Book.formatNumber(copy.number)} di ${copy.series} nella scheda, n. ${e.ordinal} nel catalogo (Wikidata)"))
+                }
                 if (copy.genre.isEmpty() && work.genre != null) { copy.genre = work.genre; any = true }
                 val ids = copy.meta.optJSONObject("ids") ?: JSONObject()
                 if (ids.optString("wikidata").isEmpty()) { ids.put("wikidata", "Q${work.id}"); any = true }
@@ -203,7 +220,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 }
             }
             // No cover at all: one online search (the catalog has no images, only their addresses).
-            if (!store.cover(b).isFile && b.meta.optString("coverSource") !in setOf("gallery", "online")) {
+            if (inputData.getBoolean(ONLINE, true) && !store.cover(b).isFile && b.meta.optString("coverSource") !in setOf("gallery", "online")) {
                 phase("Recupero online delle copertine")
                 val cover = runCatching { app.atlante.library.online.CoverSearch.best(b) }.getOrNull()
                 if (cover != null) runCatching { store.saveDownloadedCover(b, cover.bytes); covers++ }
@@ -213,8 +230,9 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             job = job.copy(done = i + 1, checkpoint = if (changed.isEmpty()) i + 1 else job.checkpoint, found = filled, offline = offline, applied = filled + covers); save()
         }
         if (changed.isNotEmpty()) store.replaceAll(changed)
-        job = job.copy(done = books.size, checkpoint = books.size, applied = filled + covers,
-            message = "$filled schede completate dal catalogo offline · $covers copertine trovate online"); save(force = true)
+        job = job.copy(done = books.size, checkpoint = books.size, applied = filled + covers, proposals = conflicts.length(),
+            result = JSONObject().put("fields", conflicts).toString(),
+            message = "$filled schede completate dal catalogo offline · $covers copertine trovate online" + if (conflicts.length() > 0) " · ${conflicts.length()} differenze da decidere" else ""); save(force = true)
     }
 
     private fun proposal(p: BibliographicEngine.Pair) = JSONObject().put("keep", p.keep.id).put("other", p.other.id)
@@ -242,7 +260,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     private fun info(): ForegroundInfo {
         val c = applicationContext
-        val text = if (job.total > 0) "${"%,d".format(job.done).replace(',', '.')} / ${"%,d".format(job.total).replace(',', '.')} libri analizzati — ${job.done * 100 / job.total}%" else job.phase
+        val text = progressText(job)
         val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_sync).setContentTitle(title(job.type))
             .setContentText(text).setSubText(job.phase).setOnlyAlertOnce(true).setOngoing(true).setSilent(true).setContentIntent(open(c))
             .setProgress(job.total, job.done, job.total == 0)
@@ -259,6 +277,14 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     companion object {
         const val TYPE = "type"; const val EVERYTHING = "everything"
+        /** false: only the offline catalog (no cover searched online). */
+        const val ONLINE = "online"
+
+        /** The notification's line: "650 / 1.000 libri analizzati — 65%"; the phase alone while the total is unknown. */
+        @JvmStatic fun progressText(j: RepairJob): String {
+            fun n(x: Int) = "%,d".format(java.util.Locale.ITALY, x)
+            return if (j.total > 0) "${n(j.done)} / ${n(j.total)} libri analizzati — ${j.done * 100 / j.total}%" else j.phase.ifEmpty { "Preparazione" }
+        }
         const val LIBRARY = "library"; const val HARDCOVER = "hardcover"; const val SAGAS = "sagas"; const val MAPS = "maps"; const val METADATA = "metadata"
         const val NAME = "atlante-repair"; const val TAG = "repair"
         private const val CHANNEL = "repair"; private const val NOTICE = 4201; private const val DONE = 4202

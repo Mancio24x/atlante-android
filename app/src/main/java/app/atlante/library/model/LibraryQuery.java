@@ -16,6 +16,20 @@ public final class LibraryQuery {
 
     /** Saga filter: "" all, {@link #IN_SAGA} books of a saga, {@link #SINGLE} books without saga, or a saga name. */
     public static final String IN_SAGA = "Solo libri di una saga", SINGLE = "Libri singoli";
+    /** Format filter: books with more than one edition in their record (merged or imported editions). */
+    public static final String MANY_EDITIONS = "Con più edizioni";
+
+    /** From the saga graph (SagaFilters): book id → its sagas, their parents and sub-series; book id → universe. */
+    public static volatile java.util.Map<String, java.util.Set<String>> graphSagas = new java.util.HashMap<>();
+    public static volatile java.util.Map<String, String> graphUniverses = new java.util.HashMap<>();
+
+    /** The book's own saga, or one of the sagas / sub-series the saga engine knows for it. */
+    public static boolean sagaMatches(Book b, String saga) {
+        if (saga.equalsIgnoreCase(b.series)) return true;
+        java.util.Set<String> known = graphSagas.get(b.id);
+        if (known != null) for (String s : known) if (s.equalsIgnoreCase(saga)) return true;
+        return false;
+    }
 
     /** Genre filter on the normalized genre ("Epic Fantasy" counts as Fantasy); a raw label still matches itself. */
     public static boolean genreMatches(Book b, String genre) {
@@ -55,11 +69,18 @@ public final class LibraryQuery {
      */
     public static ArrayList<Book> select(List<Book> books, String query, String tab,
             String genre, String format, String order, String saga, String author, String language, String decade) {
+        return select(books, query, tab, genre, format, order, saga, author, language, decade, "");
+    }
+
+    /** [universe]: books whose saga belongs to this narrative universe ("" any). */
+    public static ArrayList<Book> select(List<Book> books, String query, String tab,
+            String genre, String format, String order, String saga, String author, String language, String decade, String universe) {
         ArrayList<Book> result = new ArrayList<>();
         for (Book b : books) {
             if (!author.isEmpty() && !SearchIndex.sameAuthor(b, author)) continue;
             if (!language.isEmpty() && !language.equals(languageOf(b))) continue;
             if (!decade.isEmpty() && !decade.equals(decadeOf(b))) continue;
+            if (!universe.isEmpty() && !universe.equalsIgnoreCase(graphUniverses.get(b.id))) continue;
             if (tab.equals("Da leggere") && !b.status.equals(Book.TO_READ)) continue;
             if (tab.equals("In lettura") && !b.status.equals(Book.READING)) continue;
             if (tab.equals("Preferiti") && !b.journal.optBoolean("favorite")) continue;
@@ -67,10 +88,12 @@ public final class LibraryQuery {
             if (tab.startsWith("Scaffale: ") && !ReadingJournal.inCollection(b, tab.substring(10))) continue;
             if (tab.equals("Letti") && !b.status.equals(Book.READ)) continue;
             if (!genreMatches(b, genre)) continue;
-            if (saga.equals(IN_SAGA) && b.series.isEmpty()) continue;
-            if (saga.equals(SINGLE) && !b.series.isEmpty()) continue;
-            if (!saga.isEmpty() && !saga.equals(IN_SAGA) && !saga.equals(SINGLE) && !saga.equalsIgnoreCase(b.series)) continue;
-            if (!format.isEmpty() && !format.equals(b.format)) continue;
+            boolean inSaga = !b.series.isEmpty() || graphSagas.containsKey(b.id);
+            if (saga.equals(IN_SAGA) && !inSaga) continue;
+            if (saga.equals(SINGLE) && inSaga) continue;
+            if (!saga.isEmpty() && !saga.equals(IN_SAGA) && !saga.equals(SINGLE) && !sagaMatches(b, saga)) continue;
+            if (format.equals(MANY_EDITIONS)) { org.json.JSONArray e = b.meta.optJSONArray("editions"); if (e == null || e.length() == 0) continue; }
+            else if (!format.isEmpty() && !format.equals(b.format)) continue;
             result.add(b);
         }
         Comparator<Book> title = (a, b) -> EbookParser.naturalCompare(a.title, b.title);

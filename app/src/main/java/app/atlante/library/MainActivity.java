@@ -116,7 +116,7 @@ public final class MainActivity extends AppCompatActivity {
         uiHandler.postDelayed(this, 1000);
     }};
     private String tab = "Tutti i libri", query = "", mapAuthor = "", exportId;
-    private String filterGenre = "", filterFormat = "", filterSaga = "", sortOrder = "Titolo", filterAuthor = "", filterLanguage = "", filterDecade = "";
+    private String filterGenre = "", filterFormat = "", filterSaga = "", sortOrder = "Titolo", filterAuthor = "", filterLanguage = "", filterDecade = "", filterUniverse = "";
     /** Library tabs shown as chips; each one but the first is a reading state. */
     private static final String[] STATUS_TABS = {"Tutti i libri", "Da leggere", "In lettura", "In pausa", "Letti", "Preferiti"};
     private String coverBookId;
@@ -140,7 +140,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         filterGenre = prefs.getString("filterGenre", "");
         filterFormat = prefs.getString("filterFormat", ""); filterSaga = prefs.getString("filterSaga", ""); sortOrder = prefs.getString("sortOrder", "Titolo");
-        filterAuthor = prefs.getString("filterAuthor", ""); filterLanguage = prefs.getString("filterLanguage", ""); filterDecade = prefs.getString("filterDecade", "");
+        filterAuthor = prefs.getString("filterAuthor", ""); filterLanguage = prefs.getString("filterLanguage", ""); filterDecade = prefs.getString("filterDecade", ""); filterUniverse = prefs.getString("filterUniverse", "");
         listView = prefs.getBoolean("listView", false);
         OnlineCatalog.configure(new File(getCacheDir(), "catalog"));
         // Temporary data: expired suggestions and covers over the limit go away; sagas refresh in the background.
@@ -791,7 +791,15 @@ public final class MainActivity extends AppCompatActivity {
         for (Book b : store.snapshot()) { String g = app.atlante.library.saga.Genres.normalize(b.genre); if (g != null) count.merge(g, 1, Integer::sum); else if (!b.genre.isEmpty()) other++; }
         ArrayList<String> values = new ArrayList<>(); ArrayList<String> labels = new ArrayList<>();
         values.add(""); labels.add("Tutti i generi");
-        for (String g : app.atlante.library.saga.Genres.INSTANCE.getMain()) if (count.containsKey(g)) { values.add(g); labels.add(g + " · " + count.get(g)); }
+        Map<String, TreeMap<String, Integer>> subs = new HashMap<>();
+        for (Book b : store.snapshot()) { String g = app.atlante.library.saga.Genres.normalize(b.genre);
+            if (g != null && !b.genre.trim().equalsIgnoreCase(g)) subs.computeIfAbsent(g, k -> new TreeMap<>(String.CASE_INSENSITIVE_ORDER)).merge(b.genre.trim(), 1, Integer::sum); }
+        for (String g : app.atlante.library.saga.Genres.INSTANCE.getMain()) if (count.containsKey(g)) {
+            values.add(g); labels.add(g + " · " + count.get(g));
+            // Sub-genres as written in the sheets ("Epic Fantasy"): a filter of their own, under their genre.
+            TreeMap<String, Integer> under = subs.get(g);
+            if (under != null) for (Map.Entry<String, Integer> e : under.entrySet()) { values.add(e.getKey()); labels.add("    › " + e.getKey() + " · " + e.getValue()); }
+        }
         if (other > 0) { values.add(LibraryQuery.OTHER_GENRE); labels.add(LibraryQuery.OTHER_GENRE + " · " + other); }
         dialogBuilder().setTitle("Genere").setSingleChoiceItems(labels.toArray(new String[0]), Math.max(0, values.indexOf(filterGenre)), (d, which) -> {
             filterGenre = values.get(which); d.dismiss(); applyLibraryFilters();
@@ -833,12 +841,12 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private ArrayList<Book> filtered() {
-        return LibraryQuery.select(store.snapshot(), destination.equals("Biblioteca") && tab.equals("Mappa") ? "" : query, destination.equals("Cerca") ? "Tutti i libri" : tab, filterGenre, filterFormat, sortOrder, filterSaga, filterAuthor, filterLanguage, filterDecade);
+        return LibraryQuery.select(store.snapshot(), destination.equals("Biblioteca") && tab.equals("Mappa") ? "" : query, destination.equals("Cerca") ? "Tutti i libri" : tab, filterGenre, filterFormat, sortOrder, filterSaga, filterAuthor, filterLanguage, filterDecade, filterUniverse);
     }
 
-    private boolean hasFilters() { return !filterGenre.isEmpty() || !filterFormat.isEmpty() || !filterSaga.isEmpty() || !filterAuthor.isEmpty() || !filterLanguage.isEmpty() || !filterDecade.isEmpty(); }
-    private boolean hasMoreFilters() { return !filterFormat.isEmpty() || !filterSaga.isEmpty() || !filterLanguage.isEmpty() || !filterDecade.isEmpty(); }
-    private void clearFilters() { filterGenre = ""; filterFormat = ""; filterSaga = ""; filterAuthor = ""; filterLanguage = ""; filterDecade = ""; }
+    private boolean hasFilters() { return !filterGenre.isEmpty() || !filterFormat.isEmpty() || !filterSaga.isEmpty() || !filterAuthor.isEmpty() || !filterLanguage.isEmpty() || !filterDecade.isEmpty() || !filterUniverse.isEmpty(); }
+    private boolean hasMoreFilters() { return !filterFormat.isEmpty() || !filterSaga.isEmpty() || !filterLanguage.isEmpty() || !filterDecade.isEmpty() || !filterUniverse.isEmpty(); }
+    private void clearFilters() { filterGenre = ""; filterFormat = ""; filterSaga = ""; filterAuthor = ""; filterLanguage = ""; filterDecade = ""; filterUniverse = ""; }
 
     private void libraryFilters() {
         LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(4));
@@ -849,19 +857,23 @@ public final class MainActivity extends AppCompatActivity {
             String main = app.atlante.library.saga.Genres.normalize(book.genre);
             if (main != null) genres.add(main); else if (!book.genre.isEmpty()) other = true;
             if (!book.series.isEmpty()) sagas.add(book.series);
+            java.util.Set<String> known = LibraryQuery.graphSagas.get(book.id); if (known != null) sagas.addAll(known);   // sub-series and parent sagas too
         }
+        TreeSet<String> universes = new TreeSet<>(String.CASE_INSENSITIVE_ORDER); universes.addAll(LibraryQuery.graphUniverses.values());
         TreeSet<String> languageSet = new TreeSet<>(), decadeSet = new TreeSet<>();
         for (Book book : store.snapshot()) {
             String l = LibraryQuery.languageOf(book); if (!l.isEmpty()) languageSet.add(l);
             String d = LibraryQuery.decadeOf(book); if (!d.isEmpty()) decadeSet.add(d);
         }
         ArrayList<String> sagaOptions = new ArrayList<>(Arrays.asList("Tutte le saghe", LibraryQuery.IN_SAGA, LibraryQuery.SINGLE)); sagaOptions.addAll(sagas);
-        Picker saga = new Picker(panel, "Saga", sagaOptions, filterSaga);
+        Picker saga = new Picker(panel, "Saga o sotto-serie", sagaOptions, filterSaga);
+        ArrayList<String> universeOptions = new ArrayList<>(); universeOptions.add("Tutti gli universi"); universeOptions.addAll(universes);
+        Picker universe = new Picker(panel, "Universo narrativo", universeOptions, filterUniverse);
         ArrayList<String> languageOptions = new ArrayList<>(); languageOptions.add("Tutte le lingue"); languageOptions.addAll(languageSet);
         Picker language = new Picker(panel, "Lingua", languageOptions, filterLanguage);
         ArrayList<String> decadeOptions = new ArrayList<>(); decadeOptions.add("Tutti gli anni"); decadeOptions.addAll(decadeSet);
         Picker decade = new Picker(panel, "Anno di pubblicazione", decadeOptions, filterDecade);
-        Picker format = new Picker(panel, "Formato", Arrays.asList("Tutti i formati", "EPUB", "TXT", "CBZ", "AZW3", "CATALOGO"), filterFormat);
+        Picker format = new Picker(panel, "Formato ed edizioni", Arrays.asList("Tutti i formati", "EPUB", "TXT", "CBZ", "AZW3", "CATALOGO", LibraryQuery.MANY_EDITIONS), filterFormat);
         Picker order = new Picker(panel, "Ordina per", Arrays.asList("Titolo", "Autore", "Saga"), sortOrder);
         dialogBuilder().setTitle("Altri filtri e ordine").setView(panel)
             .setNegativeButton("Annulla", null)
@@ -871,13 +883,14 @@ public final class MainActivity extends AppCompatActivity {
                 filterDecade = decade.position() == 0 ? "" : decade.value();
                 filterFormat = format.position() == 0 ? "" : format.value();
                 filterSaga = saga.position() == 0 ? "" : saga.value();
+                filterUniverse = universe.position() == 0 ? "" : universe.value();
                 sortOrder = order.value(); applyLibraryFilters();
             }).show();
     }
 
     private void applyLibraryFilters() {
         getPreferences(MODE_PRIVATE).edit().putString("filterGenre", filterGenre).putString("filterAuthor", filterAuthor)
-            .putString("filterLanguage", filterLanguage).putString("filterDecade", filterDecade)
+            .putString("filterLanguage", filterLanguage).putString("filterDecade", filterDecade).putString("filterUniverse", filterUniverse)
             .putString("filterFormat", filterFormat).putString("filterSaga", filterSaga).putString("sortOrder", sortOrder).apply();
         showLibrary();
     }
@@ -944,7 +957,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         shownCount = count;
         // A new tab, search or filter starts from the top; edits to a book keep the scroll position.
-        String key = tab + "\n" + query + "\n" + filterGenre + "\n" + filterFormat + "\n" + filterSaga + "\n" + sortOrder + "\n" + filterAuthor + "\n" + filterLanguage + "\n" + filterDecade;
+        String key = tab + "\n" + query + "\n" + filterGenre + "\n" + filterFormat + "\n" + filterSaga + "\n" + sortOrder + "\n" + filterAuthor + "\n" + filterLanguage + "\n" + filterDecade + "\n" + filterUniverse;
         boolean changed = !key.equals(gridKey); gridKey = key;
         adapter.submit(list);
         if (changed) grid.scrollToPosition(0);
@@ -2152,6 +2165,16 @@ public final class MainActivity extends AppCompatActivity {
         @Override public void refuseNumber(long seriesId, String bookId, String ordinal) {
             worker.execute(() -> app.atlante.library.saga.SagaRepair.refuseBlocking(MainActivity.this, seriesId, bookId, ordinal));
         }
+        @Override public void applyField(String bookId, String field, String value, String series) {
+            if (field.equals("number")) { runOnUiThread(() -> sagaHost.applySeries(bookId, series, value, true)); return; }
+            worker.execute(() -> { Book x = store.find(bookId); if (x == null) return;
+                try { Book copy = Book.from(x.json()); copy.meta.put(field, value); store.replace(copy); } catch (Exception ignored) { } });
+        }
+        @Override public void keepMine(String bookId, String field) {
+            worker.execute(() -> { Book x = store.find(bookId); if (x == null) return;
+                try { Book copy = Book.from(x.json()); org.json.JSONArray k = copy.meta.optJSONArray("keepMine"); if (k == null) k = new org.json.JSONArray();
+                    k.put(field); copy.meta.put("keepMine", k); store.replace(copy); } catch (Exception ignored) { } });
+        }
         @Override public String undoLastMerge() {
             org.json.JSONObject last = app.atlante.library.storage.MergeHistory.removeLast(MainActivity.this);
             if (last == null) return "Nessuna unione da annullare.";
@@ -2618,7 +2641,7 @@ public final class MainActivity extends AppCompatActivity {
     @Override protected void onResume() {
         super.onResume();
         // Other titles of the books (original, Italian, editions) for the search, as the saga engine knows them now.
-        if (worker != null) worker.execute(() -> { app.atlante.library.catalog.LibraryIndex.syncBlocking(this); runOnUiThread(() -> { if (searching() && reading == null && detailId == null) renderContent(); }); });
+        if (worker != null) worker.execute(() -> { app.atlante.library.catalog.LibraryIndex.syncBlocking(this); app.atlante.library.saga.SagaFilters.load(this); runOnUiThread(() -> { if (searching() && reading == null && detailId == null) renderContent(); }); });
         if (store == null || widgetIntent == null) return;
         Intent i = widgetIntent; widgetIntent = null;
         String action = i.getAction();

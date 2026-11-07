@@ -40,6 +40,10 @@ interface OperationsHost {
     fun different(keep: String, other: String)
     fun applyNumber(bookId: String, series: String, ordinal: String)
     fun refuseNumber(seriesId: Long, bookId: String, ordinal: String)
+    /** A value from the catalog replaces yours ("originalTitle", "number"). */
+    fun applyField(bookId: String, field: String, value: String, series: String?)
+    /** "Tieni il mio": this field of this book is not proposed again. */
+    fun keepMine(bookId: String, field: String)
     /** Undoes the last merge; the message to show. */
     fun undoLastMerge(): String
 }
@@ -148,38 +152,59 @@ private fun Proposals(j: RepairJob, host: OperationsHost, onUpdate: (RepairJob) 
     val result = remember(j.result) { runCatching { JSONObject(j.result) }.getOrDefault(JSONObject()) }
     val merges = result.optJSONArray("merges") ?: JSONArray()
     val maps = result.optJSONArray("maps") ?: JSONArray()
+    val fields = result.optJSONArray("fields") ?: JSONArray()
     var errors by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     fun drop(key: String, index: Int) {
         val list = result.optJSONArray(key) ?: return
         val rest = JSONArray(); for (i in 0 until list.length()) if (i != index) rest.put(list.get(i))
         result.put(key, rest)
-        onUpdate(j.copy(result = result.toString(), proposals = (result.optJSONArray("merges")?.length() ?: 0) + (result.optJSONArray("maps")?.let { m -> (0 until m.length()).count { !m.getJSONObject(it).isNull("bookId") } } ?: 0)))
+        onUpdate(j.copy(result = result.toString(), proposals = (result.optJSONArray("merges")?.length() ?: 0) + (result.optJSONArray("fields")?.length() ?: 0) + (result.optJSONArray("maps")?.let { m -> (0 until m.length()).count { !m.getJSONObject(it).isNull("bookId") } } ?: 0)))
     }
-    if (merges.length() == 0 && maps.length() == 0) Text("Niente da decidere ✓", style = MaterialTheme.typography.bodyMedium)
+    if (merges.length() == 0 && maps.length() == 0 && fields.length() == 0) Text("Niente da decidere ✓", style = MaterialTheme.typography.bodyMedium)
     errors?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     for (i in 0 until merges.length()) {
         val m = merges.getJSONObject(i)
         val conflicts = m.optJSONArray("conflicts") ?: JSONArray()
         var ratingOther by remember(m.toString()) { mutableStateOf(false) }
         var reviewOther by remember(m.toString()) { mutableStateOf(false) }
+        // Which record is the main edition (its title, ISBN, file and cover stay first); the other joins it.
+        var swapped by remember(m.toString()) { mutableStateOf(false) }
+        val keepId = if (swapped) m.getString("other") else m.getString("keep")
+        val otherId = if (swapped) m.getString("keep") else m.getString("other")
         HorizontalDivider()
         Text("Corrispondenza ${m.optString("confidence")}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-        Text("Resta: " + m.optString("keepLine"), Modifier.clickable { host.openBook(m.getString("keep")) }, style = MaterialTheme.typography.bodyMedium)
-        Text("Si unisce: " + m.optString("otherLine"), Modifier.clickable { host.openBook(m.getString("other")) }, style = MaterialTheme.typography.bodyMedium)
+        Text("Edizione principale", style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(!swapped, { swapped = false }, label = { Text("Prima", maxLines = 1) })
+            FilterChip(swapped, { swapped = true }, label = { Text("Seconda", maxLines = 1) })
+        }
+        Text("Prima: " + m.optString("keepLine") + if (!swapped) "  ← resta" else "", Modifier.clickable { host.openBook(m.getString("keep")) }, style = MaterialTheme.typography.bodyMedium)
+        Text("Seconda: " + m.optString("otherLine") + if (swapped) "  ← resta" else "", Modifier.clickable { host.openBook(m.getString("other")) }, style = MaterialTheme.typography.bodyMedium)
+        Text("Dall’altra prende tutto ciò che manca: sessioni, note, voto, ISBN, file e copertina come edizione e copertina alternative.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("Perché: " + (0 until (m.optJSONArray("reasons")?.length() ?: 0)).joinToString("; ") { m.getJSONArray("reasons").getString(it) },
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (conflicts.length() > 0) {
             Text("Da scegliere: " + (0 until conflicts.length()).joinToString("; ") { conflicts.getString(it) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
             val text = conflicts.toString()
-            if (text.contains("voto")) Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(ratingOther, { ratingOther = it }); Text("Tieni il voto del secondo", style = MaterialTheme.typography.bodySmall) }
-            if (text.contains("recension")) Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(reviewOther, { reviewOther = it }); Text("Tieni la recensione del secondo", style = MaterialTheme.typography.bodySmall) }
+            if (text.contains("voto")) Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(ratingOther, { ratingOther = it }); Text("Tieni il voto dell’altra scheda", style = MaterialTheme.typography.bodySmall) }
+            if (text.contains("recension")) Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(reviewOther, { reviewOther = it }); Text("Tieni la recensione dell’altra scheda", style = MaterialTheme.typography.bodySmall) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { scope.launch { val e = withContext(Dispatchers.IO) { host.merge(m.getString("keep"), m.getString("other"), ratingOther, reviewOther) }
+            Button(onClick = { scope.launch { val e = withContext(Dispatchers.IO) { host.merge(keepId, otherId, ratingOther, reviewOther) }
                 if (e == null) drop("merges", i) else errors = e } }) { Text("Unisci") }
             OutlinedButton(onClick = { host.different(m.getString("keep"), m.getString("other")); drop("merges", i) }) { Text("Non unire") }
             TextButton(onClick = { }) { Text("Dopo") }
+        }
+    }
+    for (i in 0 until fields.length()) {
+        val f = fields.getJSONObject(i)
+        HorizontalDivider()
+        Text(f.optString("text"), Modifier.clickable { host.openBook(f.getString("bookId")) }, style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { host.applyField(f.getString("bookId"), f.getString("field"), f.getString("value"), f.optString("series").ifEmpty { null }); drop("fields", i) }) { Text("Usa quello del catalogo") }
+            OutlinedButton(onClick = { host.keepMine(f.getString("bookId"), f.getString("field")); drop("fields", i) }) { Text("Tieni il mio") }
         }
     }
     for (i in 0 until maps.length()) {

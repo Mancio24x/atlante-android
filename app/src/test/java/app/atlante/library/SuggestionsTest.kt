@@ -110,6 +110,17 @@ class SuggestionsTest {
         library[0].series = ""; library[0].number = 0.0
     }
 
+    /** The map links the other sagas of the same universe (Cosmere), not the saga's own sub-series. */
+    @Test fun universeSagasAreLinkedNotListed() = runBlocking {
+        val cosmere = dao.insertUniverse(UniverseEntity(name = "Cosmere", wikidataId = "Q1"))
+        val mistborn = dao.insertSeries(SeriesEntity(name = "Mistborn", wikidataId = "Q2", universeId = cosmere))
+        dao.insertSeries(SeriesEntity(name = "Mistborn Era One", wikidataId = "Q3", parentId = mistborn, universeId = cosmere))
+        val stormlight = dao.insertSeries(SeriesEntity(name = "The Stormlight Archive", wikidataId = "Q4", universeId = cosmere))
+        val shelf = suggestions.series(mistborn)!!
+        assertEquals(listOf(stormlight to "The Stormlight Archive"), shelf.universeSagas)
+        assertEquals("Cosmere", shelf.universe)
+    }
+
     @Test fun bundlesAreNotSuggested() {
         for (t in listOf("Red Rising 3-Book Box Set", "The Red Rising Series Collection", "Kızıl İsyan Serisi", "Mistborn Trilogy Boxed Set", "The Stormlight Archive Books 1-3", "Summary of Red Rising"))
             assertTrue(t, Suggestions.bundle(t))

@@ -33,6 +33,8 @@ data class SagaShelf(
     val lanes: Map<String, List<Int>> = emptyMap(),
     /** Your own order of the volumes (work ids), when you set one: it wins over every source. */
     val manualOrder: List<Long>? = null,
+    /** Other sagas of the same narrative universe (id, name): a link of the map, not volumes of this saga. */
+    val universeSagas: List<Pair<Long, String>> = emptyList(),
 )
 
 /**
@@ -68,11 +70,17 @@ class Suggestions(
         val manual = dao.overrides("series", seriesId.toString()).firstOrNull { it.field == "order" }?.value
             ?.split(',')?.mapNotNull { it.trim().toLongOrNull() }?.takeIf { it.isNotEmpty() }
         val universe = series.universeId?.let { dao.universe(it)?.name }
+        val related = subsOrParent(series)
+        val siblings = series.universeId?.let { u -> dao.seriesInUniverse(u).filter { it.id != series.id && it.id !in related }.map { it.id to it.name } }.orEmpty()
         val subs = dao.subseries(seriesId)
         val lanes = subs.associate { sub -> val ids = dao.volumes(sub.id).map { it.work.id }.toSet(); sub.name to items.indices.filter { items[it].workId in ids } }
             .filterValues { it.isNotEmpty() }
-        SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, subs.map { it.name }, universe, lanes, manual)
+        SagaShelf(link, series, items, items.size, items.count { it.ownedBookId != null }, subs.map { it.name }, universe, lanes, manual, siblings)
     }
+
+    /** The saga's own sub-series and its parent: not "other sagas of the universe". */
+    private suspend fun subsOrParent(series: app.atlante.library.saga.db.SeriesEntity): Set<Long> =
+        (dao.subseries(series.id).map { it.id } + listOfNotNull(series.parentId)).toSet()
 
     /** Saves your order of a saga's volumes (work ids, top to bottom); null goes back to the sources' order. */
     suspend fun saveOrder(seriesId: Long, workIds: List<Long>?) = withContext(Dispatchers.IO) {

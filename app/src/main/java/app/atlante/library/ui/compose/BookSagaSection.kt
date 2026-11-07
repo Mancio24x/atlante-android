@@ -268,6 +268,10 @@ private fun FullScreen(title: String, onClose: () -> Unit, content: @Composable 
 
 @Composable
 internal fun FullSaga(s: SagaShelf, book: Book, host: SagaHost, onClose: () -> Unit) {
+    // Another saga of the same universe, opened from the map: its own full screen on top of this one.
+    var other by remember { mutableStateOf<SagaShelf?>(null) }
+    val scope = rememberCoroutineScope()
+    other?.let { o -> FullSaga(o, book, host) { other = null } }
     var tab by remember { mutableIntStateOf(0) }
     val open: (ShelfItem) -> Unit = { v -> if (v.ownedBookId != null) { onClose(); host.openBook(v.ownedBookId) } else host.searchOnline(v.query) }
     FullScreen(s.series!!.name, onClose) {
@@ -283,7 +287,7 @@ internal fun FullSaga(s: SagaShelf, book: Book, host: SagaHost, onClose: () -> U
             Tab(tab == 1, { tab = 1 }, text = { Text("Elenco") })
         }
         Spacer(Modifier.height(8.dp))
-        if (tab == 0) SagaMap(s, book.id, host, open)
+        if (tab == 0) SagaMap(s, book.id, host, { id -> scope.launch { other = SuggestionCovers.suggestions?.series(id) } }, open)
         else LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(s.items) { v -> VolumeRow(v, v.ownedBookId == book.id, host) }
         }

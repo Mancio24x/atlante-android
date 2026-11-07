@@ -31,3 +31,28 @@ object CatalogQuality {
         runBlocking { AtlanteDatabase.get(context).saga().links() }.filter { it.status == "to_confirm" }.map { it.bookId }.toSet()
     }.getOrDefault(emptySet())
 }
+
+/** Sagas (with their parent sagas and sub-series) and universes of each book, from the saga graph: for the filters. */
+object SagaFilters {
+    @JvmStatic fun load(context: Context): Boolean = runCatching {
+        val dao = AtlanteDatabase.get(context).saga()
+        val sagas = HashMap<String, Set<String>>(); val universes = HashMap<String, String>()
+        runBlocking {
+            for (l in dao.links()) {
+                if (l.status !in setOf("auto", "confirmed", "manual")) continue
+                val work = l.workId ?: continue
+                val names = LinkedHashSet<String>()
+                for (s in dao.seriesOf(work)) {
+                    names += s.name
+                    var parent = s.parentId?.let { dao.series(it) }; var depth = 0
+                    while (parent != null && depth++ < 4) { names += parent.name; parent.universeId?.let { u -> dao.universe(u)?.let { universes[l.bookId] = it.name } }; parent = parent.parentId?.let { dao.series(it) } }
+                    s.universeId?.let { u -> dao.universe(u)?.let { universes[l.bookId] = it.name } }
+                }
+                if (names.isNotEmpty()) sagas[l.bookId] = names
+            }
+        }
+        val changed = sagas != app.atlante.library.model.LibraryQuery.graphSagas || universes != app.atlante.library.model.LibraryQuery.graphUniverses
+        app.atlante.library.model.LibraryQuery.graphSagas = sagas; app.atlante.library.model.LibraryQuery.graphUniverses = universes
+        changed
+    }.getOrDefault(false)
+}

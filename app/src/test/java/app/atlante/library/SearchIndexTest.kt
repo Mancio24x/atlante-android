@@ -45,4 +45,23 @@ class SearchIndexTest {
         println(String.format("10.000 libri · primo indice %.0f ms · per tasto %s ms", first, times.joinToString(" ") { String.format("%.0f", it) }))
         assertTrue(times.max() < 200)
     }
+
+    /** Combined filters on normalized data: Fantasy + Brandon Sanderson, a sub-series, a universe, a sub-genre. */
+    @Test fun filtersCombineOnNormalizedData() {
+        val a = book("L'ultimo impero", "Brandon Sanderson").apply { genre = "Epic Fantasy" }
+        val b = book("Steelheart", "Brandon Sanderson").apply { genre = "Fantascienza" }
+        val c = book("Il nome del vento", "Patrick Rothfuss").apply { genre = "Fantasy" }
+        val d = book("Golden Son", "Pierce Brown").apply { genre = "Science fiction" }
+        LibraryQuery.graphSagas = mapOf(a.id to setOf("Mistborn", "Mistborn Era One"), d.id to setOf("Red Rising Saga", "Red Rising Trilogy"))
+        LibraryQuery.graphUniverses = mapOf(a.id to "Cosmere")
+        val all = listOf(a, b, c, d)
+        fun sel(genre: String = "", author: String = "", saga: String = "", universe: String = "") =
+            LibraryQuery.select(all, "", "Tutti i libri", genre, "", "Titolo", saga, author, "", "", universe).map { it.title }
+        assertEquals(listOf("L'ultimo impero"), sel(genre = "Fantasy", author = "Brandon Sanderson"))
+        assertEquals(listOf("Golden Son", "Steelheart"), sel(genre = "Fantascienza"))          // Sci-fi, Science fiction, Fantascienza
+        assertEquals(listOf("Golden Son"), sel(saga = "Red Rising Trilogy"))                     // a sub-series from the graph
+        assertEquals(listOf("L'ultimo impero"), sel(universe = "Cosmere"))
+        assertEquals(listOf("L'ultimo impero"), sel(genre = "Epic Fantasy"))                     // a sub-genre
+        LibraryQuery.graphSagas = emptyMap(); LibraryQuery.graphUniverses = emptyMap()
+    }
 }

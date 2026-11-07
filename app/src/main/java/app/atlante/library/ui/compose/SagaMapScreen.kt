@@ -53,7 +53,7 @@ private val SIDE_X = 96.dp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SagaMap(shelf: SagaShelf, currentBookId: String, host: SagaHost, onOpen: (ShelfItem) -> Unit) {
+fun SagaMap(shelf: SagaShelf, currentBookId: String, host: SagaHost, onOpenSaga: (Long) -> Unit = {}, onOpen: (ShelfItem) -> Unit) {
     var manual by remember(shelf.series?.id) { mutableStateOf(shelf.manualOrder) }
     var order by remember(shelf.series?.id) { mutableStateOf(if (shelf.manualOrder != null) SagaLayout.Order.PERSONAL else SagaLayout.Order.SAGA) }
     var editing by remember { mutableStateOf(false) }
@@ -65,7 +65,8 @@ fun SagaMap(shelf: SagaShelf, currentBookId: String, host: SagaHost, onOpen: (Sh
     val scheme = MaterialTheme.colorScheme
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
-    val contentHeight = with(density) { (ROW * layout.nodes.size + 24.dp + if (layout.waiting.isEmpty()) 0.dp else 56.dp + ROW * layout.waiting.size).toPx() }
+    val contentHeight = with(density) { (ROW * layout.nodes.size + 24.dp + (if (layout.waiting.isEmpty()) 0.dp else 56.dp + ROW * layout.waiting.size) +
+        (if (shelf.universeSagas.isEmpty()) 0.dp else 64.dp + 48.dp * shelf.universeSagas.size)).toPx() }
 
     Column(Modifier.fillMaxSize()) {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -109,6 +110,7 @@ fun SagaMap(shelf: SagaShelf, currentBookId: String, host: SagaHost, onOpen: (Sh
                             Modifier.offset(x = if (n.kind == SagaLayout.Kind.SIDE) SIDE_X - COVER_W / 2 else MAIN_X - COVER_W / 2, y = ROW * n.row + 6.dp)) { onOpen(item) }
                     }
                 }
+                universeLinks(shelf, onOpenSaga)
                 if (layout.waiting.isNotEmpty()) {
                     Text("Posizione da verificare · ${layout.waiting.size}", Modifier.padding(start = 16.dp, top = 12.dp), style = MaterialTheme.typography.titleSmall)
                     Text("Nessun numero inventato: scegli tu dove vanno con «Cambia l’ordine».", Modifier.padding(start = 16.dp, bottom = 8.dp),
@@ -231,6 +233,32 @@ private fun OrderEditor(shelf: SagaShelf, manual: List<Long>?, onClose: () -> Un
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The other sagas of the same narrative universe (Cosmere: Stormlight, Elantris…): a dashed link, because they
+ * share a world, not a reading sequence. A tap opens that saga's map.
+ */
+@Composable
+private fun universeLinks(shelf: SagaShelf, onOpenSaga: (Long) -> Unit) {
+    if (shelf.universeSagas.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    Text("Stesso universo · ${shelf.universe ?: ""}", Modifier.padding(start = 16.dp, top = 12.dp), style = MaterialTheme.typography.titleSmall)
+    Text("Saghe ambientate nello stesso mondo: collegate all’universo, non alla sequenza di lettura.", Modifier.padding(start = 16.dp, bottom = 6.dp),
+        style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+    shelf.universeSagas.forEach { (id, name) ->
+        Row(Modifier.fillMaxWidth().height(48.dp).clickable { onOpenSaga(id) }.padding(start = MAIN_X - 8.dp, end = 16.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "Saga $name, stesso universo: tocca per aprirne la mappa" },
+            verticalAlignment = Alignment.CenterVertically) {
+            Canvas(Modifier.size(36.dp, 24.dp)) {
+                drawLine(scheme.tertiary, Offset(0f, size.height / 2), Offset(size.width - 6.dp.toPx(), size.height / 2), 2.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f)))
+                drawPath(Path().apply { moveTo(size.width, size.height / 2); lineTo(size.width - 8.dp.toPx(), size.height / 2 - 5.dp.toPx()); lineTo(size.width - 8.dp.toPx(), size.height / 2 + 5.dp.toPx()); close() }, scheme.tertiary)
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(name, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
         }
     }
 }
