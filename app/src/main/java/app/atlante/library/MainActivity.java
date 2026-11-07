@@ -736,7 +736,7 @@ public final class MainActivity extends AppCompatActivity {
     void save() { try { store.save(); } catch (Exception e) { error(e); } }
 
     private void showLibrary() {
-        detailId = null; editingPage = false; timerLabel = null; uiHandler.removeCallbacks(timerTick);
+        detailId = null; editingPage = false; timerLabel = null; uiHandler.removeCallbacks(timerTick); onlineBook = null;
         if (!destination.equals("Biblioteca") && !destination.equals("Cerca")) { showCompanion(); return; }
         reading = null; pages = null;
         base(PAPER);
@@ -847,14 +847,35 @@ public final class MainActivity extends AppCompatActivity {
     private int activeFilters() {
         int n = 0; for (String f : new String[]{filterGenre, filterFormat, filterSaga, filterAuthor, filterLanguage, filterDecade, filterUniverse}) if (!f.isEmpty()) n++; return n;
     }
-    /** Filtri e ordine: the genre and author pickers, the other filters with the order, and a reset. */
+    /**
+     * Filtri e ordine as a bottom sheet: the active filters as chips (× removes one), then Genere, Autore and the
+     * other filters with the order, each showing its value; «Azzera» clears them all.
+     */
     private void libraryMenu() {
-        ArrayList<String> items = new ArrayList<>(); ArrayList<Runnable> actions = new ArrayList<>();
-        items.add("Filtra per genere" + (filterGenre.isEmpty() ? "" : " · " + filterGenre)); actions.add(this::chooseGenre);
-        items.add("Filtra per autore" + (filterAuthor.isEmpty() ? "" : " · " + filterAuthor)); actions.add(this::chooseAuthor);
-        items.add(hasMoreFilters() ? "Altri filtri e ordine · attivi" : "Altri filtri e ordine · per " + sortOrder.toLowerCase(Locale.ROOT)); actions.add(this::libraryFilters);
-        if (hasFilters()) { items.add("Azzera filtri"); actions.add(() -> { clearFilters(); applyLibraryFilters(); }); }
-        dialogBuilder().setTitle("Filtri e ordine").setItems(items.toArray(new String[0]), (d, w) -> actions.get(w).run()).setNegativeButton("Chiudi", null).show();
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet = new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        LinearLayout p = column(); p.setPadding(dp(20), dp(8), dp(20), dp(24));
+        LinearLayout head = row(); p.addView(head, new LinearLayout.LayoutParams(-1, -2));
+        head.addView(text("Filtri e ordine", 22, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
+        if (hasFilters()) head.addView(button("Azzera", R.style.Atlante_Button_Text, () -> { sheet.dismiss(); clearFilters(); applyLibraryFilters(); }));
+        String[][] active = {{"Genere", filterGenre}, {"Autore", filterAuthor}, {"Saga", filterSaga}, {"Universo", filterUniverse}, {"Lingua", filterLanguage}, {"Anni", filterDecade}, {"Formato", filterFormat}};
+        com.google.android.material.chip.ChipGroup chips = new com.google.android.material.chip.ChipGroup(this); chips.setChipSpacing(dp(6));
+        for (String[] f : active) if (!f[1].isEmpty()) {
+            Chip c = new Chip(this); c.setText(f[0] + ": " + (f[0].equals("Lingua") ? OnlineCatalog.languageName(f[1]) : f[1])); c.setCloseIconVisible(true);
+            c.setCloseIconContentDescription("Togli il filtro " + f[0].toLowerCase(Locale.ITALIAN));
+            c.setOnCloseIconClickListener(v -> { sheet.dismiss(); removeFilter(f[0]); applyLibraryFilters(); }); chips.addView(c);
+        }
+        if (chips.getChildCount() > 0) { gap(p, 8); p.addView(chips); }
+        gap(p, 12);
+        LinearLayout list = listCard(p);
+        listRow(list, R.drawable.ic_tune, "Filtra per genere", filterGenre.isEmpty() ? "Tutti i generi" : filterGenre, () -> { sheet.dismiss(); chooseGenre(); });
+        listRow(list, R.drawable.ic_book, "Filtra per autore", filterAuthor.isEmpty() ? "Tutti gli autori" : filterAuthor, () -> { sheet.dismiss(); chooseAuthor(); });
+        listRow(list, R.drawable.ic_list, "Altri filtri e ordine", (hasMoreFilters() ? "Saga, universo, lingua, anni o formato attivi · " : "Saga, universo, lingua, anni, formato · ") + "per " + sortOrder.toLowerCase(Locale.ROOT), () -> { sheet.dismiss(); libraryFilters(); });
+        ScrollView scroll = new ScrollView(this); scroll.addView(p); scroll.setBackgroundColor(WHITE);
+        sheet.setContentView(scroll); sheet.show();
+    }
+    private void removeFilter(String name) {
+        switch (name) { case "Genere": filterGenre = ""; break; case "Autore": filterAuthor = ""; break; case "Saga": filterSaga = ""; break; case "Universo": filterUniverse = ""; break;
+            case "Lingua": filterLanguage = ""; break; case "Anni": filterDecade = ""; break; default: filterFormat = ""; }
     }
     /** Live search with the single suggestion and the catalog strip, shared by both library headers. */
     private void watchSearch(EditText search, Chip suggestion) {
@@ -1491,7 +1512,7 @@ public final class MainActivity extends AppCompatActivity {
             if (grid != null && grid.getLayoutManager() != null) libraryPositions.put(destination,grid.getLayoutManager().onSaveInstanceState());
             if (companionScroll != null) pagePositions.put(destination,companionScroll.getScrollY());
         }
-        editingPage = false;
+        editingPage = false; onlineBook = null; sheetRequest++;
         detailId = b.id; reading = null; pages = null; timerLabel = null; uiHandler.removeCallbacks(timerTick);
         base(PAPER);
         androidx.coordinatorlayout.widget.CoordinatorLayout stage = new androidx.coordinatorlayout.widget.CoordinatorLayout(this);
@@ -1928,11 +1949,17 @@ public final class MainActivity extends AppCompatActivity {
      * Otherwise the Italian catalog (SBN) and Open Library are asked in the background and the edition with the same
      * title and author is shown (plot, cover, "Aggiungi alla mia libreria"); only when none is sure, the search page.
      */
+    /**
+     * A book not in the library (Scopri, saga carousels and map, catalog, online search) opens the same full-page
+     * sheet at once: title and author first, then edition, cover and plot when found. A late answer for another
+     * book is ignored (each opening has its own number). The same work already in the library opens its own page.
+     */
+    private Book onlineBook; private int sheetRequest;
     private void openDiscovered(String title, String author) {
         Book wanted = new Book(); wanted.title = title; wanted.author = author.isEmpty() ? "Autore sconosciuto" : author;
         Book mine = app.atlante.library.catalog.BibliographicEngine.sameWorkIn(store.snapshot(), wanted, catalogDao());
         if (mine != null) { details(mine); return; }
-        AlertDialog loading = loading("Scheda del libro", "«" + title + "»: cerco l’edizione e la trama…");
+        int request = ++sheetRequest; onlineSheet(wanted, true, false, request);
         catalogWorker.execute(() -> {
             Book found = null;
             try {
@@ -1951,11 +1978,90 @@ public final class MainActivity extends AppCompatActivity {
             } catch (Exception ignored) { found = null; }
             final Book book = found;
             runOnUiThread(() -> {
-                loading.dismiss(); if (isFinishing() || isDestroyed()) return;
-                if (book != null) preview(book, () -> { if (reading == null && detailId == null) renderAfterRepair(); });
-                else searchFor((title + " " + author).trim());
+                if (!sheetCurrent(request)) return;
+                if (book != null) onlineSheet(book, false, true, request); else onlineSheet(wanted, false, false, request);
             });
         });
+    }
+    /** Online search result: the same sheet, filled with the edition's data and plot. */
+    private void openOnline(Book candidate, String language) {
+        int request = ++sheetRequest; onlineSheet(candidate, true, true, request);
+        catalogWorker.execute(() -> {
+            try {
+                if (candidate.source.startsWith("sbn:")) SbnCatalog.enrich(candidate); else OnlineCatalog.enrich(candidate, language);
+                app.atlante.library.online.PlotFinder.fill(candidate, catalogDao());
+            } catch (Exception ignored) { }
+            runOnUiThread(() -> { if (sheetCurrent(request)) onlineSheet(candidate, false, true, request); });
+        });
+    }
+    /** The answer still belongs to the sheet on screen (not to a book opened before it). */
+    private boolean sheetCurrent(int request) { return request == sheetRequest && onlineBook != null && !isFinishing() && !isDestroyed(); }
+    private void closeOnlineSheet() { onlineBook = null; sheetRequest++; showLibrary(); }
+    private void onlineSheet(Book b, boolean loading, boolean found, int request) {
+        reading = null; pages = null; body = null; grid = null; detailId = null; companionScroll = null; timerLabel = null; uiHandler.removeCallbacks(timerTick);
+        base(PAPER); onlineBook = b;
+        LinearLayout top = row(); top.setPadding(dp(8), dp(4), dp(12), dp(4)); root.addView(top);
+        top.addView(iconButton(R.drawable.ic_back, "Indietro", this::closeOnlineSheet));
+        top.addView(pageHeading("SCHEDA DEL LIBRO", found ? (b.publisher.isEmpty() ? "Edizione trovata" : b.publisher) : loading ? "Cerco l’edizione…" : "Non in biblioteca"), new LinearLayout.LayoutParams(0, -2, 1));
+        ScrollView scroll = new ScrollView(this); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout p = column(); p.setPadding(dp(20), dp(8), dp(20), dp(28)); scroll.addView(p);
+        // The cover always has its place: one found later appears there, nothing below moves.
+        FrameLayout frame = new FrameLayout(this); p.addView(frame, new LinearLayout.LayoutParams(-1, dp(230)));
+        ImageView cover = new ImageView(this); cover.setScaleType(ImageView.ScaleType.FIT_CENTER); cover.setContentDescription("Copertina di " + b.title);
+        GradientDrawable placeholder = background(LINE, Color.TRANSPARENT); placeholder.setCornerRadius(dp(8));
+        FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(dp(150), -1, Gravity.CENTER_HORIZONTAL); frame.addView(cover, cl);
+        Bitmap image = b.onlineCover == null ? null : decode(null, b.onlineCover, 700);
+        if (image != null) cover.setImageBitmap(image); else cover.setBackground(placeholder);
+        gap(p, 16);
+        TextView title = text(b.title, 26, INK, true); title.setGravity(Gravity.CENTER_HORIZONTAL); p.addView(title, new LinearLayout.LayoutParams(-1, -2));
+        TextView author = text(b.author, 16, SAGE, false); author.setGravity(Gravity.CENTER_HORIZONTAL); p.addView(author, new LinearLayout.LayoutParams(-1, -2));
+        ArrayList<String> facts = new ArrayList<>(); if (!b.year.isEmpty()) facts.add(b.year); if (b.totalPages > 0) facts.add(b.totalPages + " pagine"); if (!b.language.isEmpty()) facts.add(OnlineCatalog.languageName(b.language));
+        if (!facts.isEmpty()) { TextView f = text(TextUtils.join(" · ", facts), 13, MUTED, false); f.setGravity(Gravity.CENTER_HORIZONTAL); p.addView(f, new LinearLayout.LayoutParams(-1, -2)); }
+        gap(p, 16);
+        MaterialButton primary;
+        if (loading) { primary = button("Cerco l’edizione e la trama…", 0, () -> { }); primary.setEnabled(false); }
+        else if (found) primary = button("Aggiungi alla mia libreria", 0, () -> addOnline(b));
+        else primary = button("Cerca le edizioni online", 0, () -> searchFor((b.title + " " + (b.author.equals("Autore sconosciuto") ? "" : b.author)).trim()));
+        primary.setIconResource(found && !loading ? R.drawable.ic_add : R.drawable.ic_search); primary.setIconTint(android.content.res.ColorStateList.valueOf(ON_ACCENT));
+        p.addView(primary, new LinearLayout.LayoutParams(-1, -2));
+        if (!found && !loading) { TextView none = text("Non ho trovato un’edizione sicura di questo libro: cercala tu tra quelle online.", 13, MUTED, false); none.setPadding(0, dp(6), 0, 0); p.addView(none); }
+
+        sectionHeader(p, "Trama", "", null);
+        LinearLayout plot = column(); plot.setPadding(dp(18), dp(16), dp(18), dp(16)); MaterialCardView pc = card(plot); pc.setRadius(dp(20)); p.addView(pc, new LinearLayout.LayoutParams(-1, -2));
+        if (loading) plot.addView(text("Cerco la trama…", 14, MUTED, false));
+        else if (b.description.trim().isEmpty()) plot.addView(text("Trama non disponibile.", 14, MUTED, false));
+        else {
+            TextView body = text(b.description.trim(), 15, INK, false); body.setMaxLines(8); body.setEllipsize(TextUtils.TruncateAt.END); plot.addView(body);
+            if (b.description.length() > 420) { TextView more = text("Mostra tutto", 14, SAGE, false); more.setMinHeight(dp(44)); more.setGravity(Gravity.CENTER_VERTICAL);
+                more.setOnClickListener(v -> { boolean open = body.getMaxLines() == 8; body.setMaxLines(open ? Integer.MAX_VALUE : 8); more.setText(open ? "Mostra meno" : "Mostra tutto"); }); plot.addView(more); }
+            String source = b.meta.optString("descriptionSource", ""); if (!source.isEmpty()) { TextView src = text("Fonte: " + source, 12, MUTED, false); src.setPadding(0, dp(8), 0, 0); plot.addView(src); }
+        }
+        if (found && !loading) {
+            ArrayList<String[]> rows = new ArrayList<>();
+            if (!b.publisher.isEmpty()) rows.add(new String[]{"Editore", b.publisher}); if (!b.isbn.isEmpty()) rows.add(new String[]{"ISBN", b.isbn});
+            if (!b.series.isEmpty()) rows.add(new String[]{"Saga", b.series + order(b)}); if (!b.genre.isEmpty()) rows.add(new String[]{"Genere", b.genre});
+            if (!rows.isEmpty()) { sectionHeader(p, "Dettagli", "", null); LinearLayout box = column(); box.setPadding(dp(18), dp(8), dp(18), dp(8)); MaterialCardView dc = card(box); dc.setRadius(dp(20)); p.addView(dc, new LinearLayout.LayoutParams(-1, -2));
+                for (String[] r : rows) { if (box.getChildCount() > 0) rule(box); LinearLayout line = row(); line.setPadding(0, dp(10), 0, dp(10)); box.addView(line, new LinearLayout.LayoutParams(-1, -2));
+                    line.addView(text(r[0], 13, MUTED, false), new LinearLayout.LayoutParams(dp(90), -2)); TextView v = text(r[1], 14, INK, false); line.addView(v, new LinearLayout.LayoutParams(0, -2, 1)); } }
+        }
+        TextView note = text("Niente viene aggiunto da solo: il libro entra nella tua biblioteca solo con «Aggiungi».", 12, MUTED, false); note.setPadding(dp(4), dp(16), dp(4), 0); p.addView(note);
+        addBottomNav(); updateBack();
+        // No cover yet: the cover engine looks for one (same ISBN, or same title and author), for this sheet only.
+        if (found && !loading && image == null) coverWorker.execute(() -> {
+            byte[] bytes = null; try { bytes = b.coverId > 0 ? OnlineCatalog.loadCover(b) : OnlineCatalog.findCover(b); } catch (Exception ignored) { }
+            if (bytes == null) return; byte[] got = bytes;
+            runOnUiThread(() -> { if (!sheetCurrent(request) || onlineBook != b) return; b.onlineCover = got; Bitmap bm = decode(null, got, 700); if (bm != null) { cover.setBackground(null); cover.setImageBitmap(bm); } });
+        });
+    }
+    /** «Aggiungi»: the same work already here opens its page; otherwise the record is added and its page opens. */
+    private void addOnline(Book b) {
+        try {
+            Book duplicate = app.atlante.library.catalog.BibliographicEngine.sameWorkIn(store.snapshot(), b, catalogDao());
+            onlineBook = null; sheetRequest++;
+            if (duplicate != null) { Toast.makeText(this, "«" + duplicate.title + "» è già nella tua biblioteca", Toast.LENGTH_SHORT).show(); details(duplicate); return; }
+            Book added = store.addCatalog(b); forgetCover(added.id);
+            Toast.makeText(this, "Aggiunto alla tua biblioteca", Toast.LENGTH_SHORT).show(); details(added);
+        } catch (Exception e) { error(e); }
     }
 
 
@@ -2017,6 +2123,7 @@ public final class MainActivity extends AppCompatActivity {
                             Book existing = store.find(candidate.id) != null ? store.find(candidate.id) : BookMatcher.best(candidate, store.snapshot(), x -> x);
                             tile.addView(button(existing == null ? "Vedi la scheda completa" : "Già in libreria · Apri", false, () -> {
                                 if (existing != null) { dialog.dismiss(); details(existing); return; }
+                                if (candidate.format.equals("CATALOGO") || candidate.format.isEmpty()) { dialog.dismiss(); openOnline(candidate, code.isEmpty() ? "ita" : code); return; }
                                 AlertDialog loading = loading("Scheda del libro", "Caricamento trama e metadati…");
                                 catalogWorker.execute(() -> {
                                     try {
@@ -3030,11 +3137,12 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private boolean searching() { return !query.isEmpty() && !tab.equals("Mappa"); }
-    private boolean canGoBack() { return detailId != null || !destination.equals("Home") || drawer != null || reading != null || searching() || !tab.equals("Tutti i libri"); }
+    private boolean canGoBack() { return onlineBook != null || detailId != null || !destination.equals("Home") || drawer != null || reading != null || searching() || !tab.equals("Tutti i libri"); }
     private void updateBack() { back.setEnabled(store != null && canGoBack()); }
     private void goBack() {
         if (drawer != null) closeDrawer();
         else if (reading != null) { Book b = reading; rememberPage(); details(b); }
+        else if (onlineBook != null) closeOnlineSheet();
         else if (detailId != null) { Book b=store.find(detailId); if(editingPage && b!=null) details(b); else showLibrary(); }
         else if (destination.equals("Biblioteca") && tab.equals("Saghe") && !openSaga.isEmpty()) { openSaga = ""; showLibrary(); }
         else if (searching()) { query = ""; showLibrary(); }

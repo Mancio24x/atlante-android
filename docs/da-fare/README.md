@@ -18,7 +18,7 @@ Riassume le specifiche date nella sessione del 7 novembre (stabilizzazione, Scop
 
 ## 1. Biblioteca meno affollata (Priorità 4 della specifica di stabilizzazione)
 
-**Stato: in parte** (design 3a: ricerca + «Filtri e ordine» + chip degli stati con il numero; manca il foglio dal basso in Compose). Oggi in alto: riga [ricerca][Genere][Autore], suggerimento, striscia del catalogo, chip degli
+**Stato: fatto** (design 3a: ricerca + «Filtri e ordine» + chip degli stati con il numero; «Filtri e ordine» è un foglio dal basso Material con i filtri attivi come chip rimovibili e «Azzera», `MainActivity.libraryMenu`). Resta: i filtri «Altri» ancora nel dialogo `libraryFilters`. Oggi in alto: riga [ricerca][Genere][Autore], suggerimento, striscia del catalogo, chip degli
 stati + «Altri filtri e ordine» + «Azzera filtri» (`MainActivity.libraryHeader`, `libraryFilters`).
 **Da fare:**
 - Barra: ricerca + un solo pulsante «Filtri» (con contatore dei filtri attivi) + ordinamento.
@@ -32,7 +32,7 @@ stati + «Altri filtri e ordine» + «Azzera filtri» (`MainActivity.libraryHead
 
 ## 2. Scopri: scheda libro unica e trame sicure (Priorità 6 — la più importante rimasta)
 
-**Stato: in parte.** Oggi un libro non posseduto si apre con `MainActivity.openDiscovered` → `preview(...)`, che è un
+**Stato: in gran parte fatto** (7 novembre, sera): `MainActivity.onlineSheet` è la scheda a tutta pagina per ogni libro non posseduto (Scopri, carousel e mappa delle saghe via `openWork`, catalogo, ricerca online via `openOnline`), si apre subito e si riempie dopo; risposte di un libro aperto prima ignorate (`sheetRequest`/`sheetCurrent`, `OnlineSheetTest`); trame solo da Wikipedia dell'opera o da record della stessa edizione (stesso ISBN), altrimenti «Trama non disponibile», HTML ed entità puliti (`PlotFinder`, `PlotFinderTest`). Restano: conferma dell'edizione con l'id dell'opera in `openDiscovered`, etichetta «I più letti», generi di Scopri allineati a `Genres`. Testo originale del punto: Oggi un libro non posseduto si apre con `MainActivity.openDiscovered` → `preview(...)`, che è un
 **dialogo** (`AlertDialog`), mentre un libro posseduto si apre con `details(...)` (pagina intera). Sono due
 componenti diversi: la specifica chiede una sola schermata a tutta pagina per tutti.
 **Da fare:**
@@ -61,8 +61,7 @@ ordine), workflow UI preview.
   misurare su telefono vero (`dumpsys gfxinfo`) e ottimizzare `BookAdapter` / decodifica copertine (`ui/Covers.java`).
 - `MainActivity.java` ~3.100 righe: spostare in Compose una schermata alla volta (Impostazioni, Sync), senza
   cambiare comportamento.
-- Transizioni degli stati: `Book.changeStatus` copre Letto→Da leggere e Letto→In lettura (`StatusChangeTest`);
-  aggiungere test per tutte le altre combinazioni elencate nella specifica.
+- Transizioni degli stati: fatto, tutte le 16 combinazioni in `StatusMatrixTest` (pagina, percentuale, date).
 - Statistiche: verificare riletture e distribuzioni temporali senza doppi conteggi dopo le unioni.
 
 ## 4. Test e verifica sull'emulatore (Priorità 7)

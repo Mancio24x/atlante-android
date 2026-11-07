@@ -43,6 +43,8 @@ public final class MetadataEngine {
         public final List<Field> fields = new ArrayList<>();
         public final List<Candidate.Cover> covers = new ArrayList<>();
         public final List<Candidate.Description> descriptions = new ArrayList<>();
+        /** Plots from records of this very edition (same ISBN): the only ones a sheet may show without a work id. */
+        public final List<Candidate.Description> editionDescriptions = new ArrayList<>();
         public final List<String> sources = new ArrayList<>(), notes = new ArrayList<>();
         public Candidate edition;
     }
@@ -174,8 +176,9 @@ public final class MetadataEngine {
             if (!genre.isEmpty()) add(r, manual, "genre", "Genere", "", genre, genreSource);
         }
         // Plots: in the user's language first, edition before work, then the most complete one.
-        for (Candidate c : edition) r.descriptions.addAll(c.descriptions);
+        for (Candidate c : edition) { r.descriptions.addAll(c.descriptions); r.editionDescriptions.addAll(c.descriptions); }
         for (Candidate c : work) if (!edition.contains(c)) r.descriptions.addAll(c.descriptions);
+        r.editionDescriptions.removeIf(d -> d.text.length() < 120 || d.text.equals(d.text.toUpperCase(Locale.ROOT)));
         r.descriptions.removeIf(d -> d.text.length() < 120 || d.text.equals(d.text.toUpperCase(Locale.ROOT)));
         r.descriptions.sort((a, b) -> Integer.compare(plotScore(b, lang), plotScore(a, lang)));
         if (!r.descriptions.isEmpty()) {

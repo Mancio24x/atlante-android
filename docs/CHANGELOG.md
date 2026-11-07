@@ -6,6 +6,11 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Scheda unica a tutta pagina** per ogni libro non in biblioteca (Scopri, saghe, mappa, catalogo, ricerca online):
+  si apre subito, poi edizione, copertina e trama; una risposta arrivata tardi per un altro libro è ignorata.
+  **Trame sicure**: solo da Wikipedia dell'opera o da record della stessa edizione (stesso ISBN), mai per solo
+  titolo e autore; testo pulito da HTML; «Mostra tutto». **Filtri e ordine** in un foglio dal basso con i filtri
+  attivi rimovibili. Test per tutte le transizioni di stato.
 - **Nuova grafica** (progetto Claude Design «Atlante», scelte 1b, 3a, 4b, 5a, 6a, 7a–7d): intestazione compatta con
   occhiello e titolo serif; barra in basso con voci non scelte in grigio e filetto in alto.
   **Home** (1b): una card «Oggi» con anello delle pagine, minuti, giorni di fila, settimana e rotta; il comodino come
