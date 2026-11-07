@@ -115,7 +115,7 @@ public final class MainActivity extends AppCompatActivity {
         uiHandler.postDelayed(this, 1000);
     }};
     private String tab = "Tutti i libri", query = "", mapAuthor = "", exportId;
-    private String filterGenre = "", filterFormat = "", filterSaga = "", sortOrder = "Titolo";
+    private String filterGenre = "", filterFormat = "", filterSaga = "", sortOrder = "Titolo", filterAuthor = "", filterLanguage = "", filterDecade = "";
     /** Library tabs shown as chips; each one but the first is a reading state. */
     private static final String[] STATUS_TABS = {"Tutti i libri", "Da leggere", "In lettura", "In pausa", "Letti", "Preferiti"};
     private String coverBookId;
@@ -139,11 +139,13 @@ public final class MainActivity extends AppCompatActivity {
         }
         filterGenre = prefs.getString("filterGenre", "");
         filterFormat = prefs.getString("filterFormat", ""); filterSaga = prefs.getString("filterSaga", ""); sortOrder = prefs.getString("sortOrder", "Titolo");
+        filterAuthor = prefs.getString("filterAuthor", ""); filterLanguage = prefs.getString("filterLanguage", ""); filterDecade = prefs.getString("filterDecade", "");
         listView = prefs.getBoolean("listView", false);
         OnlineCatalog.configure(new File(getCacheDir(), "catalog"));
         // Temporary data: expired suggestions and covers over the limit go away; sagas refresh in the background.
         app.atlante.library.saga.CacheManager.cleanupAsync(this);
         app.atlante.library.saga.Hardcover.configure(this);
+        app.atlante.library.online.CoverSearch.setPrefer(getPreferences(MODE_PRIVATE).getString("coverPrefer", "italian"));
         try { app.atlante.library.saga.SagaRefreshWorker.schedule(this); app.atlante.library.saga.SagaScanWorker.start(this); }
         catch (RuntimeException ignored) { /* WorkManager unavailable: sagas are recognized when a book is opened. */ }
         fontSize = Math.max(8, Math.min(80, prefs.getFloat("fontSize", 20)));
@@ -255,7 +257,10 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(importBooks, new LinearLayout.LayoutParams(-1,-2));
         panel.addView(text("EPUB, TXT, CBZ e AZW3 senza DRM, anche più file insieme. Prima di aggiungerli vedi titolo, autore e copertina e puoi correggerli; se il libro è già nella libreria puoi collegare il file alla sua scheda.",12,MUTED,false)); gap(panel,12);
         panel.addView(button("Cerca e migliora le copertine",false,() -> { improveCovers(store.snapshot(), true, true); }));
-        panel.addView(text("Scarica le copertine mancanti e sostituisce quelle piccole o sfocate con una più nitida della stessa edizione o dello stesso titolo e autore. Le copertine scelte da te non vengono toccate.",12,MUTED,false)); gap(panel,12);
+        panel.addView(text("Scarica le copertine mancanti e sostituisce quelle piccole o sfocate con una più nitida della stessa edizione o dello stesso titolo e autore. Le copertine scelte da te non vengono toccate.",12,MUTED,false)); gap(panel,8);
+        coverPreference(panel); gap(panel,12);
+        panel.addView(button("Qualità del catalogo",false,this::catalogQuality));
+        panel.addView(text("Libri senza copertina, autore, ISBN, genere o pagine, possibili doppioni, saghe senza numero o da verificare: in un posto solo, con le azioni per sistemarli.",12,MUTED,false)); gap(panel,12);
         LinearLayout sagas = column();
         sagas.addView(app.atlante.library.ui.compose.SagaRepairView.create(this, palette, sagaHost)); gap(sagas,8);
         sagas.addView(text("Proposte rapide dai titoli e dai metadati già presenti, senza connessione:",14,MUTED,false));
@@ -289,6 +294,93 @@ public final class MainActivity extends AppCompatActivity {
      * Each person's own Hardcover key (free, made in their Hardcover account): it stays on this phone and is used
      * both by Sync and by the saga engine, which with it recognizes saga, volume number, sub-series and universe.
      */
+    /**
+     * Qualità del catalogo: every problem of the catalog with its count, the books concerned (a tap opens the sheet)
+     * and the action that fixes it. Nothing is changed without you: merges and saga changes always show a preview.
+     */
+    private void catalogQuality() {
+        LinearLayout panel = column(); panel.setPadding(dp(20), dp(8), dp(20), dp(8));
+        ScrollView scroll = new ScrollView(this); scroll.addView(panel);
+        TextView wait = text("Controllo del catalogo…", 14, MUTED, false); panel.addView(wait);
+        AlertDialog dialog = dialogBuilder().setTitle("Qualità del catalogo").setView(scroll).setNegativeButton("Chiudi", null).create();
+        dialog.show();
+        worker.execute(() -> {
+            List<Book> all = store.snapshot();
+            ArrayList<Book> noCover = new ArrayList<>(), smallCover = new ArrayList<>(), noAuthor = new ArrayList<>(), noIsbn = new ArrayList<>(),
+                noGenre = new ArrayList<>(), noPages = new ArrayList<>(), noNumber = new ArrayList<>(), doubles = new ArrayList<>(), sagaCheck = new ArrayList<>();
+            Map<String, List<Book>> byKey = new HashMap<>();
+            Set<String> uncertain = app.atlante.library.saga.CatalogQuality.uncertainSagaBooks(this);
+            for (Book b : all) {
+                String source = b.meta.optString("coverSource", "");
+                int w = coverWidth(b);
+                if (w == 0) noCover.add(b); else if (w < 300 && !source.equals("gallery") && !source.equals("online")) smallCover.add(b);
+                if (b.author.isEmpty() || b.author.equals("Autore sconosciuto")) noAuthor.add(b);
+                if (BookMatcher.isbns(b.isbn).isEmpty()) noIsbn.add(b);
+                if (b.genre.isEmpty()) noGenre.add(b);
+                if (b.totalPages == 0) noPages.add(b);
+                if (!b.series.isEmpty() && b.number == 0) noNumber.add(b);
+                if (uncertain.contains(b.id)) sagaCheck.add(b);
+                // Possible doubles: same title and first author, or the same ISBN (shown only, never merged by itself).
+                List<String> authors = app.atlante.library.model.SearchIndex.authors(b);
+                byKey.computeIfAbsent("t:" + app.atlante.library.model.SearchIndex.normalize(b.title) + "|" + (authors.isEmpty() ? "" : surnameOf(authors.get(0)).toLowerCase(Locale.ROOT)), k -> new ArrayList<>()).add(b);
+                for (String i : BookMatcher.isbns(b.isbn)) byKey.computeIfAbsent("i:" + i, k -> new ArrayList<>()).add(b);
+            }
+            LinkedHashSet<Book> seen = new LinkedHashSet<>();
+            for (List<Book> group : byKey.values()) if (group.size() > 1) seen.addAll(group);
+            doubles.addAll(seen);
+            doubles.sort((a, b) -> app.atlante.library.ebook.EbookParser.naturalCompare(a.title, b.title));
+            runOnUiThread(() -> {
+                if (!dialog.isShowing()) return;
+                panel.removeView(wait);
+                panel.addView(text(all.size() + " libri controllati.", 14, MUTED, false)); gap(panel, 8);
+                qualityRow(panel, dialog, "Possibili doppioni", "Stesso titolo e autore, o stesso ISBN. Aprili e decidi tu: niente viene unito da solo.", doubles, null, null);
+                if (app.atlante.library.sync.HardcoverAuth.connected(this))
+                    qualityRow(panel, dialog, "Doppioni di Hardcover da verificare", "Sync unisce da sola i doppioni certi; qui quelli dubbi, con l’anteprima.", null, "Ripara duplicati Hardcover", () -> { dialog.dismiss(); repairHardcoverDuplicates(); });
+                qualityRow(panel, dialog, "Saghe da verificare", "Il motore delle saghe non è sicuro: conferma o correggi in Ripara saghe.", sagaCheck, "Riconosci saghe e ordine", () -> { dialog.dismiss(); recognizeSeries(); });
+                qualityRow(panel, dialog, "In una saga, senza numero", "Posizione da verificare: nessun numero viene inventato.", noNumber, null, null);
+                qualityRow(panel, dialog, "Senza copertina", "", noCover, "Cerca le copertine", () -> { dialog.dismiss(); improveCovers(noCover, true, false); });
+                qualityRow(panel, dialog, "Copertina piccola o sfocata", "Meno di 300 pixel; le copertine scelte da te non sono contate.", smallCover, "Migliora le copertine", () -> { dialog.dismiss(); improveCovers(smallCover, true, true); });
+                qualityRow(panel, dialog, "Autore mancante", "", noAuthor, null, null);
+                qualityRow(panel, dialog, "Senza ISBN", "Senza ISBN il riconoscimento delle edizioni usa titolo e autore.", noIsbn, null, null);
+                qualityRow(panel, dialog, "Senza genere", "", noGenre, null, null);
+                qualityRow(panel, dialog, "Senza numero di pagine", "", noPages, null, null);
+                panel.addView(text("Per completare autore, ISBN, genere e pagine apri il libro › «Completa i dati online»: vedi le proposte prima di salvarle.", 12, MUTED, false));
+            });
+        });
+    }
+
+    private void qualityRow(LinearLayout panel, AlertDialog dialog, String title, String hint, List<Book> books, String action, Runnable run) {
+        LinearLayout box = surface(panel, "");
+        box.addView(text(title + (books == null ? "" : " · " + books.size()), 16, books != null && books.isEmpty() ? MUTED : INK, true));
+        if (!hint.isEmpty()) box.addView(text(hint, 12, MUTED, false));
+        if (books != null && books.isEmpty()) { box.addView(text("Tutto a posto ✓", 13, MUTED, false)); return; }
+        LinearLayout buttons = row(); box.addView(buttons);
+        if (books != null) buttons.addView(button("Mostra", R.style.Atlante_Button_Text, () -> {
+            String[] labels = new String[books.size()];
+            for (int i = 0; i < labels.length; i++) labels[i] = books.get(i).title + " · " + books.get(i).author;
+            dialogBuilder().setTitle(title).setItems(labels, (d, which) -> { dialog.dismiss(); details(books.get(which)); }).setNegativeButton("Chiudi", null).show();
+        }));
+        if (action != null) buttons.addView(button(action, R.style.Atlante_Button_Text, run));
+    }
+
+    /** Impostazioni › Copertine: what the app prefers when it chooses by itself, and the first filter of "Cambia copertina". */
+    private void coverPreference(LinearLayout p) {
+        p.addView(text("Copertine preferite",15,INK,true));
+        android.widget.RadioGroup group = new android.widget.RadioGroup(this);
+        String[][] options = {{"italian","Edizione italiana"},{"original","Copertina originale o inglese"},{"all","Mostra tutte quando scelgo"}};
+        String current = getPreferences(MODE_PRIVATE).getString("coverPrefer","italian");
+        for (String[] o : options) {
+            com.google.android.material.radiobutton.MaterialRadioButton r = new com.google.android.material.radiobutton.MaterialRadioButton(this);
+            r.setText(o[1]); r.setTextSize(15); r.setId(View.generateViewId()); r.setMinHeight(dp(48));
+            group.addView(r); if (o[0].equals(current)) r.setChecked(true);
+            r.setOnCheckedChangeListener((v, on) -> { if (!on) return;
+                getPreferences(MODE_PRIVATE).edit().putString("coverPrefer", o[0]).apply();
+                app.atlante.library.online.CoverSearch.setPrefer(o[0]); });
+        }
+        p.addView(group);
+        p.addView(text("Vale per le copertine trovate dall’app e per il primo filtro di «Cambia copertina» nella scheda del libro. Con Hardcover collegato trovi anche le copertine inglesi e originali dei tuoi libri italiani. Una copertina scelta da te resta ovunque, anche nei widget.",12,MUTED,false));
+    }
+
     private void hardcoverSection(LinearLayout p) {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         boolean on=app.atlante.library.sync.HardcoverAuth.connected(this);
@@ -587,8 +679,13 @@ public final class MainActivity extends AppCompatActivity {
         renderContent(); addBottomNav(); updateBack();
     }
 
-    /** Search bar, reading-state chips and the filter chip above the library. */
+    /**
+     * [Barra di ricerca] [Genere] [Autore] in one row, at most one suggestion under it (an author, a saga or a genre
+     * matching what you type: a tap applies it as a filter and clears the text), then the reading states and the
+     * other filters (saga, language, decade, format, order).
+     */
     private void libraryHeader(LinearLayout header) {
+        LinearLayout line = row(); line.setGravity(Gravity.CENTER_VERTICAL); header.addView(line);
         TextInputLayout box = new TextInputLayout(new ContextThemeWrapper(this, R.style.Atlante_Field));
         box.setHintEnabled(false); box.setStartIconDrawable(R.drawable.ic_search);
         box.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
@@ -596,15 +693,32 @@ public final class MainActivity extends AppCompatActivity {
         TextInputEditText search = new TextInputEditText(box.getContext()); search.setSingleLine(true);
         search.setHint("Cerca titolo, autore, saga, ISBN"); search.setContentDescription("Cerca nella biblioteca");
         search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH); search.setText(query);
-        box.addView(search, new LinearLayout.LayoutParams(-1, -2)); header.addView(box);
+        box.addView(search, new LinearLayout.LayoutParams(-1, -2)); line.addView(box, new LinearLayout.LayoutParams(0, -2, 1));
+        Chip genreChip = quickFilter(filterGenre.isEmpty() ? "Genere" : filterGenre, !filterGenre.isEmpty(), "Filtra per genere", this::chooseGenre);
+        Chip authorChip = quickFilter(filterAuthor.isEmpty() ? "Autore" : surnameOf(filterAuthor), !filterAuthor.isEmpty(), "Filtra per autore", this::chooseAuthor);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2); lp.setMarginStart(dp(6));
+        line.addView(genreChip, lp); line.addView(authorChip, new LinearLayout.LayoutParams(lp));
+        Chip suggestion = new Chip(this); suggestion.setVisibility(View.GONE); suggestion.setChipIconResource(R.drawable.ic_tune); suggestion.setChipIconVisible(true);
+        header.addView(suggestion, new LinearLayout.LayoutParams(-2, -2));
+        Runnable suggest = () -> {
+            String[] s = suggestionFor(query);
+            if (s == null) { suggestion.setVisibility(View.GONE); return; }
+            suggestion.setText(s[0] + ": " + s[1]); suggestion.setContentDescription("Filtra per " + s[0].toLowerCase(Locale.ITALIAN) + " " + s[1]);
+            suggestion.setVisibility(View.VISIBLE);
+            suggestion.setOnClickListener(v -> {
+                if (s[0].equals("Autore")) filterAuthor = s[1]; else if (s[0].equals("Saga")) filterSaga = s[1]; else filterGenre = s[1];
+                query = ""; hideKeyboard(v); applyLibraryFilters();
+            });
+        };
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int c, int f) { }
             public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString(); updateBack();
                 if (filterTask != null) uiHandler.removeCallbacks(filterTask);
-                filterTask = () -> { if (reading == null) renderContent(); }; uiHandler.postDelayed(filterTask, 180); }
+                filterTask = () -> { if (reading == null) { renderContent(); suggest.run(); } }; uiHandler.postDelayed(filterTask, 180); }
             public void afterTextChanged(Editable e) { }
         });
         search.setOnEditorActionListener((v, action, event) -> { hideKeyboard(v); return true; });
+        suggest.run();
         HorizontalScrollView strip = new HorizontalScrollView(this); strip.setHorizontalScrollBarEnabled(false);
         ChipGroup chips = new ChipGroup(this); chips.setSingleLine(true); chips.setSingleSelection(true); chips.setSelectionRequired(true);
         strip.addView(chips); header.addView(strip);
@@ -615,15 +729,98 @@ public final class MainActivity extends AppCompatActivity {
             chip.setOnClickListener(v -> { if (!tab.equals(name)) { tab = name; updateBack(); renderContent(); } });
         }
         Chip filters = new Chip(this); filters.setCheckable(false); filters.setChipIconResource(R.drawable.ic_tune); filters.setChipIconVisible(true);
-        filters.setText(hasFilters() ? "Filtri attivi" : "Filtri e ordine"); filters.setOnClickListener(v -> libraryFilters());
+        filters.setText(hasMoreFilters() ? "Altri filtri attivi" : "Altri filtri e ordine"); filters.setOnClickListener(v -> libraryFilters());
         chips.addView(filters);
+        if (hasFilters()) { Chip reset = new Chip(this); reset.setText("Azzera filtri"); reset.setOnClickListener(v -> { clearFilters(); applyLibraryFilters(); }); chips.addView(reset); }
+    }
+
+    private Chip quickFilter(String label, boolean active, String description, Runnable open) {
+        Chip c = new Chip(this); c.setText(label); c.setCheckable(true); c.setChecked(active); c.setCheckedIconVisible(false);
+        c.setMaxWidth(dp(110)); c.setEllipsize(TextUtils.TruncateAt.END); c.setContentDescription(description + (active ? ": " + label : ""));
+        c.setOnClickListener(v -> { c.setChecked(active); open.run(); });
+        return c;
+    }
+
+    private static String surnameOf(String author) { String[] p = author.trim().split("\\s+"); return p[p.length - 1]; }
+
+    /** The one suggestion for the typed text: an author first, then a saga, then a genre; null when none fits. */
+    private String[] suggestionFor(String text) {
+        List<String> words = app.atlante.library.model.SearchIndex.queryWords(text);
+        if (words.isEmpty() || text.trim().length() < 3) return null;
+        Map<String, Integer> authors = new HashMap<>(), sagas = new HashMap<>(), genres = new HashMap<>();
+        for (Book b : store.snapshot()) {
+            for (String a : app.atlante.library.model.SearchIndex.authors(b)) authors.merge(a, 1, Integer::sum);
+            if (!b.series.isEmpty()) sagas.merge(b.series, 1, Integer::sum);
+            String g = app.atlante.library.saga.Genres.normalize(b.genre); if (g != null) genres.merge(g, 1, Integer::sum);
+        }
+        for (Object[] kind : new Object[][]{{"Autore", authors, filterAuthor}, {"Saga", sagas, filterSaga}, {"Genere", genres, filterGenre}}) {
+            @SuppressWarnings("unchecked") Map<String, Integer> names = (Map<String, Integer>) kind[1];
+            String best = null; int most = 0;
+            for (Map.Entry<String, Integer> e : names.entrySet()) {
+                List<String> nameWords = app.atlante.library.model.SearchIndex.words(e.getKey());
+                boolean all = true;
+                for (String w : words) { boolean found = false; for (String n : nameWords) if (n.startsWith(w)) { found = true; break; } if (!found) { all = false; break; } }
+                if (all && e.getValue() > most && !e.getKey().equals(kind[2])) { most = e.getValue(); best = e.getKey(); }
+            }
+            if (best != null && most >= 2) return new String[]{(String) kind[0], best};
+        }
+        return null;
+    }
+
+    /** Genere: the normalized main genres of the library, with the number of books. */
+    private void chooseGenre() {
+        Map<String, Integer> count = new HashMap<>(); int other = 0;
+        for (Book b : store.snapshot()) { String g = app.atlante.library.saga.Genres.normalize(b.genre); if (g != null) count.merge(g, 1, Integer::sum); else if (!b.genre.isEmpty()) other++; }
+        ArrayList<String> values = new ArrayList<>(); ArrayList<String> labels = new ArrayList<>();
+        values.add(""); labels.add("Tutti i generi");
+        for (String g : app.atlante.library.saga.Genres.INSTANCE.getMain()) if (count.containsKey(g)) { values.add(g); labels.add(g + " · " + count.get(g)); }
+        if (other > 0) { values.add(LibraryQuery.OTHER_GENRE); labels.add(LibraryQuery.OTHER_GENRE + " · " + other); }
+        dialogBuilder().setTitle("Genere").setSingleChoiceItems(labels.toArray(new String[0]), Math.max(0, values.indexOf(filterGenre)), (d, which) -> {
+            filterGenre = values.get(which); d.dismiss(); applyLibraryFilters();
+        }).setNegativeButton("Chiudi", null).show();
+    }
+
+    /** Autore: one entry per person ("A & B" is two people), with a search field for long lists. */
+    private void chooseAuthor() {
+        TreeMap<String, Integer> count = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (Book b : store.snapshot()) for (String a : app.atlante.library.model.SearchIndex.authors(b)) count.merge(a, 1, Integer::sum);
+        LinearLayout panel = column(); panel.setPadding(dp(20), dp(8), dp(20), 0);
+        TextInputLayout box = new TextInputLayout(new ContextThemeWrapper(this, R.style.Atlante_Field)); box.setHint("Cerca un autore");
+        TextInputEditText field = new TextInputEditText(box.getContext()); field.setSingleLine(true); box.addView(field); panel.addView(box);
+        android.widget.ListView list = new android.widget.ListView(this);
+        panel.addView(list, new LinearLayout.LayoutParams(-1, dp(360)));
+        ArrayList<String> shown = new ArrayList<>();
+        android.widget.ArrayAdapter<String> items = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_list_item_1, new ArrayList<>());
+        list.setAdapter(items);
+        Runnable fill = () -> {
+            List<String> words = app.atlante.library.model.SearchIndex.queryWords(field.getText() == null ? "" : field.getText().toString());
+            shown.clear(); items.clear();
+            if (words.isEmpty()) { shown.add(""); items.add("Tutti gli autori"); }
+            for (Map.Entry<String, Integer> e : count.entrySet()) {
+                List<String> nameWords = app.atlante.library.model.SearchIndex.words(e.getKey()); boolean all = true;
+                for (String w : words) { boolean found = false; for (String n : nameWords) if (n.startsWith(w)) { found = true; break; } if (!found) { all = false; break; } }
+                if (all) { shown.add(e.getKey()); items.add(e.getKey() + " · " + e.getValue() + (e.getKey().equals(filterAuthor) ? "  ✓" : "")); }
+            }
+            items.notifyDataSetChanged();
+        };
+        fill.run();
+        field.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int c, int f) { }
+            public void onTextChanged(CharSequence s, int a, int b, int c) { fill.run(); }
+            public void afterTextChanged(Editable e) { }
+        });
+        androidx.appcompat.app.AlertDialog dialog = dialogBuilder().setTitle("Autore").setView(panel).setNegativeButton("Chiudi", null).create();
+        list.setOnItemClickListener((parent, view, position, id) -> { filterAuthor = shown.get(position); dialog.dismiss(); applyLibraryFilters(); });
+        dialog.show();
     }
 
     private ArrayList<Book> filtered() {
-        return LibraryQuery.select(store.snapshot(), destination.equals("Biblioteca") && tab.equals("Mappa") ? "" : query, destination.equals("Cerca") ? "Tutti i libri" : tab, filterGenre, filterFormat, sortOrder, filterSaga);
+        return LibraryQuery.select(store.snapshot(), destination.equals("Biblioteca") && tab.equals("Mappa") ? "" : query, destination.equals("Cerca") ? "Tutti i libri" : tab, filterGenre, filterFormat, sortOrder, filterSaga, filterAuthor, filterLanguage, filterDecade);
     }
 
-    private boolean hasFilters() { return !filterGenre.isEmpty() || !filterFormat.isEmpty() || !filterSaga.isEmpty(); }
+    private boolean hasFilters() { return !filterGenre.isEmpty() || !filterFormat.isEmpty() || !filterSaga.isEmpty() || !filterAuthor.isEmpty() || !filterLanguage.isEmpty() || !filterDecade.isEmpty(); }
+    private boolean hasMoreFilters() { return !filterFormat.isEmpty() || !filterSaga.isEmpty() || !filterLanguage.isEmpty() || !filterDecade.isEmpty(); }
+    private void clearFilters() { filterGenre = ""; filterFormat = ""; filterSaga = ""; filterAuthor = ""; filterLanguage = ""; filterDecade = ""; }
 
     private void libraryFilters() {
         LinearLayout panel = column(); panel.setPadding(dp(24), dp(12), dp(24), dp(4));
@@ -635,20 +832,25 @@ public final class MainActivity extends AppCompatActivity {
             if (main != null) genres.add(main); else if (!book.genre.isEmpty()) other = true;
             if (!book.series.isEmpty()) sagas.add(book.series);
         }
-        ArrayList<String> genreOptions = new ArrayList<>(); genreOptions.add("Tutti i generi");
-        for (String g : app.atlante.library.saga.Genres.INSTANCE.getMain()) if (genres.contains(g)) genreOptions.add(g);
-        if (other) genreOptions.add(LibraryQuery.OTHER_GENRE);
-        if (!filterGenre.isEmpty() && !genreOptions.contains(filterGenre)) genreOptions.add(filterGenre);
-        Picker genre = new Picker(panel, "Genere", genreOptions, filterGenre);
+        TreeSet<String> languageSet = new TreeSet<>(), decadeSet = new TreeSet<>();
+        for (Book book : store.snapshot()) {
+            String l = LibraryQuery.languageOf(book); if (!l.isEmpty()) languageSet.add(l);
+            String d = LibraryQuery.decadeOf(book); if (!d.isEmpty()) decadeSet.add(d);
+        }
         ArrayList<String> sagaOptions = new ArrayList<>(Arrays.asList("Tutte le saghe", LibraryQuery.IN_SAGA, LibraryQuery.SINGLE)); sagaOptions.addAll(sagas);
         Picker saga = new Picker(panel, "Saga", sagaOptions, filterSaga);
+        ArrayList<String> languageOptions = new ArrayList<>(); languageOptions.add("Tutte le lingue"); languageOptions.addAll(languageSet);
+        Picker language = new Picker(panel, "Lingua", languageOptions, filterLanguage);
+        ArrayList<String> decadeOptions = new ArrayList<>(); decadeOptions.add("Tutti gli anni"); decadeOptions.addAll(decadeSet);
+        Picker decade = new Picker(panel, "Anno di pubblicazione", decadeOptions, filterDecade);
         Picker format = new Picker(panel, "Formato", Arrays.asList("Tutti i formati", "EPUB", "TXT", "CBZ", "AZW3", "CATALOGO"), filterFormat);
         Picker order = new Picker(panel, "Ordina per", Arrays.asList("Titolo", "Autore", "Saga"), sortOrder);
-        dialogBuilder().setTitle("Filtri e ordine").setView(panel)
+        dialogBuilder().setTitle("Altri filtri e ordine").setView(panel)
             .setNegativeButton("Annulla", null)
-            .setNeutralButton("Azzera", (d, w) -> { filterGenre = ""; filterFormat = ""; filterSaga = ""; applyLibraryFilters(); })
+            .setNeutralButton("Azzera", (d, w) -> { clearFilters(); applyLibraryFilters(); })
             .setPositiveButton("Applica", (d, w) -> {
-                filterGenre = genre.position() == 0 ? "" : genre.value();
+                filterLanguage = language.position() == 0 ? "" : language.value();
+                filterDecade = decade.position() == 0 ? "" : decade.value();
                 filterFormat = format.position() == 0 ? "" : format.value();
                 filterSaga = saga.position() == 0 ? "" : saga.value();
                 sortOrder = order.value(); applyLibraryFilters();
@@ -656,7 +858,8 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void applyLibraryFilters() {
-        getPreferences(MODE_PRIVATE).edit().putString("filterGenre", filterGenre)
+        getPreferences(MODE_PRIVATE).edit().putString("filterGenre", filterGenre).putString("filterAuthor", filterAuthor)
+            .putString("filterLanguage", filterLanguage).putString("filterDecade", filterDecade)
             .putString("filterFormat", filterFormat).putString("filterSaga", filterSaga).putString("sortOrder", sortOrder).apply();
         showLibrary();
     }
@@ -676,7 +879,7 @@ public final class MainActivity extends AppCompatActivity {
             gap(content, 16);
             content.addView(text(store.snapshot().isEmpty() ? "Apri il menu ☰ per cercare nuovi titoli online o importare EPUB, TXT e CBZ. Tutte le tue letture, anche su carta, trovano posto qui." : "Prova un altro titolo, autore o nome di saga.", 16, MUTED, false));
             gap(content, 24);
-            if (hasFilters()) content.addView(button("Azzera filtri", false, () -> { filterGenre = ""; filterFormat = ""; filterSaga = ""; applyLibraryFilters(); }));
+            if (hasFilters()) content.addView(button("Azzera filtri", false, () -> { clearFilters(); applyLibraryFilters(); }));
             if (store.snapshot().isEmpty()) content.addView(button("Cerca il tuo primo libro", true, this::onlineSearch));
             return;
         }
@@ -723,7 +926,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         shownCount = count;
         // A new tab, search or filter starts from the top; edits to a book keep the scroll position.
-        String key = tab + "\n" + query + "\n" + filterGenre + "\n" + filterFormat + "\n" + filterSaga + "\n" + sortOrder;
+        String key = tab + "\n" + query + "\n" + filterGenre + "\n" + filterFormat + "\n" + filterSaga + "\n" + sortOrder + "\n" + filterAuthor + "\n" + filterLanguage + "\n" + filterDecade;
         boolean changed = !key.equals(gridKey); gridKey = key;
         adapter.submit(list);
         if (changed) grid.scrollToPosition(0);
@@ -960,7 +1163,7 @@ public final class MainActivity extends AppCompatActivity {
 
         panel.addView(button("Completa i dati online", R.style.Atlante_Button_Tonal, () -> completeMetadata(b)), new LinearLayout.LayoutParams(-1, -2));
         panel.addView(button("Modifica scheda", R.style.Atlante_Button_Tonal, () -> { sheet.dismiss(); edit(b); }), new LinearLayout.LayoutParams(-1, -2));
-        panel.addView(button("Scegli copertina online", R.style.Atlante_Button_Tonal, () -> chooseOnlineCover(b)), new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(button("Cambia copertina", R.style.Atlante_Button_Tonal, () -> chooseOnlineCover(b)), new LinearLayout.LayoutParams(-1, -2));
         panel.addView(button("Scegli copertina dalla galleria", R.style.Atlante_Button_Tonal, () -> {
             coverBookId = b.id; sheet.dismiss();
             coverLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"));
@@ -1475,7 +1678,7 @@ public final class MainActivity extends AppCompatActivity {
                 if (creating) store.addCatalog(b);
                 else { app.atlante.library.online.MetadataEngine.markManual(original, b); store.replace(b); }
             } catch (Exception e) { error(e); return; }
-            if (creating) { destination = "Biblioteca"; tab = "Tutti i libri"; query = ""; filterGenre = ""; filterFormat = ""; filterSaga = ""; showLibrary(); }
+            if (creating) { destination = "Biblioteca"; tab = "Tutti i libri"; query = ""; clearFilters(); showLibrary(); }
             dialog.dismiss(); renderContent(); details(b);
         })); dialog.show();
     }
@@ -1614,9 +1817,20 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /** Where the current cover comes from: "gallery" (chosen by you), "online" (chosen by you online), "auto". */
-    private void markCover(Book b, String source) {
+    private void markCover(Book b, String source) { markCover(b, source, ""); }
+
+    /**
+     * Where the cover comes from: "online" and "gallery" are your choices (never replaced by the app: not by
+     * "Cerca e migliora le copertine", not by Sync or metadata), "auto" one the app found. [origin] tells
+     * source, language and publisher ("Hardcover · Inglese · Tor Books").
+     */
+    private void markCover(Book b, String source, String origin) {
         Book current = store.find(b.id); if (current == null) return;
-        try { current.meta.put("coverSource", source); store.replace(current); } catch (Exception ignored) { /* The cover is saved anyway. */ }
+        try {
+            current.meta.put("coverSource", source);
+            if (origin.isEmpty()) current.meta.remove("coverOrigin"); else current.meta.put("coverOrigin", origin);
+            store.replace(current);
+        } catch (Exception ignored) { /* The cover is saved anyway. */ }
     }
 
     /**
@@ -1662,11 +1876,11 @@ public final class MainActivity extends AppCompatActivity {
     /** Covers found online for one book; the one you tap replaces the current cover. */
     private void chooseOnlineCover(Book b) {
         View[] holder = new View[1];
-        holder[0] = app.atlante.library.ui.compose.CoverPickerView.create(this, palette, b, bytes -> {
+        holder[0] = app.atlante.library.ui.compose.CoverPickerView.create(this, palette, b, (bytes, origin) -> {
             screen.removeView(holder[0]);
             worker.execute(() -> {
                 try {
-                    store.saveDownloadedCover(b, bytes); markCover(b, "online");
+                    store.saveDownloadedCover(b, bytes); markCover(b, "online", origin);
                     runOnUiThread(() -> { forgetCover(b.id); Book current = store.find(b.id); if (current != null) details(current); });
                 } catch (Exception e) { runOnUiThread(() -> error(e)); }
             });
@@ -2320,6 +2534,8 @@ public final class MainActivity extends AppCompatActivity {
 
     @Override protected void onResume() {
         super.onResume();
+        // Other titles of the books (original, Italian, editions) for the search, as the saga engine knows them now.
+        if (worker != null) worker.execute(() -> { if (app.atlante.library.saga.SearchAliases.load(this)) runOnUiThread(() -> { if (searching() && reading == null && detailId == null) renderContent(); }); });
         if (store == null || widgetIntent == null) return;
         Intent i = widgetIntent; widgetIntent = null;
         String action = i.getAction();
@@ -2359,7 +2575,7 @@ public final class MainActivity extends AppCompatActivity {
         if (grid != null && grid.getLayoutManager() != null && detailId == null) libraryPositions.put(destination, grid.getLayoutManager().onSaveInstanceState());
         if (companionScroll != null && detailId == null) pagePositions.put(destination, companionScroll.getScrollY());
         companionScroll = null; grid = null; body = null; detailId = null;
-        destinationQueries.put(destination,query); query=destinationQueries.getOrDefault(next, "");
+        query = "";   // a page always opens with an empty search: the previous text does not come back
         destination = next; getPreferences(MODE_PRIVATE).edit().putString("destination",next).apply(); showLibrary();
     }
     private void addBottomNav() {

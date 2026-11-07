@@ -181,6 +181,51 @@ object Hardcover {
         return out.distinctBy { it.first }
     }
 
+    /** One edition's cover, for "Cambia copertina": Italian, English or the original, with its language and publisher. */
+    data class EditionCover(val url: String, val width: Int, val height: Int, val language: String, val languageName: String,
+                            val publisher: String, val title: String, val exact: Boolean, val main: Boolean)
+
+    /** Italian names of the languages of the editions shown in the picker. */
+    fun languageName(code3: String, english: String): String = when (code3) {
+        "ita" -> "Italiano"; "eng" -> "Inglese"; "spa" -> "Spagnolo"; "fre", "fra" -> "Francese"; "ger", "deu" -> "Tedesco"
+        "por", "pob" -> "Portoghese"; "jpn" -> "Giapponese"; "pol" -> "Polacco"; "rus" -> "Russo"; "dut", "nld" -> "Olandese"
+        "tur" -> "Turco"; "swe" -> "Svedese"; "chi", "zho" -> "Cinese"; "gre", "ell" -> "Greco"; "cze", "ces" -> "Ceco"; "ukr" -> "Ucraino"
+        "hun" -> "Ungherese"; "fin" -> "Finlandese"; "dan" -> "Danese"; "nor", "nob" -> "Norvegese"; "kor" -> "Coreano"; "ara" -> "Arabo"; "cat" -> "Catalano"
+        "" -> ""; else -> english.substringBefore(';').trim()
+    }
+
+    /**
+     * Every edition cover Hardcover has for this book's work (the Italian ones, the English and original ones,
+     * the others), the main one marked. Square images (audiobooks) and tiny ones are left out. Most read first.
+     */
+    fun coverChoices(book: Book): List<EditionCover> {
+        val isbns = BookMatcher.isbns(book.isbn)
+        var bookId: Int? = null
+        for (i in isbns.filter { it.length == 13 }.take(2)) { bookId = editionByIsbn(i)?.optJSONObject("book")?.optInt("id")?.takeIf { it > 0 }; if (bookId != null) break }
+        if (bookId == null) bookId = search(book)?.takeIf { it.second >= 78 }?.first
+        val id = bookId ?: return emptyList()
+        val b = api.call("query(\$id:Int!){ books(where:{id:{_eq:\$id}}) { image { url } editions(where:{image_id:{_is_null:false}}, order_by:{users_count:desc_nulls_last}, limit:40) {" +
+            " title isbn_13 isbn_10 image { url width height } language { code3 language } publisher { name } } } }", JSONObject().put("id", id))
+            .optJSONArray("books")?.optJSONObject(0) ?: return emptyList()
+        val mainUrl = b.optJSONObject("image")?.optString("url").orEmpty()
+        val eds = b.optJSONArray("editions") ?: return emptyList()
+        val out = ArrayList<EditionCover>()
+        for (i in 0 until eds.length()) {
+            val e = eds.optJSONObject(i) ?: continue
+            val img = e.optJSONObject("image") ?: continue
+            val url = img.optString("url").takeIf { it.startsWith("https://") } ?: continue
+            val w = img.optInt("width"); val h = img.optInt("height")
+            if (w in 1 until 150 || (w > 0 && h > 0 && h.toFloat() / w < 1.2f)) continue
+            val lang = e.optJSONObject("language")
+            val code = lang?.optString("code3").orEmpty()
+            val exact = isbns.isNotEmpty() && listOf(e.optString("isbn_13"), e.optString("isbn_10")).any { it.isNotEmpty() && it != "null" && it in isbns }
+            out += EditionCover(url, w, h, code, languageName(code, lang?.optString("language").orEmpty()), e.optJSONObject("publisher")?.optString("name").orEmpty(),
+                e.optString("title"), exact, url == mainUrl)
+        }
+        if (mainUrl.startsWith("https://") && out.none { it.url == mainUrl }) out.add(0, EditionCover(mainUrl, 0, 0, "", "", "", "", false, true))
+        return out.distinctBy { it.url }
+    }
+
     // ---- Scopri: books by genre as Hardcover's readers vote them ------------------------------------------
 
     /**
@@ -190,7 +235,7 @@ object Hardcover {
     fun discoverJson(genres: List<String>?): String {
         val genre = if (genres == null) "" else "taggings:{tag:{tag:{_in:\$g}, tag_category:{slug:{_eq:\"genre\"}}}}, "
         val query = "query(" + (if (genres == null) "" else "\$g:[String!]") + "){ books(where:{" + genre +
-            "}, order_by:{users_count:desc_nulls_last}, limit:150) { id title release_year cached_tags image { url }" +
+            "}, order_by:{users_count:desc_nulls_last}, limit:150) { id title release_year cached_tags(path:\"Genre\") image { url }" +
             " contributions(limit:1) { author { name } } editions(where:{language_id:{_eq:$ITALIAN}}, limit:1) { title image { url } } } }"
         val vars = JSONObject(); if (genres != null) vars.put("g", JSONArray(genres))
         return api.call(query.replace("query()", "query"), vars).toString()
@@ -201,7 +246,9 @@ object Hardcover {
 
     /** The genres most voted by readers (at most [n]): a book tagged "Horror" by a few is not a horror book. */
     fun topGenres(book: JSONObject, n: Int = 3): List<String> {
-        val tags = (book.opt("cached_tags") as? JSONObject ?: (book.opt("cached_tags") as? String)?.let { runCatching { JSONObject(it) }.getOrNull() })
+        // Asked with path:"Genre" the field is the genre list itself (a quarter of the bytes); the whole object also works.
+        val raw = book.opt("cached_tags")
+        val tags = raw as? JSONArray ?: (raw as? JSONObject ?: (raw as? String)?.let { runCatching { JSONObject(it) }.getOrNull() })
             ?.optJSONArray("Genre") ?: return emptyList()
         return (0 until tags.length()).mapNotNull { tags.optJSONObject(it) }.sortedByDescending { it.optInt("count") }.take(n).map { it.optString("tag").lowercase() }
     }

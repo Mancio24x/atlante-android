@@ -22,6 +22,7 @@ import app.atlante.library.saga.CacheManager
 import app.atlante.library.saga.Discover
 import app.atlante.library.saga.db.AtlanteDatabase
 import app.atlante.library.ui.ThemePalette
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
@@ -71,6 +72,12 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
         // Most picks already carry their Italian edition; the rest look for it one by one (children of this
         // effect: a new genre or page cancels them).
         coroutineScope {
+            // The next six are ready before "Altri 6" is tapped: their list comes from the same cached answer,
+            // their covers go to the disk cache (a few at a time, after this page's covers have started).
+            if (discover.hasMore(found.size, page)) launch(Dispatchers.IO) {
+                val next = runCatching { discover.picks(genre, page + 1) }.getOrDefault(emptyList())
+                next.mapNotNull { it.coverUrl }.forEach { u -> runCatching { SuggestionCovers.bytes(u) } }
+            }
             found.forEachIndexed { i, p -> if (!p.italian) launch {
                 val it = try { discover.italian(p) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { p }
                 if (it == p) return@launch

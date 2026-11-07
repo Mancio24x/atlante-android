@@ -63,6 +63,9 @@ public class SyncTest {
     static final class FakeHardcover implements HardcoverSync.Api {
         final List<String> mutations = new ArrayList<>();
         final Map<String, Integer> isbnBooks = new HashMap<>();
+        /** Search answers: a word of the query → hits. */
+        final Map<String, JSONArray> searchHits = new HashMap<>();
+        int searches;
         JSONArray userBooks;
         public JSONObject call(String q, JSONObject v) throws Exception {
             if (q.contains("me {")) return new JSONObject().put("me", new JSONArray().put(new JSONObject().put("id", 7).put("username", "lettrice")));
@@ -74,7 +77,9 @@ public class SyncTest {
                 }
                 return new JSONObject().put("editions", found); }
             if (q.contains("editions(where")) return new JSONObject().put("editions", v.getString("i").equals("9788835700777") ? new JSONArray().put(new JSONObject().put("id", 1).put("book_id", 555)) : new JSONArray());
-            if (q.contains("search(")) return new JSONObject().put("search", new JSONObject().put("results", new JSONObject().put("hits", new JSONArray())));
+            if (q.contains("search(")) { searches++; JSONArray hits = new JSONArray();
+                for (Map.Entry<String, JSONArray> e : searchHits.entrySet()) if (v.getString("q").contains(e.getKey())) hits = e.getValue();
+                return new JSONObject().put("search", new JSONObject().put("results", new JSONObject().put("hits", hits))); }
             if (q.contains("user_books(where:{id")) return new JSONObject().put("user_books", new JSONArray().put(new JSONObject().put("user_book_reads", new JSONArray().put(new JSONObject().put("id", 900)))));
             mutations.add(q.substring(q.indexOf('{') + 1).trim().split("\\(")[0] + " " + v);
             if (q.contains("insert_user_book(")) return new JSONObject().put("insert_user_book", new JSONObject().put("id", 4242));
@@ -180,6 +185,47 @@ public class SyncTest {
         assertNotNull(store.find(other.id));
         // Nothing left to propose afterwards.
         assertTrue(HardcoverSync.duplicates(store, new HardcoverSync.Settings(), m -> { }, api).isEmpty());
+    }
+
+    /** Nothing to repair by hand: the next sync merges the certain double by itself and keeps the user's book. */
+    @Test public void syncMergesOldCopiesByItself() throws Exception {
+        MemoryStore store = new MemoryStore();
+        Book original = book("Quel che resta del giorno", "Kazuo Ishiguro", "", Book.TO_READ, 0, 0); original.notes = "Bellissimo"; original.addedAt = 1;
+        Book copy = book("The Remains of the Day", "Kazuo Ishiguro", "9780679731726", Book.READ, 0, 245); copy.addedAt = 2; copy.finished = "2026-08-29";
+        SyncCore.remember(copy, HardcoverSync.SERVICE, new JSONObject().put("id", 9).put("book", 90), SyncCore.Snapshot.of(copy));
+        store.books.add(original); store.books.add(copy);
+        FakeHardcover api = new FakeHardcover();
+        api.userBooks = new JSONArray().put(withItalian(userBook(9, 3, null, "The Remains of the Day", "Kazuo Ishiguro", "9780679731726", 0), "Quel che resta del giorno", "9788806219352"));
+        HardcoverSync.Report r = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(1, r.merged); assertEquals(1, store.books.size()); assertEquals(0, r.created);
+        Book kept = store.books.get(0);
+        assertEquals("Quel che resta del giorno", kept.title); assertEquals("Bellissimo", kept.notes); assertEquals(Book.READ, kept.status);
+        assertEquals(9, SyncCore.link(kept, HardcoverSync.SERVICE).optInt("id"));
+        HardcoverSync.Report again = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(0, again.merged); assertEquals(0, again.created); assertEquals(1, store.books.size());
+    }
+
+    /**
+     * The Hardcover record lists no Italian edition and the book here has no ISBN: the Italian title is one of
+     * Hardcover's alternative titles. The book here is looked up once and linked; no English sheet appears.
+     */
+    @Test public void italianTitleOnlyAmongAlternativeTitlesIsNotDoubled() throws Exception {
+        MemoryStore store = new MemoryStore();
+        Book mine = book("Il buio oltre la siepe", "Harper Lee", "", Book.TO_READ, 0, 0); store.books.add(mine);
+        Book other = book("Va', metti una sentinella", "Harper Lee", "", Book.TO_READ, 0, 0); store.books.add(other);
+        FakeHardcover api = new FakeHardcover();
+        api.userBooks = new JSONArray().put(userBook(5, 3, null, "To Kill a Mockingbird", "Harper Lee", "9780061120084", 0));
+        api.searchHits.put("buio", new JSONArray().put(new JSONObject().put("document", new JSONObject().put("id", "50").put("title", "To Kill a Mockingbird")
+            .put("alternative_titles", new JSONArray().put("Il buio oltre la siepe")).put("author_names", new JSONArray().put("Harper Lee")).put("users_count", 9000))));
+        HardcoverSync.Report r = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(0, r.created); assertEquals(2, store.books.size());
+        assertEquals(5, SyncCore.link(store.find(mine.id), HardcoverSync.SERVICE).optInt("id"));
+        JSONObject otherLink = SyncCore.link(store.find(other.id), HardcoverSync.SERVICE);
+        assertTrue(otherLink == null || otherLink.optInt("id") == 0);
+        int searches = api.searches;
+        HardcoverSync.Report again = HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(0, again.created); assertEquals(2, store.books.size());
+        assertEquals("each book is searched once", searches, api.searches);
     }
 
     @Test public void statusMapping() {

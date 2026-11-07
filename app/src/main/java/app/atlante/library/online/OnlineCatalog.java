@@ -56,20 +56,28 @@ public final class OnlineCatalog {
 
     /**
      * Minimum gap between two requests of the same kind. Open Library covers by cover id or OLID are not
-     * rate limited by Open Library: up to 10 per second (6 at a time). Everything else keeps about one per
-     * second, the limit Open Library sets for its API and for covers by ISBN (over it the phone's IP is blocked).
+     * rate limited by Open Library: up to 10 per second (6 at a time). Images on a static CDN (Hardcover's
+     * assets on Cloudflare, Apple's mzstatic) have no limit: they share the same 6 parallel slots, without gap.
+     * Everything else keeps about one per second, the limit Open Library sets for its API and for covers by
+     * ISBN (over it the phone's IP is blocked).
+     * Measured (DiscoverSpeedLiveTest, 12 Hardcover covers): with the one-per-second lane 6 covers took 5.3–6.3 s
+     * and 12 took 11.6–12.6 s.
      */
     public static long interval(String address) {
-        return coverById(address) ? 100 : 1050;
+        return staticImage(address) ? 0 : coverById(address) ? 100 : 1050;
     }
     public static boolean coverById(String address) {
-        return address.startsWith("https://covers.openlibrary.org/b/id/") || address.startsWith("https://covers.openlibrary.org/b/olid/");
+        return address.startsWith("https://covers.openlibrary.org/b/id/") || address.startsWith("https://covers.openlibrary.org/b/olid/") || staticImage(address);
+    }
+    /** An image file on a CDN: no API behind it, no rate limit. */
+    public static boolean staticImage(String address) {
+        return address.startsWith("https://assets.hardcover.app/") || (address.startsWith("https://") && address.contains(".mzstatic.com/"));
     }
 
     /** Network only: shared rate limit per host (covers by id have their own, faster one), no cache. */
     public static byte[] download(String address, int limit) throws Exception {
         boolean cover = coverById(address);
-        String lane = cover ? "covers-by-id" : new URL(address).getHost(); long wait;
+        String lane = staticImage(address) ? "static-images" : cover ? "covers-by-id" : new URL(address).getHost(); long wait;
         synchronized (nextRequest) {
             long now = System.currentTimeMillis(); long slot = Math.max(now,nextRequest.containsKey(lane) ? nextRequest.get(lane) : now);
             nextRequest.put(lane,slot+interval(address)); wait=slot-now;

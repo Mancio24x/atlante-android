@@ -62,6 +62,13 @@ interface SagaDao {
     @Query("SELECT * FROM book_links WHERE bookId = :bookId") suspend fun link(bookId: String): BookLink?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putLink(l: BookLink)
     @Query("SELECT * FROM book_links") suspend fun links(): List<BookLink>
+
+    /** Other titles of the library's books through their identified work (original, Italian, alternative, editions). */
+    @Query("""SELECT l.bookId AS bookId, w.originalTitle AS title, w.italianTitle AS other, w.altTitles AS more FROM book_links l
+              JOIN works w ON w.id = l.workId WHERE l.status IN ('auto', 'confirmed', 'manual', 'no_saga')
+              UNION ALL SELECT l.bookId, e.title, NULL, '' FROM book_links l JOIN editions e ON e.workId = l.workId
+              WHERE l.status IN ('auto', 'confirmed', 'manual', 'no_saga')""")
+    suspend fun bookTitles(): List<BookTitles>
     @Query("DELETE FROM book_links WHERE bookId = :bookId") suspend fun deleteLink(bookId: String)
     @Query("SELECT ordinal FROM series_entries WHERE seriesId = :seriesId AND workId = :workId") suspend fun ordinal(seriesId: Long, workId: Long): String?
     @Query("SELECT * FROM book_links WHERE workId IN (:workIds)") suspend fun linksForWorks(workIds: List<Long>): List<BookLink>

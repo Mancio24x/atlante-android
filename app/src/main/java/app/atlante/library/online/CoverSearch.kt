@@ -17,14 +17,29 @@ import java.text.Normalizer
  * Placeholders ("image not available", 1×1 pixels) are rejected.
  */
 object CoverSearch {
-    data class Candidate(val url: String, val source: String, val exact: Boolean, val italian: Boolean = false)
-    data class Cover(val bytes: ByteArray, val source: String, val width: Int, val height: Int, val exact: Boolean, val italian: Boolean = false) {
-        /** Exact edition first, then an Italian edition, then size; landscape or tiny images lose. */
+    /**
+     * [language]: the edition's language code ("ita", "eng"…, "" when unknown); [original]: the work's main cover
+     * (on Hardcover the cover of its most read edition, usually the original); [detail]: publisher or edition title.
+     */
+    data class Candidate(val url: String, val source: String, val exact: Boolean, val italian: Boolean = false,
+                         val language: String = if (italian) "ita" else "", val languageName: String = if (italian) "Italiano" else "",
+                         val detail: String = "", val original: Boolean = false)
+    data class Cover(val bytes: ByteArray, val source: String, val width: Int, val height: Int, val exact: Boolean, val italian: Boolean = false,
+                     val language: String = if (italian) "ita" else "", val languageName: String = if (italian) "Italiano" else "",
+                     val detail: String = "", val original: Boolean = false) {
+        /** Exact edition first, then the preferred kind (Italian, or the original cover), then size; landscape or tiny images lose. */
         val score: Int get() {
             val ratio = height.toFloat() / width.coerceAtLeast(1)
-            return (if (exact) 2000 else 0) + (if (italian) 700 else 0) + minOf(width, 1200) + (if (ratio in 1.2f..1.8f) 300 else -600)
+            val preferred = if (prefer == ORIGINAL) original || language == "eng" else italian
+            return (if (exact) 2000 else 0) + (if (preferred) 700 else 0) + minOf(width, 1200) + (if (ratio in 1.2f..1.8f) 300 else -600)
         }
+        /** "Hardcover · Inglese · Tor Books": where the cover comes from, as shown and as remembered with the book. */
+        val origin: String get() = listOf(source, languageName, detail).filter { it.isNotBlank() }.joinToString(" · ")
     }
+
+    /** Impostazioni › Copertine: which cover wins when the app chooses by itself, and the picker's first filter. */
+    const val ITALIAN = "italian"; const val ORIGINAL = "original"; const val ALL = "all"
+    @JvmStatic @Volatile var prefer: String = ITALIAN
 
     /** Italian ISBN groups: 978-88 and 979-12. */
     fun italianIsbn(text: String) = Regex("(97888|97912)\\d{8}").containsMatchIn(text)
@@ -56,9 +71,15 @@ object CoverSearch {
     fun candidates(book: Book, get: (String, Int) -> ByteArray = fetch): Sequence<Candidate> = sequence {
         val isbns = isbns(book)
         // Hardcover first when connected: covers curated per edition (the exact one by ISBN, else the Italian one).
-        if (app.atlante.library.saga.Hardcover.enabled)
-            for ((url, exact, italian) in runCatching { app.atlante.library.saga.Hardcover.covers(book) }.getOrDefault(emptyList()))
-                yield(Candidate(url, "Hardcover", exact, italian))
+        // Every edition's cover of the work: Italian, English, the original; the same edition and the preferred kind first.
+        if (app.atlante.library.saga.Hardcover.enabled) {
+            val choices = runCatching { app.atlante.library.saga.Hardcover.coverChoices(book) }.getOrDefault(emptyList())
+            val ordered = choices.sortedWith(compareByDescending<app.atlante.library.saga.Hardcover.EditionCover> { it.exact }
+                .thenByDescending { if (prefer == ORIGINAL) it.main || it.language == "eng" else it.language == "ita" }
+                .thenByDescending { it.main })
+            for (e in ordered) yield(Candidate(e.url, "Hardcover", e.exact, e.language == "ita", e.language, e.languageName,
+                e.publisher.ifBlank { e.title }, e.main))
+        }
         for (i in isbns) yield(Candidate("https://covers.openlibrary.org/b/isbn/$i-L.jpg?default=false", "Open Library", true))
         for (i in isbns.filter { it.length == 13 }.take(1)) {
             yieldAll(apple(book, i, get, exact = true))
@@ -98,7 +119,7 @@ object CoverSearch {
         val bytes = runCatching { get(c.url, 6 * 1024 * 1024) }.getOrNull() ?: return null
         val (w, h) = dimensions(bytes) ?: return null
         if (w < MIN || h < MIN || bytes.size < 4000) return null      // placeholders and 1×1 images
-        return Cover(bytes, c.source, w, h, c.exact, c.italian)
+        return Cover(bytes, c.source, w, h, c.exact, c.italian, c.language, c.languageName, c.detail, c.original)
     }
 
     fun dimensions(bytes: ByteArray): Pair<Int, Int>? {
@@ -118,7 +139,7 @@ object CoverSearch {
             val sameIsbn = isbns(book).any { art.contains(it) }
             if (exact && !sameIsbn) return@mapNotNull null
             if (!sameIsbn && !(titleMatches(book.title, r.optString("trackName")) && authorMatches(book.author, r.optString("artistName")))) return@mapNotNull null
-            Candidate(art.replace(Regex("/\\d+x\\d+bb\\.(jpg|png)$"), "/1000x1000bb.jpg"), "Apple Books", sameIsbn, italianIsbn(art))
+            Candidate(art.replace(Regex("/\\d+x\\d+bb\\.(jpg|png)$"), "/1000x1000bb.jpg"), "Apple Books", sameIsbn, italianIsbn(art), detail = r.optString("trackName"))
         }
     }.getOrDefault(emptyList())
 
@@ -140,9 +161,9 @@ object CoverSearch {
                 val e = eds!!.optJSONObject(i) ?: continue
                 val id = e.optLong("cover_i"); if (id <= 0) continue
                 val italian = e.optJSONArray("language")?.let { l -> (0 until l.length()).any { l.optString(it) == "ita" } } == true
-                out += Candidate("https://covers.openlibrary.org/b/id/$id-L.jpg?default=false", "Open Library (edizione)", exact, italian)
+                out += Candidate("https://covers.openlibrary.org/b/id/$id-L.jpg?default=false", "Open Library", exact, italian, detail = "edizione")
             }
-            d.optLong("cover_i").takeIf { it > 0 }?.let { out += Candidate("https://covers.openlibrary.org/b/id/$it-L.jpg?default=false", "Open Library (opera)", exact) }
+            d.optLong("cover_i").takeIf { it > 0 }?.let { out += Candidate("https://covers.openlibrary.org/b/id/$it-L.jpg?default=false", "Open Library", exact, detail = "copertina dell’opera", original = true) }
         }
         out.sortedByDescending { it.italian }
     }.getOrDefault(emptyList())

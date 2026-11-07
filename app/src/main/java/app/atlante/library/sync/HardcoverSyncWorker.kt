@@ -44,7 +44,8 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
             prefs.edit().putString("hardcoverUser", report.user).putString("hardcoverLast", "Ultima sincronizzazione: $line").apply()
             val summary = "${report.remote} libri su Hardcover · ${report.linked} collegati\n${report.pushed} aggiornati su Hardcover · ${report.pulled} aggiornati in Atlante\n" +
                 "${report.added} aggiunti a Hardcover · ${report.created} nuove schede in Atlante" +
-                (if (report.recognized > 0) "\n${report.recognized} libri riconosciuti come già presenti: nessun doppione" else "")
+                (if (report.recognized > 0) "\n${report.recognized} libri riconosciuti come già presenti: nessun doppione" else "") +
+                (if (report.merged > 0) "\n${report.merged} doppioni di sincronizzazioni precedenti uniti da soli (resta il tuo libro)" else "")
             finished(if (settings.cancelled) "Sincronizzazione interrotta" else "Hardcover sincronizzato", summary)
             Result.success(workDataOf(SUMMARY to summary, NOTES to report.notes.take(60).joinToString("\n").take(8000), STOPPED to settings.cancelled))
         } catch (e: Exception) {

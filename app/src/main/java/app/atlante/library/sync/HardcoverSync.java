@@ -28,6 +28,8 @@ public final class HardcoverSync {
     /** A book searched on Hardcover without result is not searched again for this long. */
     static final long MISSING_RETRY = 30L * 86_400_000L;
     public static final class Report {
+        /** Doubles of earlier syncs merged automatically. */
+        public int merged;
         public String user = ""; public int remote, linked, pushed, pulled, created, added, onlyHere, recognized;
         public final List<String> notes = new ArrayList<>();
     }
@@ -64,6 +66,15 @@ public final class HardcoverSync {
         List<JSONObject> remote = remote(api, s, progress, report);
         if (remote == null) { report.notes.add("Sincronizzazione interrotta: niente è stato cambiato."); return report; }
         report.remote = remote.size();
+        // Doubles left by earlier syncs: the certain ones are merged at once (the copy holds nothing of the user's own);
+        // only the doubtful ones wait for "Ripara duplicati Hardcover".
+        List<Duplicate> certain = new ArrayList<>();
+        for (Duplicate d : duplicates(store, s, progress, api, remote)) if (d.certain) certain.add(d);
+        if (!certain.isEmpty() && !s.cancelled) {
+            progress.update("Unisco " + certain.size() + " doppioni di sincronizzazioni precedenti…");
+            merge(store, certain); report.merged = certain.size();
+            for (Duplicate d : certain) report.notes.add("Unito: «" + d.copy.title + "» in «" + d.original.title + "»");
+        }
         return compare(store, s, progress, api, pending, report, remote);
     }
 
@@ -131,6 +142,8 @@ public final class HardcoverSync {
             JSONObject ub = match(local, remote, matched);
             // Not recognized by title (Italian here, English there): the same Hardcover book through the ISBN.
             Integer viaIsbn = bookIdOf(local, byIsbn);
+            JSONObject known = SyncCore.link(local, SERVICE);
+            if (viaIsbn == null && known != null && known.optInt("id") == 0 && known.optInt("book") > 0) viaIsbn = known.optInt("book");
             if (viaIsbn != null) localBooks.add(viaIsbn);
             if (ub == null && viaIsbn != null && remoteByBook.containsKey(viaIsbn) && !matched.contains(remoteByBook.get(viaIsbn).optInt("id"))) ub = remoteByBook.get(viaIsbn);
             SyncCore.Snapshot here = SyncCore.Snapshot.of(local);
@@ -197,6 +210,14 @@ public final class HardcoverSync {
             if (b == null || store.find(b.id) != null) continue;
             // Never a duplicate: a book already here (another edition, a different title form) is not added again.
             if (bestIdentity(store.snapshot(), ub) != null) { report.recognized++; continue; }
+            // Same author, title only in Italian here and not among Hardcover's editions: the book here is looked up on
+            // Hardcover (once: the answer is kept with it) and, when it is the same Hardcover book, it is linked.
+            Book same = sameBookByAuthor(api, store, ub, matched, progress);
+            if (same != null) {
+                Book copy = Book.from(same.json());
+                SyncCore.remember(copy, SERVICE, new JSONObject().put("id", ub.getInt("id")).put("book", ub.optInt("book_id")), SyncCore.Snapshot.of(copy));
+                store.replace(copy); matched.add(ub.getInt("id")); report.recognized++; report.linked++; continue;
+            }
             progress.update("Nuova scheda da Hardcover: " + b.title);
             SyncCore.apply(b, snapshot(ub), false, true, today);
             SyncCore.remember(b, SERVICE, new JSONObject().put("id", ub.getInt("id")).put("book", ub.optInt("book_id")), SyncCore.Snapshot.of(b));
@@ -210,7 +231,9 @@ public final class HardcoverSync {
     /** A sheet made by an earlier sync from a Hardcover record (often English) and the book that was already here. */
     public static final class Duplicate {
         public final Book copy, original;
-        Duplicate(Book copy, Book original) { this.copy = copy; this.original = original; }
+        /** Same Hardcover book through an ISBN, or same title and author as the record or one of its editions (not a title part). */
+        public final boolean certain;
+        Duplicate(Book copy, Book original, boolean certain) { this.copy = copy; this.original = original; this.certain = certain; }
     }
 
     /**
@@ -226,8 +249,11 @@ public final class HardcoverSync {
 
     public static List<Duplicate> duplicates(SyncStore store, Settings s, Progress progress, Api api) throws Exception {
         List<JSONObject> remote = remote(api, s, progress, new Report());
+        return remote == null ? new ArrayList<>() : duplicates(store, s, progress, api, remote);
+    }
+
+    static List<Duplicate> duplicates(SyncStore store, Settings s, Progress progress, Api api, List<JSONObject> remote) throws Exception {
         List<Duplicate> out = new ArrayList<>();
-        if (remote == null) return out;
         Map<Integer, JSONObject> byId = new HashMap<>(); for (JSONObject ub : remote) byId.put(ub.optInt("id"), ub);
         List<Book> all = store.snapshot(); List<Book> copies = new ArrayList<>(); List<String> isbns = new ArrayList<>();
         for (Book b : all) {
@@ -241,19 +267,22 @@ public final class HardcoverSync {
         progress.update("Confronto delle schede…");
         for (Book c : copies) {
             JSONObject ub = byId.get(SyncCore.link(c, SERVICE).optInt("id"));
-            Book best = null; int top = 0;
+            Book best = null; int top = 0; boolean sure = false;
+            List<Book> whole = wholeIdentities(ub);
             for (Book o : all) {
                 if (o == c || used.contains(o.id) || used.contains(c.id)) continue;
                 JSONObject ol = SyncCore.link(o, SERVICE);
                 if (ol != null && ol.optInt("id") > 0 && ol.optInt("id") != ub.optInt("id")) continue;   // linked to another Hardcover book
                 Integer viaIsbn = bookIdOf(o, byIsbn);
                 int score = viaIsbn != null && viaIsbn == ub.optInt("book_id") ? 200 : 0;
+                int wholeScore = score;
+                for (Book id : whole) wholeScore = Math.max(wholeScore, BookMatcher.score(o, id));
                 for (Book id : identities(ub)) score = Math.max(score, BookMatcher.score(o, id));
-                if (score > top) { top = score; best = o; }
+                if (score > top) { top = score; best = o; sure = wholeScore >= BookMatcher.SAME_TITLE_AND_AUTHOR; }
             }
             // The one kept is never a newer bare sheet than the copy.
             if (best != null && top >= BookMatcher.SAME_TITLE_AND_AUTHOR && !(onlySyncData(best) && best.addedAt > c.addedAt)) {
-                out.add(new Duplicate(c, best)); used.add(c.id); used.add(best.id);
+                out.add(new Duplicate(c, best, sure)); used.add(c.id); used.add(best.id);
             }
         }
         return out;
@@ -320,6 +349,9 @@ public final class HardcoverSync {
         JSONObject search = api.call("query($q:String!){ search(query:$q, query_type:\"Book\", per_page:5, page:1) { results } }", new JSONObject().put("q", query)).optJSONObject("search");
         Object results = search == null ? null : search.opt("results");
         JSONObject parsed = results instanceof JSONObject ? (JSONObject) results : results instanceof String ? new JSONObject((String) results) : null;
+        // Same title (also one of Hardcover's alternative titles, often the Italian one) and the same author.
+        kotlin.Pair<Integer, Integer> hit0 = parsed == null ? null : app.atlante.library.saga.Hardcover.INSTANCE.pickHit(b, parsed);
+        if (hit0 != null && hit0.getSecond() >= 88) return hit0.getFirst();
         JSONArray hits = parsed == null ? null : parsed.optJSONArray("hits");
         for (int i = 0; hits != null && i < hits.length(); i++) {
             JSONObject hit = hits.optJSONObject(i), doc = hit == null ? null : hit.optJSONObject("document");
@@ -354,6 +386,37 @@ public final class HardcoverSync {
         return top >= BookMatcher.SAME_TITLE_UNKNOWN_AUTHOR ? found : null;
     }
 
+    /**
+     * A book here, by the same author and not linked to Hardcover yet, that Hardcover knows as the book of [ub]
+     * (searched by its own title, Hardcover's Italian alternative titles included). The answer is kept with the
+     * book ("book" in its link), so each one is searched once.
+     */
+    static Book sameBookByAuthor(Api api, SyncStore store, JSONObject ub, Set<Integer> matched, Progress progress) throws Exception {
+        Book identity = sheetIdentity(ub); if (identity == null) return null;
+        Set<String> surnames = new HashSet<>(BookMatcher.surnames(identity.author));
+        if (surnames.isEmpty()) return null;
+        for (Book o : store.snapshot()) {
+            JSONObject l = SyncCore.link(o, SERVICE);
+            if (l != null && l.optInt("id") > 0) continue;
+            boolean sameAuthor = false; for (String n : BookMatcher.surnames(o.author)) if (surnames.contains(n)) { sameAuthor = true; break; }
+            if (!sameAuthor) continue;
+            int id = l == null ? 0 : l.optInt("book");
+            if (id == 0 && (l == null || l.optLong("checked") == 0)) {
+                progress.update("Controllo su Hardcover: " + o.title);
+                Integer found; try { found = findBook(api, o, true); } catch (IOException e) { continue; }
+                id = found == null ? 0 : found;
+                Book copy = Book.from(o.json());
+                JSONObject link = l == null ? new JSONObject() : new JSONObject(l.toString());
+                link.put("id", 0).put("book", id).put("checked", System.currentTimeMillis());
+                JSONObject sync = copy.journal.optJSONObject("sync"); if (sync == null) sync = new JSONObject();
+                sync.put(SERVICE, link); copy.journal.put("sync", sync);
+                store.replace(copy);
+            }
+            if (id > 0 && id == ub.optInt("book_id")) return store.find(o.id);
+        }
+        return null;
+    }
+
     /** Hardcover book id of a local book through the ISBNs looked up in the batch. */
     static Integer bookIdOf(Book b, Map<String, Integer> byIsbn) {
         for (String i : BookMatcher.isbns(b.isbn)) if (byIsbn.containsKey(i)) return byIsbn.get(i);
@@ -365,6 +428,21 @@ public final class HardcoverSync {
      * Day" is also "Quel che resta del giorno", with that edition's ISBN.
      */
     static List<Book> identities(JSONObject ub) {
+        List<Book> out = wholeIdentities(ub);
+        // Titles led by the saga name: "Mistborn. L'ultimo impero", "Mistborn: The Final Empire" are also "L'ultimo impero"…
+        List<Book> withParts = new ArrayList<>(out);
+        for (Book b : out) for (String sep : new String[]{": ", ". ", " - "}) {
+            int at = b.title.indexOf(sep);
+            if (at > 0 && b.title.length() - at - sep.length() >= 4) {
+                Book part = new Book(); part.author = b.author; part.isbn = b.isbn; part.title = b.title.substring(at + sep.length()).trim();
+                withParts.add(part);
+            }
+        }
+        return withParts;
+    }
+
+    /** The record and its Italian editions, with their whole titles. */
+    static List<Book> wholeIdentities(JSONObject ub) {
         List<Book> out = new ArrayList<>();
         Book main = sheetIdentity(ub); if (main == null) return out;
         out.add(main);
@@ -377,16 +455,7 @@ public final class HardcoverSync {
             it.isbn = (e.isNull("isbn_13") ? "" : e.optString("isbn_13")) + " " + (e.isNull("isbn_10") ? "" : e.optString("isbn_10"));
             if (!it.title.isEmpty()) out.add(it);
         }
-        // Titles led by the saga name: "Mistborn. L'ultimo impero", "Mistborn: The Final Empire" are also "L'ultimo impero"…
-        List<Book> withParts = new ArrayList<>(out);
-        for (Book b : out) for (String sep : new String[]{": ", ". ", " - "}) {
-            int at = b.title.indexOf(sep);
-            if (at > 0 && b.title.length() - at - sep.length() >= 4) {
-                Book part = new Book(); part.author = b.author; part.isbn = b.isbn; part.title = b.title.substring(at + sep.length()).trim();
-                withParts.add(part);
-            }
-        }
-        return withParts;
+        return out;
     }
 
     public static SyncCore.Snapshot snapshot(JSONObject ub) {

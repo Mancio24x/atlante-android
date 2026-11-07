@@ -135,3 +135,6 @@ data class BookLink(
 /** Temporary data (search results, suggestions) with an expiry; personal data never goes here. */
 @Entity(tableName = "cache_entries", indices = [Index("expiresAt")])
 data class CacheEntry(@PrimaryKey val key: String, val kind: String, val json: String, val fetchedAt: Long, val expiresAt: Long)
+
+/** A title of a library book's work (query result, not a table). */
+data class BookTitles(val bookId: String, val title: String, val other: String?, val more: String)

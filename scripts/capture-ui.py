@@ -149,8 +149,13 @@ tap('Home',exact=True);shot('16-home')
 tap('Statistiche',exact=True);shot('17-statistics')
 # Genres: one horizontal bar per main genre ("Epic Fantasy" and "Fantasy" together), counts at the end.
 assert visible('Generi nella tua biblioteca',True), 'Genre chart missing'
-time.sleep(.6);shot('17a-statistics-genres')
-assert any(n.get('content-desc','').startswith('Fantasy:') for n in dump().iter('node')), 'Genres not grouped into bars'
+def has_bar():
+    return any(n.get('content-desc','').startswith('Fantasy:') for n in dump().iter('node'))
+for _ in range(4):
+    if has_bar(): break
+    adb('shell','input','swipe','540','1250','540','650','350'); time.sleep(.5)
+shot('17a-statistics-genres')
+assert has_bar(), 'Genres not grouped into bars'
 tap('Scopri',exact=True)
 # Scopri: a grid of six covers (most read), then six of a chosen genre; the search opens empty.
 for _ in range(40):
@@ -219,13 +224,15 @@ for _ in range(20):
     if any(n.get('text','').startswith('Altri libri di Pierce') for n in dump().iter('node')): break
     adb('shell','input','swipe','540','1250','540','750','300');time.sleep(1.5)
 shot('52-book-author-carousel')
-tap('Scegli copertina online',True)
+tap('Cambia copertina',True)
 for _ in range(40):
     texts=[n.get('text','') for n in dump().iter('node')]
-    if any(t.startswith('Tocca la copertina') or t.startswith('Nessuna copertina') for t in texts): break
+    descs=[n.get('content-desc','') for n in dump().iter('node')]
+    if any(d.startswith('Copertina ') for d in descs) or any(t.startswith('Nessuna copertina') for t in texts): break
     time.sleep(1.5)
-shot('52c-cover-picker')
-assert any(n.get('text','').startswith('Tocca la copertina') for n in dump().iter('node')), 'No online cover found for Red Rising'
+time.sleep(3);shot('52c-cover-picker')
+assert any(n.get('content-desc','').startswith('Copertina ') for n in dump().iter('node')), 'No online cover found for Red Rising'
+assert visible('Tutte ·'), 'Cover filters missing'
 tap('Chiudi',exact=True)
 back();tap('Apri menu laterale');tap('Universi',exact=True);time.sleep(1);shot('52a-universes')
 assert any(n.get('text','')=='Universi narrativi' for n in dump().iter('node')), 'Universes view missing'
@@ -235,12 +242,27 @@ for node in dump().iter('node'):
     if node.get('text','')=='Letti':
         b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));y=str((b[1]+b[3])//2)
         adb('shell','input','swipe','900',y,'100',y,'300');time.sleep(.5);break
-tap('Filtri e ordine');shot('52b-filters');tap('Annulla',exact=True)
+tap('Altri filtri');shot('52b-filters')
+assert visible('Lingua') or visible('Anno di pubblicazione'), 'Language / year filters missing'
+tap('Annulla',exact=True)
+# [Barra ricerca] [Genere] [Autore]: the two quick filters open their lists.
+tap('Filtra per genere');time.sleep(.5);shot('52d-genre-filter');tap('Chiudi',exact=True)
+tap('Filtra per autore');time.sleep(.5);shot('52e-author-filter')
+assert visible('Tutti gli autori'), 'Author filter missing'
+tap('Chiudi',exact=True)
 print('Saga carousels completed.')
 
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.
 back();tap('Impostazioni');tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
 assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
+# Qualità del catalogo: every check with its count.
+tap('Qualità del catalogo',True)
+for _ in range(20):
+    if any('libri controllati' in n.get('text','') for n in dump().iter('node')): break
+    time.sleep(.5)
+shot('53b-catalog-quality')
+assert any('libri controllati' in n.get('text','') for n in dump().iter('node')), 'Catalog quality did not load'
+tap('Chiudi',exact=True)
 assert any(b['title']=='Red Rising' for b in catalog()), 'Cache cleanup touched the library'
 print('Cache settings completed.')
 

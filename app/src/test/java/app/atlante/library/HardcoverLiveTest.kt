@@ -34,4 +34,18 @@ class HardcoverLiveTest {
         }
         println(String.format("%d libri in %.1f s", books.size, (System.currentTimeMillis() - start) / 1000.0))
     }
+
+    /** "Cambia copertina" for Italian books: their Italian covers and the English / original ones. */
+    @Test fun coversOfItalianBooks() {
+        val token = System.getenv("HARDCOVER_TOKEN") ?: ""
+        assumeTrue("HARDCOVER_TOKEN not set", token.isNotBlank())
+        Hardcover.useKey(token)
+        for ((title, author) in listOf("La via dei re" to "Brandon Sanderson", "Quel che resta del giorno" to "Kazuo Ishiguro", "Il nome della rosa" to "Umberto Eco")) {
+            val t = System.currentTimeMillis()
+            val c = Hardcover.coverChoices(Book().apply { this.title = title; this.author = author })
+            println(String.format("%-28s %2d copertine · %s · %.1fs", title, c.size,
+                c.groupingBy { it.languageName.ifEmpty { if (it.main) "principale" else "?" } }.eachCount(), (System.currentTimeMillis() - t) / 1000.0))
+            org.junit.Assert.assertTrue(title, c.any { it.language == "eng" || it.main })
+        }
+    }
 }
