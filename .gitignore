@@ -11,3 +11,6 @@ signing.properties
 
 scripts/__pycache__/
 .kotlin/
+
+# Claude Code: personal settings stay local (project skills and CLAUDE.md are versioned)
+.claude/settings.local.json

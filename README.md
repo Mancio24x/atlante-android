@@ -405,22 +405,11 @@ senza scelta del processore. Le future release saranno rilevate da Obtainium.
 
 ## Struttura del codice
 
-Il codice è diviso per argomento in `app/src/main/java/app/atlante/library/`:
-
-| Cartella | Contenuto |
-| --- | --- |
-| *(radice)* | `MainActivity`: navigazione e schermate non ancora migrate |
-| `ui/compose/` | schermate in Jetpack Compose (tema condiviso `AtlanteTheme`, Statistiche) |
-| `model/` | `Book`, diario di lettura (`ReadingJournal`), filtri (`LibraryQuery`), riconoscimento dei doppioni (`BookMatcher`) |
-| `storage/` | catalogo sul telefono (`LibraryStore`), backup ZIP, importazione di cataloghi |
-| `online/` | Open Library, catalogo SBN, saghe |
-| `sync/` | Calibre, Hardcover, KOReader, evidenziazioni del Kindle e regole di sincronizzazione |
-| `ebook/` | lettura di EPUB, TXT e CBZ |
-| `ui/` | griglia, copertine, mappa delle letture, palette dei temi |
-
-I test JVM sono in `app/src/test/java/app/atlante/library/`. `MainActivity` resta nella
-radice perché il nome della sua classe identifica il file delle preferenze (tema, filtri,
-collegamenti di Sync).
+Pacchetti, dipendenze tra i moduli e flussi principali: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Dati e
+database: [docs/DATABASE.md](docs/DATABASE.md). Funzioni con il codice e i test che le coprono:
+[docs/FEATURES.md](docs/FEATURES.md). Regole per lo sviluppo, anche con agenti AI: [AGENTS.md](AGENTS.md).
+`MainActivity` resta nella radice del pacchetto perché il nome della sua classe identifica il file delle preferenze
+(tema, filtri, collegamenti di Sync).
 
 ## Compilazione locale per chi sviluppa
 
