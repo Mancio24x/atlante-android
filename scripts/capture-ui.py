@@ -98,7 +98,7 @@ if not visible('AMOLED nero  ✓', True):
     (out/'failure-prefs.xml').write_bytes(adb('exec-out','run-as',package,'sh','-c','cat shared_prefs/*.xml'))
     raise AssertionError('Theme preference was not restored')
 shot('11-settings-restored')
-adb('shell','input','keyevent','4');time.sleep(.5);shot('12-theme-restored')
+leave_settings();shot('12-theme-restored')
 # Manual cataloging must save only after confirmation, without requiring an ISBN.
 def catalog(): return json.loads(adb('exec-out','run-as',package,'cat','files/library.json'))
 def back(): adb('shell','input','keyevent','4');time.sleep(.5)

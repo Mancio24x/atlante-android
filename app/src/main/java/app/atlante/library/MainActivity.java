@@ -1442,15 +1442,6 @@ public final class MainActivity extends AppCompatActivity {
             content.setPadding(dp(20), dp(24), dp(20), dp(24));
             content.addView(text("Scegli un autore dalla ricerca in alto.", 18, MUTED, false)); return;
         }
-        // The author as a dark card: initial, name, sagas, read and owned books.
-        Set<String> series = new HashSet<>(); int read = 0; for (Book b : selected) { if (!b.series.isEmpty()) series.add(b.series.toLowerCase(Locale.ROOT)); if (b.status.equals(Book.READ)) read++; }
-        LinearLayout card = row(); card.setPadding(dp(18), dp(16), dp(18), dp(16)); GradientDrawable g = background(INK, Color.TRANSPARENT); g.setCornerRadius(dp(20)); card.setBackground(g);
-        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2); cl.setMargins(dp(16), dp(4), dp(16), dp(8)); content.addView(card, cl);
-        TextView ini = text(initial(mapAuthor), 20, INK, true); ini.setGravity(Gravity.CENTER); GradientDrawable ig = background(PAPER, Color.TRANSPARENT); ig.setCornerRadius(dp(24)); ini.setBackground(ig); card.addView(ini, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        LinearLayout who = column(); who.setPadding(dp(14), 0, 0, 0); card.addView(who, new LinearLayout.LayoutParams(0, -2, 1));
-        who.addView(text(mapAuthor, 20, PAPER, true));
-        TextView stats = text(series.size() + (series.size() == 1 ? " saga" : " saghe") + " · " + read + " letti · " + selected.size() + " in biblioteca", 13, PAPER, false); stats.setAlpha(.75f); who.addView(stats);
-        card.setContentDescription(mapAuthor + ", " + stats.getText());
         content.addView(new ReadingMap(this, mapAuthor, selected, app.atlante.library.saga.SagaIndex.known(), this::details), new LinearLayout.LayoutParams(-1, -2));
         TextView hint = text("Autore → saga → libri nell’ordine di lettura. Tocca un libro per aprire la scheda."
             + (selected.size() == 250 ? " Sono mostrate le prime 250 opere." : ""), 12, MUTED, false);
