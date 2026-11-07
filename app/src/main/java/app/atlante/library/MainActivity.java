@@ -734,7 +734,7 @@ public final class MainActivity extends AppCompatActivity {
         if (!place) masthead.addView(iconButton(R.drawable.ic_settings, "Impostazioni", this::settings));
         LinearLayout controls = column(); controls.setPadding(dp(8), dp(4), dp(8), 0); header.addView(controls);
         if (map) mapHeader(controls); else if (!place) libraryHeader(controls);
-        if(destination.equals("Cerca")) controls.addView(button("Cerca anche online",R.style.Atlante_Button_Text,()->{lastOnlineQuery=query;onlineSearch();}));
+        if(destination.equals("Cerca")) controls.addView(button("Cerca anche online",R.style.Atlante_Button_Text,()->{lastOnlineQuery=query;prefillOnline=true;onlineSearch();}));
         addLibraryStage(!map);
     }
     /** The scrolling area under the library header; the extended button only where the top bar has no "+". */
@@ -1356,7 +1356,7 @@ public final class MainActivity extends AppCompatActivity {
                 line.setOnClickListener(v -> details(b));
             } else {
                 info.addView(text("Volume " + n, 15, MUTED, false)); info.addView(text("Non in biblioteca", 12, MUTED, false));
-                MaterialButton find = button("Cerca", R.style.Atlante_Button_Text, () -> { lastOnlineQuery = name + " " + n; onlineSearch(); }); find.setContentDescription("Cerca il volume " + n + " di " + name); line.addView(find);
+                MaterialButton find = button("Cerca", R.style.Atlante_Button_Text, () -> { lastOnlineQuery = name + " " + n; prefillOnline = true; onlineSearch(); }); find.setContentDescription("Cerca il volume " + n + " di " + name); line.addView(find);
             }
         }
         TextView note = text("Nessun numero inventato: i volumi mancanti vengono dai numeri dei tuoi libri. Ordine e saga si correggono dalla scheda.", 12, MUTED, false); note.setPadding(dp(6), dp(12), dp(6), 0); content.addView(note);
@@ -1925,10 +1925,11 @@ public final class MainActivity extends AppCompatActivity {
 
     /** Opens the online search with this text and runs it at once; an empty text opens an empty search. */
     private void searchFor(String query) {
-        lastOnlineQuery = query == null ? "" : query.trim(); autoSearch = !lastOnlineQuery.isEmpty(); clearSearch = lastOnlineQuery.isEmpty();
+        lastOnlineQuery = query == null ? "" : query.trim(); autoSearch = !lastOnlineQuery.isEmpty(); prefillOnline = autoSearch;
         onlineSearch();
     }
-    private boolean autoSearch, clearSearch;
+    /** The search opens empty; only a caller that asks for a text (a saga volume, "Cerca anche online") fills it. */
+    private boolean autoSearch, prefillOnline;
     /**
      * A book seen in Scopri, a saga or the catalog: its sheet opens at once. Already in the library → your record.
      * Otherwise the Italian catalog (SBN) and Open Library are asked in the background and the edition with the same
@@ -2069,8 +2070,8 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
         panel.addView(text("Cerca per titolo, autore o ISBN nel catalogo delle biblioteche italiane (SBN, per l’italiano) e su Open Library. Si aggiunge una scheda personale, anche se non possiedi il file. La ricerca invia al servizio solo il testo inserito.", 14, MUTED, false));
         gap(panel, 8);
-        EditText input = field(panel, "Titolo, autore o ISBN", clearSearch ? "" : lastOnlineQuery.isEmpty() ? getPreferences(MODE_PRIVATE).getString("onlineQuery", "") : lastOnlineQuery);
-        boolean runNow = autoSearch; autoSearch = false; clearSearch = false;
+        EditText input = field(panel, "Titolo, autore o ISBN", prefillOnline ? lastOnlineQuery : "");
+        boolean runNow = autoSearch; autoSearch = false; prefillOnline = false;
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         // Preferred language: its editions come first, with their own title and cover. Remembered.
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);

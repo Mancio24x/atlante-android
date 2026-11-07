@@ -6,6 +6,9 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Ricerca online sempre vuota** all'apertura (dal menu e da Scopri); si riempie solo quando la apri per un libro
+  preciso (volume mancante di una saga, «Cerca anche online»). **Trama**: da Wikipedia si prende la sezione «Trama»
+  (o Sinossi, Riassunto) della voce, non l'introduzione che dice solo che libro è.
 - **Correzioni dopo i test**: il segnalibro di Scopri non toglie più un libro che è già in biblioteca (prima, tornando
   in Scopri e toccandolo, il libro salvato veniva cancellato); le Impostazioni si aprono sempre dall'indice; ricerca
   della Biblioteca non tagliata sui telefoni stretti; numero di saga che non copre il titolo sulle copertine senza

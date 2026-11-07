@@ -42,11 +42,38 @@ object PlotFinder {
         runCatching { book.meta.put("descriptionSource", source) }
     }
 
-    /** The introduction of the work's article on it.wikipedia.org (Wikidata sitelink), or null. */
+    /**
+     * The plot section ("Trama", "Sinossi", "Riassunto"…) of the work's article on it.wikipedia.org (Wikidata
+     * sitelink), or null. Not the article's introduction: that says what the book is, not what happens in it.
+     */
     fun wikipedia(qid: Long): String? {
         val entity = JSONObject(String(OnlineCatalog.request("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q$qid&props=sitelinks&sitefilter=itwiki&format=json", 256 * 1024)))
         val title = entity.optJSONObject("entities")?.optJSONObject("Q$qid")?.optJSONObject("sitelinks")?.optJSONObject("itwiki")?.optString("title")?.takeIf { it.isNotBlank() } ?: return null
-        val summary = JSONObject(String(OnlineCatalog.request("https://it.wikipedia.org/api/rest_v1/page/summary/" + URLEncoder.encode(title.replace(' ', '_'), "UTF-8").replace("+", "%20"), 256 * 1024)))
-        return summary.optString("extract").takeIf { it.length > 80 }
+        val answer = JSONObject(String(OnlineCatalog.request("https://it.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exsectionformat=wiki&redirects=1&format=json&titles=" +
+            URLEncoder.encode(title, "UTF-8"), 2 * 1024 * 1024)))
+        val pages = answer.optJSONObject("query")?.optJSONObject("pages") ?: return null
+        val page = pages.keys().asSequence().mapNotNull { pages.optJSONObject(it) }.firstOrNull() ?: return null
+        return plotSection(page.optString("extract"))
+    }
+
+    private val PLOT_HEADINGS = Regex("^(trama|sinossi|riassunto|la trama|trama e personaggi|contenuto)\\b.*", RegexOption.IGNORE_CASE)
+
+    /**
+     * From an article's plain text with "== Titolo ==" headings: the text of the plot section (its sub-sections
+     * included, their headings dropped), at most about 2.500 characters cut at the end of a sentence; null if none.
+     */
+    @JvmStatic fun plotSection(extract: String): String? {
+        val lines = extract.lines(); var i = lines.indexOfFirst { l -> Regex("^==\\s*([^=].*?)\\s*==\\s*$").matchEntire(l.trim())?.groupValues?.get(1)?.let { PLOT_HEADINGS.matches(it) } == true }
+        if (i < 0) return null
+        val body = StringBuilder()
+        while (++i < lines.size) {
+            val l = lines[i].trim()
+            if (Regex("^==[^=].*==$").matches(l)) break                 // the next section of the same level
+            if (l.startsWith("===")) continue                           // a sub-section heading: its text belongs to the plot
+            if (l.isEmpty()) { if (body.isNotEmpty() && !body.endsWith("\n\n")) body.append("\n\n") } else body.append(l).append(' ')
+        }
+        var text = body.toString().replace(Regex(" +\n"), "\n").trim()
+        if (text.length > 2500) { val cut = text.lastIndexOf(". ", 2500); text = text.substring(0, if (cut > 800) cut + 1 else 2500).trim() + if (cut > 800) "" else "…" }
+        return text.takeIf { it.length > 80 }
     }
 }
