@@ -31,7 +31,8 @@ object BibliographicEngine {
 
     /** You said these two are different books (on either record): never proposed or merged. */
     fun different(a: Book, b: Book): Boolean {
-        fun has(x: Book, id: String): Boolean { val l = x.meta.optJSONArray("notSameAs") ?: return false; return (0 until l.length()).any { l.optString(it) == id } }
+        // A book still being looked up (Scopri, a search) has no id yet: nothing was decided about it.
+        fun has(x: Book, id: String?): Boolean { if (id.isNullOrEmpty()) return false; val l = x.meta.optJSONArray("notSameAs") ?: return false; return (0 until l.length()).any { l.optString(it) == id } }
         return has(a, b.id) || has(b, a.id)
     }
 
@@ -49,7 +50,7 @@ object BibliographicEngine {
 
     /** The same work, and why; null when they are not (or not enough to say so). */
     fun compare(a: Book, b: Book, ia: Identity?, ib: Identity?): kotlin.Pair<Confidence, List<String>>? {
-        if (a.id == b.id || different(a, b)) return null
+        if ((a.id != null && a.id == b.id) || different(a, b)) return null
         val score = BookMatcher.score(a, b)
         if (score == BookMatcher.DIFFERENT && a.number > 0 && b.number > 0) return null       // two volumes of one saga
         val authors = authorsMatch(a, b)
