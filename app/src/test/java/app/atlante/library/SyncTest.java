@@ -21,6 +21,7 @@ public class SyncTest {
         public Book find(String id) { for (Book b : books) if (b.id.equals(id)) return b; return null; }
         public void replace(Book u) { for (int i = 0; i < books.size(); i++) if (books.get(i).id.equals(u.id)) books.set(i, u); }
         public Book addCatalog(Book b) { books.add(b); return b; }
+        @Override public void remove(Book b) { books.removeIf(x -> x.id.equals(b.id)); }
     }
     static Book book(String title, String author, String isbn, String status, int page, int total) throws Exception {
         Map<String, String> f = new HashMap<>(); f.put("title", title); f.put("author", author); f.put("isbn", isbn);
@@ -61,12 +62,16 @@ public class SyncTest {
     /** A Hardcover API that answers like the real one (schema of the official documentation). */
     static final class FakeHardcover implements HardcoverSync.Api {
         final List<String> mutations = new ArrayList<>();
+        final Map<String, Integer> isbnBooks = new HashMap<>();
         JSONArray userBooks;
         public JSONObject call(String q, JSONObject v) throws Exception {
             if (q.contains("me {")) return new JSONObject().put("me", new JSONArray().put(new JSONObject().put("id", 7).put("username", "lettrice")));
             if (q.contains("user_books(where:{user_id")) return new JSONObject().put("user_books", v.getInt("offset") == 0 ? userBooks : new JSONArray());
             if (q.contains("isbn_13:{_in")) { JSONArray found = new JSONArray(); JSONArray asked = v.getJSONArray("i");
-                for (int i = 0; i < asked.length(); i++) if (asked.getString(i).equals("9788835700777")) found.put(new JSONObject().put("isbn_13", "9788835700777").put("book_id", 555).put("book", new JSONObject().put("canonical_id", JSONObject.NULL)));
+                for (int i = 0; i < asked.length(); i++) {
+                    Integer id = asked.getString(i).equals("9788835700777") ? Integer.valueOf(555) : isbnBooks.get(asked.getString(i));
+                    if (id != null) found.put(new JSONObject().put("isbn_13", asked.getString(i)).put("book_id", id).put("book", new JSONObject().put("canonical_id", JSONObject.NULL)));
+                }
                 return new JSONObject().put("editions", found); }
             if (q.contains("editions(where")) return new JSONObject().put("editions", v.getString("i").equals("9788835700777") ? new JSONArray().put(new JSONObject().put("id", 1).put("book_id", 555)) : new JSONArray());
             if (q.contains("search(")) return new JSONObject().put("search", new JSONObject().put("results", new JSONObject().put("hits", new JSONArray())));
@@ -111,6 +116,70 @@ public class SyncTest {
             .put(userBook(3, 3, null, "Solo su Hardcover", "Autrice", null, 0)).put(userBook(4242, 3, null, "La nona casa", "Leigh Bardugo", "9788835700777", 0));
         HardcoverSync.Report again = HardcoverSync.sync(store, s, m -> { }, api);
         assertEquals(0, again.pushed); assertEquals(0, again.pulled); assertEquals(0, again.created); assertTrue(api.mutations.toString(), api.mutations.isEmpty());
+    }
+
+    /** A Hardcover record as it often is: English edition, with its Italian editions listed. */
+    static JSONObject withItalian(JSONObject ub, String title, String isbn) throws Exception {
+        ub.getJSONObject("book").put("editions", new JSONArray().put(new JSONObject().put("title", title).put("isbn_13", isbn == null ? JSONObject.NULL : isbn).put("isbn_10", JSONObject.NULL)));
+        return ub;
+    }
+
+    /** Caso 1 + 4: Italian book here, English on Hardcover; synced twice: one book, linked, never a second sheet. */
+    @Test public void englishHardcoverRecordIsTheItalianBookHere() throws Exception {
+        MemoryStore store = new MemoryStore();
+        Book impero = book("L'ultimo impero", "Brandon Sanderson", "", Book.TO_READ, 0, 0); store.books.add(impero);
+        Book giorno = book("Quel che resta del giorno", "Kazuo Ishiguro", "9788806219352", Book.READ, 0, 0); store.books.add(giorno);
+        FakeHardcover api = new FakeHardcover();
+        api.isbnBooks.put("9788806219352", 90);                                             // the Italian ISBN is that Hardcover book
+        api.userBooks = new JSONArray()
+            .put(withItalian(userBook(5, 3, null, "Mistborn: The Final Empire", "Brandon Sanderson", "9780765311788", 0), "Mistborn. L'ultimo impero", "9788804748809"))
+            .put(userBook(9, 3, null, "The Remains of the Day", "Kazuo Ishiguro", "9780679731726", 0));   // book_id 90, no Italian edition listed
+        HardcoverSync.Settings s = new HardcoverSync.Settings();
+        for (int run = 0; run < 2; run++) {
+            HardcoverSync.Report r = HardcoverSync.sync(store, s, m -> { }, api);
+            assertEquals("run " + run, 0, r.created);
+            assertEquals(2, store.books.size());
+            assertEquals(2, r.linked);
+        }
+        assertEquals(5, SyncCore.link(store.find(impero.id), HardcoverSync.SERVICE).optInt("id"));
+        assertEquals(9, SyncCore.link(store.find(giorno.id), HardcoverSync.SERVICE).optInt("id"));
+        assertEquals("L'ultimo impero", store.find(impero.id).title);                      // the Italian edition stays
+        assertEquals(Book.READ, store.find(impero.id).status);                              // the reading state came over
+        assertTrue(api.mutations.stream().noneMatch(m -> m.startsWith("insert_user_book ")));  // nothing added twice on Hardcover
+    }
+
+    /** Caso 2: same title, different authors: two works. */
+    @Test public void sameTitleOtherAuthorIsAnotherBook() throws Exception {
+        MemoryStore store = new MemoryStore();
+        store.books.add(book("La casa", "Michael McDowell", "", Book.TO_READ, 0, 0));
+        FakeHardcover api = new FakeHardcover();
+        api.userBooks = new JSONArray().put(userBook(3, 3, null, "La casa", "Mario Rossi", null, 0));
+        assertEquals(1, HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api).created);
+        assertEquals(2, store.books.size());
+    }
+
+    /** Ripara duplicati: the English sheet made by an old sync is merged into the Italian book, which keeps its data. */
+    @Test public void oldEnglishCopyIsProposedAndMerged() throws Exception {
+        MemoryStore store = new MemoryStore();
+        Book original = book("Quel che resta del giorno", "Kazuo Ishiguro", "", Book.TO_READ, 0, 0); original.notes = "Bellissimo"; original.addedAt = 1;
+        Book copy = book("The Remains of the Day", "Kazuo Ishiguro", "9780679731726", Book.READ, 0, 245); copy.addedAt = 2; copy.finished = "2026-08-29";
+        SyncCore.remember(copy, HardcoverSync.SERVICE, new JSONObject().put("id", 9).put("book", 90), SyncCore.Snapshot.of(copy));
+        Book other = book("La casa", "Michael McDowell", "", Book.TO_READ, 0, 0);
+        store.books.add(original); store.books.add(copy); store.books.add(other);
+        FakeHardcover api = new FakeHardcover();
+        api.userBooks = new JSONArray().put(withItalian(userBook(9, 3, null, "The Remains of the Day", "Kazuo Ishiguro", "9780679731726", 0), "Quel che resta del giorno", "9788806219352"));
+        List<HardcoverSync.Duplicate> found = HardcoverSync.duplicates(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(1, found.size());
+        assertEquals(copy.id, found.get(0).copy.id); assertEquals(original.id, found.get(0).original.id);
+        HardcoverSync.merge(store, found);
+        assertEquals(2, store.books.size());
+        Book kept = store.find(original.id);
+        assertEquals("Quel che resta del giorno", kept.title); assertEquals("Bellissimo", kept.notes);
+        assertEquals(Book.READ, kept.status); assertEquals("2026-08-29", kept.finished); assertEquals(245, kept.totalPages);
+        assertEquals(9, SyncCore.link(kept, HardcoverSync.SERVICE).optInt("id"));
+        assertNotNull(store.find(other.id));
+        // Nothing left to propose afterwards.
+        assertTrue(HardcoverSync.duplicates(store, new HardcoverSync.Settings(), m -> { }, api).isEmpty());
     }
 
     @Test public void statusMapping() {

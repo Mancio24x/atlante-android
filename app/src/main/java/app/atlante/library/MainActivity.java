@@ -1690,6 +1690,7 @@ public final class MainActivity extends AppCompatActivity {
         gap(hc,8);
         if(hcOn) hc.addView(button("Sincronizza ora",true,this::runHardcover),new LinearLayout.LayoutParams(-1,-2));
         hc.addView(button(hcOn?"Impostazioni di Hardcover":"Collega Hardcover",hcOn?R.style.Atlante_Button_Text:0,this::hardcoverSettings),new LinearLayout.LayoutParams(-1,-2));
+        if(hcOn) hc.addView(button("Ripara duplicati Hardcover",R.style.Atlante_Button_Text,this::repairHardcoverDuplicates),new LinearLayout.LayoutParams(-1,-2));
 
         LinearLayout cal=surface(p,"CALIBRE · STATO, PAGINA E CAPITOLO");
         boolean calOn=!prefs.getString("calibreUrl","").isEmpty();
@@ -1850,6 +1851,45 @@ public final class MainActivity extends AppCompatActivity {
         app.atlante.library.sync.HardcoverSyncWorker.start(this);
         Toast.makeText(this,"Sincronizzazione avviata: segui l’avanzamento nelle notifiche. Puoi usare o chiudere l’app.",Toast.LENGTH_LONG).show();
         watchHardcoverSync();
+    }
+
+    /**
+     * Sheets made by an earlier sync from an English Hardcover record while the Italian book was already here:
+     * found, shown side by side and merged only when the user ticks them. The Italian book stays.
+     */
+    private void repairHardcoverDuplicates() {
+        if(busy) return; busy=true;
+        HardcoverSync.Settings s=new HardcoverSync.Settings();
+        AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Duplicati Hardcover",dialog,()->s.cancelled=true);
+        worker.execute(()->{
+            try {
+                s.token=app.atlante.library.sync.HardcoverAuth.token(this);
+                List<HardcoverSync.Duplicate> found=HardcoverSync.duplicates(store,s,m->runOnUiThread(()->label.setText(m)));
+                runOnUiThread(()->{ dialog[0].dismiss(); busy=false; if(isFinishing()||isDestroyed()) return; showDuplicates(found); });
+            } catch(Exception e){ runOnUiThread(()->{ dialog[0].dismiss(); busy=false; error(e); }); }
+        });
+    }
+
+    private String duplicateLine(Book b) {
+        return "«"+b.title+"» · "+b.author+"\n"+b.status+(b.isbn.isEmpty()?"":" · ISBN "+b.isbn)+(b.totalPages>0?" · "+b.totalPages+" pagine":"")+(b.rating>0?" · voto "+b.rating:"")+(b.finished.isEmpty()?"":" · letto il "+b.finished);
+    }
+
+    private void showDuplicates(List<HardcoverSync.Duplicate> found) {
+        if(found.isEmpty()){ dialogBuilder().setTitle("Nessun duplicato").setMessage("Nessuna scheda creata da Hardcover doppia di un libro già presente.").setPositiveButton("OK",null).show(); return; }
+        String[] labels=new String[found.size()]; boolean[] chosen=new boolean[found.size()]; Arrays.fill(chosen,true);
+        for(int i=0;i<found.size();i++) labels[i]="Copia da Hardcover:\n"+duplicateLine(found.get(i).copy)+"\n\nResta il tuo libro:\n"+duplicateLine(found.get(i).original);
+        dialogBuilder().setTitle(found.size()+" possibili duplicati")
+            .setMultiChoiceItems(labels,chosen,(d,w,c)->chosen[w]=c)
+            .setNegativeButton("Annulla",null)
+            .setPositiveButton("Unisci selezionati",(d,w)->{
+                List<HardcoverSync.Duplicate> pick=new ArrayList<>(); for(int i=0;i<found.size();i++) if(chosen[i]) pick.add(found.get(i));
+                if(pick.isEmpty()) return;
+                worker.execute(()->{
+                    try { HardcoverSync.merge(store,pick); runOnUiThread(()->{ Toast.makeText(this,pick.size()+" duplicati uniti: restano i tuoi libri, con il collegamento a Hardcover.",Toast.LENGTH_LONG).show(); renderContent(); }); }
+                    catch(Exception e){ runOnUiThread(()->error(e)); }
+                });
+            }).show();
+        Toast.makeText(this,"Resta sempre il tuo libro con note, voto e progressi; dalla copia prende solo ciò che gli manca.",Toast.LENGTH_LONG).show();
     }
 
     private boolean watchingHardcover;

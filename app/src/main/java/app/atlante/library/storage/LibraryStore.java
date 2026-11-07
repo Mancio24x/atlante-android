@@ -231,7 +231,7 @@ public final class LibraryStore implements SyncStore {
         if (find(candidate.id) == null) deleteTree(directory(candidate));
     }
 
-    public synchronized void remove(Book b) throws Exception {
+    @Override public synchronized void remove(Book b) throws Exception {
         int index = books.indexOf(b);
         books.remove(b);
         try { save(); }
