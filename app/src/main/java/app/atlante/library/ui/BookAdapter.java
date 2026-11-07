@@ -15,6 +15,8 @@ public final class BookAdapter extends RecyclerView.Adapter<BookAdapter.Holder> 
     public interface Cards {
         public View header();
         public View card(Book book);
+        /** Updates a card made before for another book; null when it cannot be reused (a new one is made). */
+        default View rebind(View card, Book book) { return null; }
     }
 
     public static final class Holder extends RecyclerView.ViewHolder {
@@ -50,7 +52,12 @@ public final class BookAdapter extends RecyclerView.Adapter<BookAdapter.Holder> 
         return new Holder(slot);
     }
 
+    /**
+     * A recycled book slot keeps its card and only refreshes its content (no new views while scrolling);
+     * the header, and cards that cannot be refreshed, are made again.
+     */
     @Override public void onBindViewHolder(Holder holder, int position) {
+        if (position > 0 && holder.slot.getChildCount() == 1 && cards.rebind(holder.slot.getChildAt(0), books.get(position - 1)) != null) return;
         holder.slot.removeAllViews();
         holder.slot.addView(position == 0 ? cards.header() : cards.card(books.get(position - 1)));
     }

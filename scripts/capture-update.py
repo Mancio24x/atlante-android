@@ -63,15 +63,21 @@ adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.
 def back(): adb('shell','input','keyevent','4');time.sleep(.5)
 def catalog(): return json.loads(adb('exec-out','run-as',package,'cat','files/library.json'))
 tap('Biblioteca',exact=True);tap('Apri menu laterale');tap('Impostazioni');shot('update-settings')
-texts=set()
-for _ in range(12):
-    texts.update(n.get('text','') for n in dump().iter('node'))
-    adb('shell','input','swipe','540','1250','540','550','250');time.sleep(.2)
-assert 'Importa eBook' in texts
+def page_texts():
+    texts=set()
+    for _ in range(12):
+        texts.update(n.get('text','') for n in dump().iter('node'))
+        adb('shell','input','swipe','540','1250','540','550','250');time.sleep(.2)
+    return texts
+# Settings are an index (design 6a): no backup entries there; the import is in "Libreria e catalogo".
+texts=page_texts()
+assert 'Libreria e catalogo' in texts and 'Obiettivi di lettura' in texts, 'Settings index missing'
 assert not any(x in texts for x in ['Importa catalogo','Catalogo e backup','Esporta backup','Ripristina o importa un catalogo'])
-assert 'OBIETTIVI DI LETTURA' in texts
+tap('Libreria e catalogo',True);texts=page_texts()
+assert 'Importa eBook' in texts
+back();tap('Obiettivi di lettura',True);texts=page_texts()
 assert 'Obiettivo di oggi' in texts, 'Goals ring missing'
-back();tap('Libro prova UI');tap('Aggiorna avanzamento',True);shot('update-wheels-pages')
+back();back();tap('Libro prova UI');tap('Aggiorna avanzamento',True);shot('update-wheels-pages')
 tap('Percentuale',exact=True);tap('20%',exact=True)
 adb('shell','input','keyevent','KEYCODE_MOVE_END');adb('shell','input','keyevent','KEYCODE_DEL');adb('shell','input','keyevent','KEYCODE_DEL');adb('shell','input','text','75')
 tap('OK',exact=True);shot('update-wheels-percent');tap('Salva',True,exact=True);time.sleep(1)

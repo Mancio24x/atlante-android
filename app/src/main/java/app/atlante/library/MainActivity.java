@@ -1157,6 +1157,7 @@ public final class MainActivity extends AppCompatActivity {
             adapter = new BookAdapter(new BookAdapter.Cards() {
                 @Override public View header() { return gridHeader(); }
                 @Override public View card(Book book) { return bookCard(book); }
+                @Override public View rebind(View card, Book book) { return !listView && card.getTag() instanceof CoverCell && ((CoverCell) card.getTag()).columns == density() ? bindCoverCell((CoverCell) card.getTag(), book) : null; }
             });
             GridLayoutManager manager = new GridLayoutManager(this, columns());
             manager.setSpanSizeLookup(adapter.spans(manager));
@@ -1174,11 +1175,13 @@ public final class MainActivity extends AppCompatActivity {
     }
     private int shownCount;
 
+    /** A plain bar, as in the designs: no gap between done and to do, no dot at the end. */
+    static void solid(LinearProgressIndicator bar) { bar.setIndicatorTrackGapSize(0); bar.setTrackStopIndicatorSize(0); }
     private LinearProgressIndicator progressBar(Book b) {
         LinearProgressIndicator bar = new LinearProgressIndicator(this);
         if (b.totalPages > 0) { bar.setMax(b.totalPages); bar.setProgressCompat(Math.min(b.currentPage, b.totalPages), false); }
         else { bar.setMax(100); bar.setProgressCompat(b.percent, false); }
-        bar.setTrackCornerRadius(dp(4)); bar.setTrackThickness(dp(6));
+        bar.setTrackCornerRadius(dp(4)); bar.setTrackThickness(dp(6)); solid(bar);
         return bar;
     }
 
@@ -1246,27 +1249,46 @@ public final class MainActivity extends AppCompatActivity {
      * Grid cell (design 3a): the cover is the card. Saga number top left, a tick when read, a thin progress bar
      * (accent while reading, copper when paused); the title under it at 3 and 4 columns, the author at 3.
      */
+    /** The views of a grid cell, kept so a recycled cell is refreshed instead of rebuilt while scrolling. */
+    private static final class CoverCell { LinearLayout cell; FrameLayout art; ImageView image; TextView fallback, number, tick, title, author; LinearProgressIndicator bar; int columns, width, height; }
     private View coverCard(Book b) {
-        int cols = density(), screen = getResources().getConfiguration().screenWidthDp, gutter = cols == 5 ? 6 : cols == 4 ? 8 : 12;
-        int shown = columns(), width = Math.max(48, (screen - 16 - shown * gutter) / shown), height = width * 3 / 2;
-        LinearLayout cell = column(); cell.setPadding(dp(gutter / 2f), 0, dp(gutter / 2f), dp(cols == 5 ? 10 : 14));
-        FrameLayout art = (FrameLayout) coverView(b, dp(width), dp(height));
-        cell.addView(art, new LinearLayout.LayoutParams(-1, dp(height)));
-        if (b.number > 0) { TextView n = text(number(b.number), 10, PAPER, false); n.setGravity(Gravity.CENTER); n.setPadding(dp(4), 0, dp(4), 0); n.setMinWidth(dp(18));
-            GradientDrawable g = background(INK, Color.TRANSPARENT); g.setCornerRadius(dp(9)); n.setBackground(g);
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, dp(18), Gravity.TOP | Gravity.START); lp.setMargins(dp(4), dp(4), 0, 0); art.addView(n, lp); }
-        if (b.status.equals(Book.READ)) { TextView tick = text("✓", 11, ON_ACCENT, false); tick.setGravity(Gravity.CENTER);
-            GradientDrawable g = background(SAGE, Color.TRANSPARENT); g.setCornerRadius(dp(9)); tick.setBackground(g);
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(18), dp(18), Gravity.TOP | Gravity.END); lp.setMargins(0, dp(4), dp(4), 0); art.addView(tick, lp); }
-        if (b.status.equals(Book.READING) || b.status.equals(Book.PAUSED)) {
-            LinearProgressIndicator bar = progressBar(b); bar.setTrackThickness(dp(4)); bar.setTrackCornerRadius(0);
-            bar.setIndicatorColor(b.status.equals(Book.PAUSED) ? COPPER : SAGE); bar.setTrackColor(0x33000000 | (INK & 0x00FFFFFF));
-            art.addView(bar, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM)); }
-        if (cols < 5) { gap(cell, 5); TextView t = text(b.title, cols == 3 ? 14 : 12, INK, true); t.setMaxLines(cols == 3 ? 2 : 1); t.setEllipsize(TextUtils.TruncateAt.END); cell.addView(t); }
-        if (cols == 3) { TextView a = text(b.author, 11, MUTED, false); a.setMaxLines(1); a.setEllipsize(TextUtils.TruncateAt.END); cell.addView(a); }
-        cell.setContentDescription(b.title + ", " + b.author + ", " + b.status + (b.status.equals(Book.READING) ? " " + progress(b) + "%" : ""));
-        cell.setOnClickListener(v -> details(b)); cell.setOnLongClickListener(v -> { bookActions(b); return true; });
-        return cell;
+        CoverCell c = new CoverCell(); c.columns = density();
+        int cols = c.columns, screen = getResources().getConfiguration().screenWidthDp, gutter = cols == 5 ? 6 : cols == 4 ? 8 : 12;
+        int shown = columns(); c.width = Math.max(48, (screen - 16 - shown * gutter) / shown); c.height = c.width * 3 / 2;
+        c.cell = column(); c.cell.setPadding(dp(gutter / 2f), 0, dp(gutter / 2f), dp(cols == 5 ? 10 : 14)); c.cell.setTag(c);
+        c.art = new FrameLayout(this); c.art.setClipToOutline(true); GradientDrawable shape = background(LINE, Color.TRANSPARENT); shape.setCornerRadius(dp(6)); c.art.setBackground(shape); c.art.setElevation(dp(3));
+        c.cell.addView(c.art, new LinearLayout.LayoutParams(-1, dp(c.height)));
+        c.fallback = text("", 11, SAGE, true); c.fallback.setPadding(dp(6), dp(8), dp(6), dp(8)); c.art.addView(c.fallback, new FrameLayout.LayoutParams(-1, -1));
+        c.image = new ImageView(this); c.image.setScaleType(ImageView.ScaleType.CENTER_CROP); c.art.addView(c.image, new FrameLayout.LayoutParams(-1, -1));
+        c.number = text("", 10, PAPER, false); c.number.setGravity(Gravity.CENTER); c.number.setPadding(dp(4), 0, dp(4), 0); c.number.setMinWidth(dp(18));
+        GradientDrawable ng = background(INK, Color.TRANSPARENT); ng.setCornerRadius(dp(9)); c.number.setBackground(ng);
+        FrameLayout.LayoutParams nl = new FrameLayout.LayoutParams(-2, dp(18), Gravity.TOP | Gravity.START); nl.setMargins(dp(4), dp(4), 0, 0); c.art.addView(c.number, nl);
+        c.tick = text("✓", 11, ON_ACCENT, false); c.tick.setGravity(Gravity.CENTER); GradientDrawable tg = background(SAGE, Color.TRANSPARENT); tg.setCornerRadius(dp(9)); c.tick.setBackground(tg);
+        FrameLayout.LayoutParams tl = new FrameLayout.LayoutParams(dp(18), dp(18), Gravity.TOP | Gravity.END); tl.setMargins(0, dp(4), dp(4), 0); c.art.addView(c.tick, tl);
+        c.bar = new LinearProgressIndicator(this); solid(c.bar); c.bar.setTrackThickness(dp(4)); c.bar.setTrackCornerRadius(0); c.bar.setTrackColor(0x33000000 | (INK & 0x00FFFFFF));
+        c.art.addView(c.bar, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+        if (cols < 5) { gap(c.cell, 5); c.title = text("", cols == 3 ? 14 : 12, INK, true); c.title.setMaxLines(cols == 3 ? 2 : 1); c.title.setEllipsize(TextUtils.TruncateAt.END); c.cell.addView(c.title); }
+        if (cols == 3) { c.author = text("", 11, MUTED, false); c.author.setMaxLines(1); c.author.setEllipsize(TextUtils.TruncateAt.END); c.cell.addView(c.author); }
+        return bindCoverCell(c, b);
+    }
+    /**
+     * Grid cell (design 3a): the cover is the card. Saga number top left, a tick when read, a thin progress bar
+     * (accent while reading, copper when paused); the title under it at 3 and 4 columns, the author at 3.
+     */
+    private View bindCoverCell(CoverCell c, Book b) {
+        c.fallback.setText(b.title); c.image.setContentDescription("Copertina di " + b.title);
+        covers.thumbnail(b.id, store.cover(b), Math.max(dp(c.width), dp(c.height)), c.image, c.fallback);
+        c.number.setVisibility(b.number > 0 ? View.VISIBLE : View.GONE); if (b.number > 0) c.number.setText(number(b.number));
+        c.tick.setVisibility(b.status.equals(Book.READ) ? View.VISIBLE : View.GONE);
+        boolean going = b.status.equals(Book.READING) || b.status.equals(Book.PAUSED);
+        c.bar.setVisibility(going ? View.VISIBLE : View.GONE);
+        if (going) { c.bar.setIndicatorColor(b.status.equals(Book.PAUSED) ? COPPER : SAGE);
+            if (b.totalPages > 0) { c.bar.setMax(b.totalPages); c.bar.setProgressCompat(Math.min(b.currentPage, b.totalPages), false); } else { c.bar.setMax(100); c.bar.setProgressCompat(b.percent, false); } }
+        if (c.title != null) c.title.setText(b.title);
+        if (c.author != null) c.author.setText(b.author);
+        c.cell.setContentDescription(b.title + ", " + b.author + ", " + b.status + (b.status.equals(Book.READING) ? " " + progress(b) + "%" : ""));
+        c.cell.setOnClickListener(v -> details(b)); c.cell.setOnLongClickListener(v -> { bookActions(b); return true; });
+        return c.cell;
     }
 
     static String order(Book b) { return b.number > 0 ? " · n. " + number(b.number) : ""; }
@@ -3393,7 +3415,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout line=row(); box.addView(line,new LinearLayout.LayoutParams(-1,-2));
         line.addView(text("La tua rotta "+today.getYear()+" · "+(yearly>0?done+" di "+yearly+" libri":done+(done==1?" libro letto":" libri letti")),13,MUTED,false),new LinearLayout.LayoutParams(0,-2,1));
         if(yearly>0) { line.addView(text(Math.min(100,done*100/yearly)+"%",13,SAGE,false)); gap(box,6);
-            LinearProgressIndicator bar=new LinearProgressIndicator(this); bar.setIndicatorColor(SAGE); bar.setTrackColor(LINE); bar.setTrackThickness(dp(6)); bar.setTrackCornerRadius(dp(3)); bar.setProgressCompat(Math.min(100,done*100/yearly),motion()); box.addView(bar); }
+            LinearProgressIndicator bar=new LinearProgressIndicator(this); bar.setIndicatorColor(SAGE); bar.setTrackColor(LINE); bar.setTrackThickness(dp(6)); bar.setTrackCornerRadius(dp(3)); solid(bar); bar.setProgressCompat(Math.min(100,done*100/yearly),motion()); box.addView(bar); }
         box.setOnClickListener(v->goals()); box.setContentDescription("Oggi e la tua rotta. Tocca per gli obiettivi.");
     }
     private void smallMetric(LinearLayout row,String value,String label,int color) {

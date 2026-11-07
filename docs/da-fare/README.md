@@ -57,12 +57,12 @@ ordine), workflow UI preview.
 ## 3. Revisione tecnica (Priorità 5)
 
 **Stato: da fare** (alcune parti già coperte da test). Punti concreti noti:
-- Scorrimento della Biblioteca: sull'emulatore CI 66% di frame lenti (p50 46 ms) — emulatore senza GPU, ma da
-  misurare su telefono vero (`dumpsys gfxinfo`) e ottimizzare `BookAdapter` / decodifica copertine (`ui/Covers.java`).
+- Scorrimento della Biblioteca: `BookAdapter` ora riusa le celle della griglia (`Cards.rebind`, `MainActivity.CoverCell`):
+  nessuna vista nuova durante lo scorrimento. Da misurare su telefono vero (`dumpsys gfxinfo`).
 - `MainActivity.java` ~3.100 righe: spostare in Compose una schermata alla volta (Impostazioni, Sync), senza
   cambiare comportamento.
 - Transizioni degli stati: fatto, tutte le 16 combinazioni in `StatusMatrixTest` (pagina, percentuale, date).
-- Statistiche: verificare riletture e distribuzioni temporali senza doppi conteggi dopo le unioni.
+- Statistiche: fatto, `StatsAfterMergeTest` (unioni e riletture contano una volta sola; nessun errore trovato).
 
 ## 4. Test e verifica sull'emulatore (Priorità 7)
 

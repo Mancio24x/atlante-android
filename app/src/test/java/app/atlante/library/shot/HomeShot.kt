@@ -36,6 +36,15 @@ class HomeShot {
         MainActivity::class.java.getDeclaredField("shelfView").apply { isAccessible = true }.setBoolean(a, true)
         MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a)
         shot(a, out, "shelf")
+        MainActivity::class.java.getDeclaredField("shelfView").apply { isAccessible = true }.setBoolean(a, false)
+        for (i in 1..14) store.addCatalog(Book().apply { id = ('a' + i).toString().repeat(64); title = "Libro $i"; author = "Autore $i"; format = "CATALOGO"; totalPages = 300; currentPage = i * 20
+            status = listOf(Book.TO_READ, Book.READING, Book.PAUSED, Book.READ)[i % 4]; if (i % 3 == 0) { series = "Saga"; number = i / 3.0 } })
+        MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a)
+        a.window.decorView.measure(android.view.View.MeasureSpec.makeMeasureSpec(a.window.decorView.width, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(a.window.decorView.height, android.view.View.MeasureSpec.EXACTLY))
+        a.window.decorView.layout(0, 0, a.window.decorView.width, a.window.decorView.height)
+        val grid = MainActivity::class.java.getDeclaredField("grid").apply { isAccessible = true }.get(a) as androidx.recyclerview.widget.RecyclerView
+        grid.scrollBy(0, 2000); grid.scrollBy(0, -2000)                                     // recycled cells are refreshed, not rebuilt
+        shot(a, out, "grid")
         c.pause().stop().destroy()
     }
 }

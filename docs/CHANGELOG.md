@@ -6,6 +6,9 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Biblioteca più fluida**: le celle della griglia vengono riusate durante lo scorrimento invece di essere
+  ricostruite. Barre di avanzamento piene, senza stacco né puntino finale. Test delle statistiche dopo unioni e
+  riletture.
 - **Correzioni**: anello di Home centrato con i numeri al centro; nello Scaffale torna il pulsante della vista.
   **Scopri**: «Popolari» (popolarità tra i lettori, non vendite), generi con gli stessi nomi della biblioteca
   (Giallo, Romanzo storico), edizione della scheda confermata con l'id dell'opera di Open Library.
