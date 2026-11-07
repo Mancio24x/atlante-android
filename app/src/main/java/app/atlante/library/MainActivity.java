@@ -1927,41 +1927,36 @@ public final class MainActivity extends AppCompatActivity {
      * Missing covers are downloaded; with {@code improve} also small ones (under 300 px) are replaced when a
      * clearly sharper cover of the same book is found. Covers chosen by the user are never replaced.
      */
+    /**
+     * Missing covers are downloaded; with {@code improve} also small ones (under 300 px) are replaced when a sharper
+     * one exists. In the background, with the notification and the bar (like Sync with Hardcover); the library
+     * redraws with the new covers when it ends. [books] says only whether there is anything to do.
+     */
     private void improveCovers(List<Book> books, boolean announce, boolean improve) {
-        ArrayList<Book> todo = new ArrayList<>();
-        for (Book b : books) {
-            Book current = store.find(b.id); if (current == null) continue;
+        boolean any = false;
+        for (Book b : books) { Book current = store.find(b.id); if (current == null) continue;
             String source = current.meta.optString("coverSource", "");
-            if (!store.cover(current).isFile()) todo.add(current);
-            else if (improve && !source.equals("gallery") && !source.equals("online") && coverWidth(current) < 300) todo.add(current);
-        }
-        if (todo.isEmpty()) { if (announce) Toast.makeText(this, "Tutte le copertine sono già presenti e nitide", Toast.LENGTH_SHORT).show(); return; }
-        if (fetchingCovers) { if (announce) Toast.makeText(this, "Ricerca delle copertine già in corso", Toast.LENGTH_SHORT).show(); return; }
-        fetchingCovers = true;
-        if (announce) Toast.makeText(this, "Cerco " + todo.size() + " copertine su Open Library e Apple Books…", Toast.LENGTH_LONG).show();
-        coverWorker.execute(() -> {
-            int found = 0, better = 0;
-            for (Book b : todo) {
-                if (isDestroyed()) break;
-                int old = coverWidth(b);
-                app.atlante.library.online.CoverSearch.Cover c;
-                try { c = app.atlante.library.online.CoverSearch.INSTANCE.best(b, (url, limit) -> { try { return OnlineCatalog.request(url, limit); } catch (Exception e) { throw new RuntimeException(e); } }, 8); }
-                catch (RuntimeException e) { continue; }
-                if (c == null || decode(null, c.getBytes(), 64) == null) continue;
-                if (old > 0 && c.getWidth() < old * 3 / 2) continue;      // not clearly sharper: keep what is there
-                try { store.saveDownloadedCover(b, c.getBytes()); markCover(b, "auto"); } catch (Exception ignored) { continue; }
-                if (old == 0) found++; else better++;
-                final boolean refresh = (found + better) % 4 == 0;
-                runOnUiThread(() -> { forgetCover(b.id); if (refresh && reading == null && detailId == null) renderContent(); });
+            if (!store.cover(current).isFile() || (improve && !source.equals("gallery") && !source.equals("online") && coverWidth(current) < 300)) { any = true; break; } }
+        if (!any) { if (announce) Toast.makeText(this, "Tutte le copertine sono già presenti e nitide", Toast.LENGTH_SHORT).show(); return; }
+        if (announce) startRepair(app.atlante.library.catalog.RepairWorker.COVERS, improve);
+        else app.atlante.library.catalog.RepairWorker.start(this, app.atlante.library.catalog.RepairWorker.COVERS, improve);
+        watchRepairs();
+    }
+
+    private boolean watchingRepairs;
+    /** When a background repair or cover search ends: cached covers are forgotten and the page redraws. */
+    private void watchRepairs() {
+        if (watchingRepairs) return; watchingRepairs = true;
+        androidx.work.WorkManager.getInstance(this).getWorkInfosForUniqueWorkLiveData(app.atlante.library.catalog.RepairWorker.NAME).observe(this, infos -> {
+            if (infos == null) return;
+            // The first answer lists work finished earlier: only remembered, nothing redrawn.
+            if (!repairsPrimed) { repairsPrimed = true; for (androidx.work.WorkInfo w : infos) if (w.getState().isFinished()) seenRepairs.add(w.getId().toString()); return; }
+            for (androidx.work.WorkInfo w : infos) if (w.getState().isFinished() && seenRepairs.add(w.getId().toString())) {
+                covers.clear(); app.atlante.library.ui.compose.CoverImages.clear(); renderAfterRepair(); break;
             }
-            final int added = found, improved = better;
-            runOnUiThread(() -> {
-                fetchingCovers = false; if (isFinishing() || isDestroyed()) return;
-                if (reading == null && detailId == null) renderContent();
-                Toast.makeText(this, added + " copertine nuove" + (improve ? ", " + improved + " migliorate" : "") + " su " + todo.size() + " libri", Toast.LENGTH_LONG).show();
-            });
         });
     }
+    private final java.util.Set<String> seenRepairs = new java.util.HashSet<>(); private boolean repairsPrimed;
 
     /** Covers found online for one book; the one you tap replaces the current cover. */
     private void chooseOnlineCover(Book b) {
@@ -2172,7 +2167,7 @@ public final class MainActivity extends AppCompatActivity {
     void startRepair(String type, boolean everything) {
         if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},8);
-        app.atlante.library.catalog.RepairWorker.start(this, type, everything);
+        app.atlante.library.catalog.RepairWorker.start(this, type, everything); watchRepairs();
         Toast.makeText(this, app.atlante.library.catalog.RepairWorker.title(type) + ": avviata in background. Puoi continuare a usare l’app.", Toast.LENGTH_LONG).show();
     }
 

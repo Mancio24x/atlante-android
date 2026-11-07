@@ -62,6 +62,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 SAGAS -> sagas(c, store)
                 MAPS -> maps(store)
                 METADATA -> metadata(c, store)
+                COVERS -> covers(c, store, inputData.getBoolean(EVERYTHING, false))
             }
             job = job.copy(state = "done", phase = "Completato", finishedAt = System.currentTimeMillis())
             save(force = true); finished(c)
@@ -235,6 +236,39 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             message = "$filled schede completate dal catalogo offline · $covers copertine trovate online" + if (conflicts.length() > 0) " · ${conflicts.length()} differenze da decidere" else ""); save(force = true)
     }
 
+    /**
+     * Cerca e migliora le copertine: books without a cover, and with [improve] the small ones (under 300 px) that
+     * you did not choose. A new cover replaces one only when clearly sharper. Your choices are never touched.
+     */
+    private suspend fun covers(c: Context, store: LibraryStore, improve: Boolean) {
+        phase("Ricerca delle copertine")
+        fun width(f: java.io.File): Int { val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }; android.graphics.BitmapFactory.decodeFile(f.path, o); return maxOf(0, o.outWidth) }
+        val todo = store.snapshot().filter { b ->
+            val f = store.cover(b); val src = b.meta.optString("coverSource")
+            !f.isFile || (improve && src !in setOf("gallery", "online") && width(f) < 300)
+        }.sortedBy { it.id }
+        job = job.copy(total = todo.size); save(force = true)
+        var found = job.found; var better = job.applied - job.found
+        for ((i, b) in todo.withIndex()) {
+            if (i < job.checkpoint) continue
+            if (isStopped) throw CancellationException()
+            val current = store.find(b.id)
+            if (current != null) {
+                val old = store.cover(current).let { if (it.isFile) width(it) else 0 }
+                val cover = runCatching { app.atlante.library.online.CoverSearch.best(current) }.getOrNull()
+                if (cover != null && (old == 0 || cover.width >= old * 3 / 2)) runCatching {
+                    store.saveDownloadedCover(current, cover.bytes)
+                    store.find(b.id)?.let { x -> val copy = Book.from(x.json()); copy.meta.put("coverSource", "auto"); copy.meta.put("coverOrigin", cover.origin); store.replace(copy) }
+                    if (old == 0) found++ else better++
+                }
+            }
+            job = job.copy(done = i + 1, checkpoint = i + 1, found = found, applied = found + better); save()
+        }
+        job = job.copy(done = todo.size, message = if (todo.isEmpty()) "Tutte le copertine sono già presenti e nitide" else "$found copertine nuove" + if (improve) " · $better migliorate" else "")
+        save(force = true)
+        app.atlante.library.widget.Widgets.libraryChanged(c)
+    }
+
     private fun proposal(p: BibliographicEngine.Pair) = JSONObject().put("keep", p.keep.id).put("other", p.other.id)
         .put("keepLine", line(p.keep)).put("otherLine", line(p.other)).put("confidence", p.confidence.label)
         .put("reasons", JSONArray(p.reasons)).put("conflicts", JSONArray(p.conflicts))
@@ -285,13 +319,13 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             fun n(x: Int) = "%,d".format(java.util.Locale.ITALY, x)
             return if (j.total > 0) "${n(j.done)} / ${n(j.total)} libri analizzati — ${j.done * 100 / j.total}%" else j.phase.ifEmpty { "Preparazione" }
         }
-        const val LIBRARY = "library"; const val HARDCOVER = "hardcover"; const val SAGAS = "sagas"; const val MAPS = "maps"; const val METADATA = "metadata"
+        const val LIBRARY = "library"; const val HARDCOVER = "hardcover"; const val SAGAS = "sagas"; const val MAPS = "maps"; const val METADATA = "metadata"; const val COVERS = "covers"
         const val NAME = "atlante-repair"; const val TAG = "repair"
         private const val CHANNEL = "repair"; private const val NOTICE = 4201; private const val DONE = 4202
 
         @JvmStatic fun title(type: String) = when (type) {
             LIBRARY -> "Ripara duplicati della libreria"; HARDCOVER -> "Ripara duplicati Hardcover"; SAGAS -> "Ripara saghe"
-            MAPS -> "Ripara mappe delle saghe"; METADATA -> "Completa metadati"; else -> "Riparazione"
+            MAPS -> "Ripara mappe delle saghe"; METADATA -> "Completa metadati"; COVERS -> "Ricerca delle copertine"; else -> "Riparazione"
         }
 
         private fun channel(c: Context) {

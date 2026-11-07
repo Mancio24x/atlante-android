@@ -70,6 +70,7 @@ for _ in range(12):
 assert 'Importa eBook' in texts
 assert not any(x in texts for x in ['Importa catalogo','Catalogo e backup','Esporta backup','Ripristina o importa un catalogo'])
 assert 'OBIETTIVI DI LETTURA' in texts
+assert 'Obiettivo di oggi' in texts, 'Goals ring missing'
 back();tap('Libro prova UI');tap('Aggiorna avanzamento',True);shot('update-wheels-pages')
 tap('Percentuale',exact=True);tap('20%',exact=True)
 adb('shell','input','keyevent','KEYCODE_MOVE_END');adb('shell','input','keyevent','KEYCODE_DEL');adb('shell','input','keyevent','KEYCODE_DEL');adb('shell','input','text','75')

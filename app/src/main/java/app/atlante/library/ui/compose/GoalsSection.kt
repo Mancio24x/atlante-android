@@ -38,9 +38,13 @@ private fun monthName(m: YearMonth) = m.month.getDisplayName(TextStyle.FULL, Loc
 @Composable
 fun GoalsSection(goals: ReadingGoals, books: List<Book>) {
     var version by remember { mutableIntStateOf(0) }      // recomposes after every change
+    var expanded by remember { mutableStateOf(false) }
     val today = LocalDate.now()
     key(version) {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Today's goal in a big ring; a tap opens the goals of the day, the month and the year.
+        GoalsSummary(goals, books, today, expanded) { expanded = !expanded }
+        AnimatedVisibility(expanded) {
+        Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GoalCard("Oggi") {
                 GoalRow("Minuti di lettura al giorno", goals.dailyMinutesOn, { goals.dailyMinutesOn = it; version++ }, goals.dailyMinutes, 1..1440, 5, "min",
                     { goals.dailyMinutes = it; version++ }, { goals.resetDailyMinutes(); version++ }, goals.minutesToday(books, today), "Tempo letto oggi")
@@ -81,6 +85,60 @@ fun GoalsSection(goals: ReadingGoals, books: List<Book>) {
             Text("I progressi usano solo le sessioni registrate e le date in cui hai finito i libri; una rilettura conta una volta per data.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        }
+    }
+}
+
+/** The card on top: today's goal as a big ring with the numbers inside, month and year as two small rings. */
+@Composable
+private fun GoalsSummary(goals: ReadingGoals, books: List<Book>, today: LocalDate, expanded: Boolean, onTap: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val daily = when {
+        goals.dailyMinutesOn -> Triple(goals.minutesToday(books, today), "min", "Minuti di oggi")
+        goals.dailyPagesOn -> Triple(goals.pagesToday(books, today), "pagine", "Pagine di oggi")
+        else -> null
+    }
+    val month = if (goals.monthOn) goals.month(books, YearMonth.now()) else null
+    val year = if (goals.yearOn) goals.year(books, today) else null
+    val description = (daily?.let { (p, unit, label) -> "$label: ${p.done} di ${p.goal} $unit, ${p.percent}%" } ?: "Nessun obiettivo per oggi") +
+        (month?.let { ". Mese: ${it.done} di ${it.goal} libri" } ?: "") + (year?.let { ". Anno: ${it.done} di ${it.goal} libri" } ?: "") +
+        if (expanded) ". Tocca per chiudere le impostazioni" else ". Tocca per impostare gli obiettivi"
+    ElevatedCard(onClick = onTap, modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = description }) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Obiettivo di oggi", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            Box(Modifier.size(168.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(progress = { daily?.first?.fraction ?: 0f }, modifier = Modifier.fillMaxSize(), strokeWidth = 14.dp,
+                    trackColor = scheme.surfaceVariant, color = if (daily?.first?.reached == true) scheme.tertiary else scheme.primary)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (daily != null) {
+                        Text("${daily.first.done}", style = MaterialTheme.typography.displaySmall)
+                        Text("di ${daily.first.goal} ${daily.second}", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                        if (daily.first.reached) Text("raggiunto ✓", style = MaterialTheme.typography.labelLarge, color = scheme.tertiary)
+                    } else Text("Imposta\nun obiettivo", style = MaterialTheme.typography.titleMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                SmallRing(monthName(YearMonth.now()).replaceFirstChar { it.uppercase() }, month)
+                SmallRing("${today.year}", year)
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(if (expanded) "Chiudi le impostazioni ▲" else "Imposta giorno, mese e anno ▼", style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+        }
+    }
+}
+
+@Composable
+private fun SmallRing(label: String, p: ReadingGoals.Progress?) {
+    val scheme = MaterialTheme.colorScheme
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(progress = { p?.fraction ?: 0f }, modifier = Modifier.fillMaxSize(), strokeWidth = 6.dp, trackColor = scheme.surfaceVariant,
+                color = if (p?.reached == true) scheme.tertiary else scheme.secondary)
+            Text(p?.let { "${it.done}/${it.goal}" } ?: "–", style = MaterialTheme.typography.labelLarge)
+        }
+        Text(label, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
     }
 }
 
