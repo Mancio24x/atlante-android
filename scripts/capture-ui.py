@@ -140,6 +140,7 @@ shot('13-manual-book');back()
 tap('Elenco');tap('Elenco',exact=True);shot('14-list-view')
 adb('shell','am','force-stop',package);adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity')
 tap('Impostazioni');back()
+tap('Biblioteca',exact=True);time.sleep(.6)   # after a restart the app opens on Home
 assert any('Griglia' in (n.get('text',''),n.get('content-desc','')) for n in dump().iter('node')), 'List preference was not restored'
 assert any(b['title']=='AtlanteManualeProva' for b in catalog()), 'Manual book lost after restart'
 shot('15-manual-and-list-restored')

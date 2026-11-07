@@ -268,7 +268,7 @@ class LargeWidget : ReadingWidget(true) {
             Spacer(GlanceModifier.height(10.dp))
             val goals = if (roomy) shown.goals else shown.goals.take(2)
             if (goals.isEmpty()) Text("Attiva gli obiettivi di lettura nelle impostazioni dell’app.", maxLines = 2, style = TextStyle(color = c.muted, fontSize = 12.sp))
-            Column(GlanceModifier.fillMaxWidth().defaultWeight().clickable(stats)) {
+            Column(GlanceModifier.fillMaxWidth().clickable(stats)) {
                 goals.forEach { g ->
                     Row(GlanceModifier.fillMaxWidth()) {
                         Text(g.label, GlanceModifier.defaultWeight(), maxLines = 1, style = TextStyle(color = c.ink, fontSize = 13.sp))
@@ -280,6 +280,8 @@ class LargeWidget : ReadingWidget(true) {
                     Spacer(GlanceModifier.height(8.dp))
                 }
             }
+            // The goals take their natural height (the last bar was clipped when they shared the free space).
+            Spacer(GlanceModifier.defaultWeight())
             Row(GlanceModifier.fillMaxWidth()) {
                 Pill("+${shown.pageStep} pag.", c, true, "Aggiungi ${shown.pageStep} pagine",
                     actionRunCallback<AddPagesAction>(actionParametersOf(BOOK_ID to b.id, STEP to shown.pageStep)))
