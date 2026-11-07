@@ -2445,87 +2445,37 @@ public final class MainActivity extends AppCompatActivity {
 
     // ---- Sync: Hardcover, Calibre, Kindle highlights ----------------------------------------------
 
-    /** Sync (design 5a): is everything up to date? One "Sincronizza tutto", then services as rows that open. */
-    private String syncOpen = "hc";
-    private void syncPage(LinearLayout p) {
+    /** Sync (design 5a), drawn in Compose (ui/compose/SyncScreen.kt); the actions are the same methods as before. */
+    private View syncView() {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         boolean hcOn=app.atlante.library.sync.HardcoverAuth.connected(this), calOn=!prefs.getString("calibreUrl","").isEmpty(), koOn=!prefs.getString("koreaderKey","").isEmpty();
-        int services=(hcOn?1:0)+(calOn?1:0)+(koOn?1:0), conflicts=hcOn?hardcoverConflicts().length():0;
-        String last=!prefs.getString("hardcoverLast","").isEmpty()?prefs.getString("hardcoverLast",""):prefs.getString("calibreLast","");
-
-        LinearLayout hero=column(); hero.setPadding(dp(18),dp(18),dp(18),dp(18)); MaterialCardView heroCard=card(hero); heroCard.setRadius(dp(20)); p.addView(heroCard,new LinearLayout.LayoutParams(-1,-2));
-        LinearLayout status=row(); hero.addView(status,new LinearLayout.LayoutParams(-1,-2));
-        status.addView(iconTile(services==0?R.drawable.ic_cloud:conflicts>0?R.drawable.ic_warning:R.drawable.ic_check,conflicts>0?COPPER:SAGE,dp(48),dp(24)));
-        LinearLayout words=column(); words.setPadding(dp(14),0,0,0); status.addView(words,new LinearLayout.LayoutParams(0,-2,1));
-        words.addView(text(services==0?"Nessun servizio collegato":conflicts>0?"Quasi tutto aggiornato":"Tutto aggiornato",20,INK,true));
-        words.addView(text(services==0?"Collega Hardcover, Calibre o KOReader qui sotto.":(last.isEmpty()?"":last+" · ")+services+(services==1?" servizio":" servizi"),13,MUTED,false));
-        if(services>0) { gap(hero,16); MaterialButton all=button("Sincronizza tutto",0,()->syncAll(hcOn,calOn,koOn)); all.setIconResource(R.drawable.ic_sync); all.setIconTint(android.content.res.ColorStateList.valueOf(ON_ACCENT)); hero.addView(all,new LinearLayout.LayoutParams(-1,-2)); }
-        if(conflicts>0) { gap(hero,12);
-            LinearLayout warn=row(); warn.setPadding(dp(14),0,dp(4),0); warn.setMinimumHeight(dp(48)); GradientDrawable g=background(blend(WHITE,COPPER,.14f),Color.TRANSPARENT); g.setCornerRadius(dp(14)); warn.setBackground(g);
-            ImageView icon=new ImageView(this); icon.setImageResource(R.drawable.ic_warning); icon.setColorFilter(COPPER); warn.addView(icon,new LinearLayout.LayoutParams(dp(20),dp(20)));
-            TextView label=text(conflicts+(conflicts==1?" libro differisce":" libri differiscono")+" da Hardcover",14,INK,false); label.setPadding(dp(10),0,dp(8),0); warn.addView(label,new LinearLayout.LayoutParams(0,-2,1));
-            TextView fix=text("Risolvi",14,COPPER,false); fix.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); fix.setPadding(dp(8),0,dp(8),0); warn.addView(fix);
-            warn.setOnClickListener(v->resolveHardcoverConflicts()); warn.setContentDescription("Conflitti con Hardcover: "+conflicts+". Risolvi"); hero.addView(warn,new LinearLayout.LayoutParams(-1,-2)); }
-
-        sectionHeader(p,"Servizi collegati",calOn||hcOn?"":"",null);
-        LinearLayout list=listCard(p);
-        serviceRow(list,"hc","Hardcover","H",SAGE,hcOn,conflicts>0,hcOn?(prefs.getString("hardcoverUser","").isEmpty()?"Collegato":"@"+prefs.getString("hardcoverUser",""))+" · stato, pagina e voto":"Non collegato · serve la tua chiave personale",
-            "Stato, pagina e voto, nei due sensi.",hcOn?new Object[]{"Sincronizza ora",(Runnable)this::runHardcover,"Impostazioni",(Runnable)this::hardcoverSettings,"Ripara duplicati",(Runnable)this::repairHardcoverDuplicates}:new Object[]{"Collega Hardcover",(Runnable)this::hardcoverSettings});
-        serviceRow(list,"cal","Calibre","C",INK,calOn,false,calOn?prefs.getString("calibreUrl",""):"Non collegato · server di contenuti sulla rete di casa",
-            "Stato, pagina e capitolo dal server di contenuti di Calibre.",calOn?new Object[]{"Sincronizza ora",(Runnable)this::runCalibre,"Impostazioni",(Runnable)this::calibreSettings,"Come prepararlo",(Runnable)this::calibreHelp}:new Object[]{"Collega Calibre",(Runnable)this::calibreSettings,"Come prepararlo",(Runnable)this::calibreHelp});
-        serviceRow(list,"ko","KOReader","K",COPPER,koOn,false,koOn?"Riceve · "+prefs.getString("koreaderUser",""):"Non configurato · riceve la percentuale letta",
-            "Riceve la percentuale letta, anche senza EPUB sul telefono.",new Object[]{"Ricevi avanzamento",(Runnable)this::runKoreader,"Collega un libro",(Runnable)this::linkKoreader,"Impostazioni",(Runnable)this::koreaderSettings});
-
-        sectionHeader(p,"Importa ed esporta","",null);
-        LinearLayout files=listCard(p);
         int missing=0; for(Book b:store.snapshot()) if(!store.cover(b).exists()) missing++;
-        listRow(files,R.drawable.ic_edit,"Evidenziazioni Kindle","Da My Clippings.txt al taccuino del libro",()->clippingsLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")));
-        listRow(files,R.drawable.ic_download,"Importa catalogo o backup","Atlante, Goodreads, StoryGraph, Calibre ZIP",this::chooseBackup);
-        listRow(files,R.drawable.ic_upload,"Esporta backup",store.snapshot().size()+" libri, note e avanzamenti in un file ZIP",this::exportBackup);
-        listRow(files,R.drawable.ic_image,"Copertine mancanti",missing==0?"Ogni libro ha la sua copertina":missing+(missing==1?" libro senza copertina":" libri senza copertina"),()->fetchMissingCovers(store.snapshot(),true));
-
-        sectionHeader(p,"Fonti dei dati","",null);
-        LinearLayout src=column(); src.setPadding(dp(16),dp(16),dp(16),dp(16)); MaterialCardView srcCard=card(src); srcCard.setRadius(dp(20)); p.addView(srcCard,new LinearLayout.LayoutParams(-1,-2));
-        com.google.android.material.chip.ChipGroup chips=new com.google.android.material.chip.ChipGroup(this); chips.setChipSpacing(dp(6)); src.addView(chips);
-        boolean isbndb=!prefs.getString("isbndbKey","").isEmpty();
-        String[] names={"SBN","Open Library","Internet Archive","Hardcover","ISBNdb"}; boolean[] on={true,true,true,hcOn,isbndb};
-        for(int i=0;i<names.length;i++) { TextView t=text("●  "+names[i],13,on[i]?INK:MUTED,false); t.setPadding(dp(12),dp(6),dp(12),dp(6));
-            GradientDrawable g=background(on[i]?blend(WHITE,SAGE,.08f):Color.TRANSPARENT,on[i]?Color.TRANSPARENT:LINE); g.setCornerRadius(dp(16)); t.setBackground(g);
-            SpannableStringBuilder v=new SpannableStringBuilder(t.getText()); v.setSpan(new android.text.style.ForegroundColorSpan(on[i]?SAGE:LINE),0,1,0); t.setText(v);
-            t.setContentDescription(names[i]+(on[i]?", attiva":", non attiva")); chips.addView(t); }
-        LinearLayout keys=row(); keys.setPadding(0,dp(8),0,0); src.addView(keys,new LinearLayout.LayoutParams(-1,-2));
-        keys.addView(text("ISBNdb è facoltativo, con la tua chiave.",12,MUTED,false),new LinearLayout.LayoutParams(0,-2,1));
-        keys.addView(button("Chiavi",R.style.Atlante_Button_Text,this::sourceKeys));
-
-        LinearLayout privacy=row(); privacy.setGravity(Gravity.TOP); privacy.setPadding(dp(8),dp(20),dp(8),0); p.addView(privacy,new LinearLayout.LayoutParams(-1,-2));
-        ImageView lock=new ImageView(this); lock.setImageResource(R.drawable.ic_lock); lock.setColorFilter(MUTED); privacy.addView(lock,new LinearLayout.LayoutParams(dp(18),dp(18)));
-        TextView note=text("Chiavi e password restano su questo telefono. Ai servizi vanno solo stato, pagina, capitolo e voto dei libri collegati.",12,MUTED,false); note.setPadding(dp(10),0,0,0); privacy.addView(note,new LinearLayout.LayoutParams(0,-2,1));
+        String last=!prefs.getString("hardcoverLast","").isEmpty()?prefs.getString("hardcoverLast",""):prefs.getString("calibreLast","");
+        app.atlante.library.ui.compose.SyncState state=new app.atlante.library.ui.compose.SyncState(hcOn,prefs.getString("hardcoverUser",""),hcOn?hardcoverConflicts().length():0,
+            prefs.getString("calibreUrl",""),koOn,prefs.getString("koreaderUser",""),last,store.snapshot().size(),missing,!prefs.getString("isbndbKey","").isEmpty());
+        return app.atlante.library.ui.compose.SyncView.create(this,palette,state,new app.atlante.library.ui.compose.SyncHost() {
+            @Override public void syncAll() { MainActivity.this.syncAll(hcOn,calOn,koOn); }
+            @Override public void resolveConflicts() { resolveHardcoverConflicts(); }
+            @Override public void runHardcover() { MainActivity.this.runHardcover(); }
+            @Override public void hardcoverSettings() { MainActivity.this.hardcoverSettings(); }
+            @Override public void repairHardcover() { repairHardcoverDuplicates(); }
+            @Override public void runCalibre() { MainActivity.this.runCalibre(); }
+            @Override public void calibreSettings() { MainActivity.this.calibreSettings(); }
+            @Override public void calibreHelp() { MainActivity.this.calibreHelp(); }
+            @Override public void runKoreader() { MainActivity.this.runKoreader(); }
+            @Override public void linkKoreader() { MainActivity.this.linkKoreader(); }
+            @Override public void koreaderSettings() { MainActivity.this.koreaderSettings(); }
+            @Override public void importClippings() { clippingsLauncher.launch(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")); }
+            @Override public void importCatalog() { chooseBackup(); }
+            @Override public void exportBackup() { MainActivity.this.exportBackup(); }
+            @Override public void fetchCovers() { fetchMissingCovers(store.snapshot(),true); }
+            @Override public void sourceKeys() { MainActivity.this.sourceKeys(); }
+        });
     }
     /** Hardcover runs in the background; Calibre (or else KOReader) then runs in the foreground with its progress. */
     private void syncAll(boolean hc,boolean cal,boolean ko) {
         if(hc) runHardcover();
         if(cal) runCalibre(); else if(ko) runKoreader();
-    }
-    /** A service as a row: letter tile, name with a state dot, one line of status; a tap shows what it does and its actions. */
-    private void serviceRow(LinearLayout list,String key,String name,String letter,int tile,boolean connected,boolean warning,String status,String what,Object[] actions) {
-        if(list.getChildCount()>0) rule(list);
-        boolean open=key.equals(syncOpen);
-        LinearLayout line=row(); line.setPadding(dp(16),dp(14),dp(12),dp(14)); list.addView(line,new LinearLayout.LayoutParams(-1,-2));
-        TextView mono=text(letter,17,PAPER,true); mono.setGravity(Gravity.CENTER); GradientDrawable g=background(tile,Color.TRANSPARENT); g.setCornerRadius(dp(12)); mono.setBackground(g); line.addView(mono,new LinearLayout.LayoutParams(dp(40),dp(40)));
-        LinearLayout info=column(); info.setPadding(dp(12),0,dp(8),0); line.addView(info,new LinearLayout.LayoutParams(0,-2,1));
-        LinearLayout title=row(); info.addView(title);
-        TextView n=text(name,15,INK,false); n.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); title.addView(n);
-        View dot=new View(this); GradientDrawable d=background(warning?COPPER:connected?SAGE:LINE,Color.TRANSPARENT); d.setCornerRadius(dp(4)); dot.setBackground(d);
-        LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(dp(7),dp(7)); dl.setMargins(dp(6),0,0,0); title.addView(dot,dl);
-        TextView st=text(status,12,MUTED,false); st.setMaxLines(1); st.setEllipsize(TextUtils.TruncateAt.END); info.addView(st);
-        ImageView chevron=new ImageView(this); chevron.setImageResource(open?R.drawable.ic_expand_less:R.drawable.ic_expand_more); chevron.setColorFilter(MUTED); line.addView(chevron,new LinearLayout.LayoutParams(dp(22),dp(22)));
-        line.setContentDescription(name+", "+(connected?"collegato":"non collegato")+", "+status+(open?". Comprimi":". Mostra azioni"));
-        line.setOnClickListener(v->{ syncOpen=open?"":key; if(companionScroll!=null) pagePositions.put(destination,companionScroll.getScrollY()); showCompanion(); });
-        if(!open) return;
-        LinearLayout more=column(); more.setPadding(dp(68),0,dp(16),dp(16)); list.addView(more,new LinearLayout.LayoutParams(-1,-2));
-        more.addView(text(what,13,MUTED,false)); gap(more,8);
-        com.google.android.material.chip.ChipGroup buttons=new com.google.android.material.chip.ChipGroup(this); buttons.setChipSpacing(dp(8)); more.addView(buttons);
-        for(int i=0;i<actions.length;i+=2) { Runnable r=(Runnable)actions[i+1]; MaterialButton b=button((String)actions[i],i==0?R.style.Atlante_Button_Tonal:R.style.Atlante_Button_Text,r); if(((String)actions[i]).equals("Impostazioni")) b.setContentDescription("Impostazioni di "+name); buttons.addView(b); }
     }
     /** A card that holds rows separated by hairlines. */
     LinearLayout listCard(LinearLayout p) {
@@ -3302,7 +3252,7 @@ public final class MainActivity extends AppCompatActivity {
         reading=null; pages=null; body=null; grid=null; detailId=null; companionScroll=null; base(PAPER);
         LinearLayout top=row(); top.setPadding(dp(12),dp(6),dp(12),dp(8)); root.addView(top);
         top.addView(iconButton(R.drawable.ic_menu,"Apri menu laterale",this::openDrawer));
-        top.addView(destination.equals("Scopri")?pageHeading("SCOPRI","La prossima storia."):pageHeading("","Statistiche"),new LinearLayout.LayoutParams(0,-2,1));
+        top.addView(destination.equals("Scopri")?pageHeading("SCOPRI","La prossima storia."):destination.equals("Sync")?pageHeading("SYNC","Invia e ricevi."):pageHeading("","Statistiche"),new LinearLayout.LayoutParams(0,-2,1));
         top.addView(iconButton(R.drawable.ic_settings,"Impostazioni",this::settings));
         root.addView(content,new LinearLayout.LayoutParams(-1,0,1));
         addBottomNav(); updateBack();
@@ -3320,10 +3270,10 @@ public final class MainActivity extends AppCompatActivity {
             return;
         }
         if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("IMPOSTAZIONI",settingsSection.isEmpty()?"Impostazioni":settingsTitle(settingsSection)); settingsPage(p); updateBack(); return; }
-        boolean sync=destination.equals("Sync");
+        if(destination.equals("Sync")) { composePage(syncView()); return; }
         String day=java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM",Locale.ITALIAN)).toUpperCase(Locale.ITALIAN);
-        LinearLayout panel=companionPage(sync?"SYNC":day, sync?"Invia e ricevi.":"Buona lettura.");
-        if(sync) syncPage(panel); else { home(panel); sessionBar(); }
+        LinearLayout panel=companionPage(day,"Buona lettura.");
+        home(panel); sessionBar();
         addBottomNav(); updateBack(); animateIn(panel);
         int y=pagePositions.getOrDefault(destination,0); companionScroll.post(() -> { if(companionScroll!=null) companionScroll.scrollTo(0,y); });
     }

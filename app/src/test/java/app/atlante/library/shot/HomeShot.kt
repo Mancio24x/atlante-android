@@ -45,6 +45,10 @@ class HomeShot {
         val grid = MainActivity::class.java.getDeclaredField("grid").apply { isAccessible = true }.get(a) as androidx.recyclerview.widget.RecyclerView
         grid.scrollBy(0, 2000); grid.scrollBy(0, -2000)                                     // recycled cells are refreshed, not rebuilt
         shot(a, out, "grid")
+        for (page in listOf("Sync", "Statistiche", "Scopri")) {
+            MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, page)
+            shot(a, out, page.lowercase())
+        }
         c.pause().stop().destroy()
     }
 }

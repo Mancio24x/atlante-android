@@ -59,8 +59,8 @@ ordine), workflow UI preview.
 **Stato: da fare** (alcune parti già coperte da test). Punti concreti noti:
 - Scorrimento della Biblioteca: `BookAdapter` ora riusa le celle della griglia (`Cards.rebind`, `MainActivity.CoverCell`):
   nessuna vista nuova durante lo scorrimento. Da misurare su telefono vero (`dumpsys gfxinfo`).
-- `MainActivity.java` ~3.100 righe: spostare in Compose una schermata alla volta (Impostazioni, Sync), senza
-  cambiare comportamento.
+- `MainActivity.java`: spostare in Compose una schermata alla volta. **Sync fatto** (`ui/compose/SyncScreen.kt`,
+  `SyncState` + `SyncHost`, le azioni restano i metodi di prima); resta Impostazioni.
 - Transizioni degli stati: fatto, tutte le 16 combinazioni in `StatusMatrixTest` (pagina, percentuale, date).
 - Statistiche: fatto, `StatsAfterMergeTest` (unioni e riletture contano una volta sola; nessun errore trovato).
 

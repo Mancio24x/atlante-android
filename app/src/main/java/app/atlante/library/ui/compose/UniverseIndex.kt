@@ -57,7 +57,7 @@ fun UniverseIndex(data: List<Pair<UniverseEntity, List<SeriesSummary>>>?, librar
                 val read = sagas.sumOf { s -> readIn(library, s.series.name) }
                 val total = sagas.sumOf { it.volumes }.coerceAtLeast(1)
                 OutlinedCard(Modifier.fillMaxWidth().padding(bottom = 12.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                    colors = CardDefaults.outlinedCardColors(containerColor = colors.surface)) {
+                    colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.Top) {
                         Column(Modifier.weight(1f)) {
                             Text(universe.name, style = MaterialTheme.typography.titleLarge.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))

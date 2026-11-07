@@ -125,7 +125,7 @@ fun StatisticsScreen(data: StatsData, palette: ThemePalette, motion: Boolean, on
             horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             listOf("Settimana", "Mese", "Anno").forEach { p ->
                 val on = p == period
-                Box(Modifier.weight(1f).fillMaxHeight().clip(androidx.compose.foundation.shape.RoundedCornerShape(17.dp)).background(if (on) colors.surface else androidx.compose.ui.graphics.Color.Transparent)
+                Box(Modifier.weight(1f).fillMaxHeight().clip(androidx.compose.foundation.shape.RoundedCornerShape(17.dp)).background(if (on) colors.surfaceContainer else androidx.compose.ui.graphics.Color.Transparent)
                     .clickable { period = p }.semantics { contentDescription = p + if (on) ", selezionato" else "" }, contentAlignment = Alignment.Center) {
                     Text(p, style = MaterialTheme.typography.labelLarge, color = if (on) colors.onSurface else colors.onSurfaceVariant)
                 }
@@ -146,7 +146,7 @@ private fun minutesOn(data: StatsData, day: LocalDate) = data.sessions[day].orEm
 private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minutes / 60} h" + if (minutes % 60 > 0) " ${minutes % 60}′" else ""
 
 @Composable private fun Card(content: @Composable ColumnScope.() -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth(), shape = Round20, colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    OutlinedCard(Modifier.fillMaxWidth(), shape = Round20, colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.padding(18.dp), content = content)
     }
 }

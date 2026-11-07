@@ -6,6 +6,8 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Sync in Compose** (`SyncScreen.kt`), stesso aspetto (5a) e stesse azioni; schede bianche come nei design in
+  Scopri, Statistiche e Universi.
 - **Biblioteca più fluida**: le celle della griglia vengono riusate durante lo scorrimento invece di essere
   ricostruite. Barre di avanzamento piene, senza stacco né puntino finale. Test delle statistiche dopo unioni e
   riletture.

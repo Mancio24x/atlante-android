@@ -107,7 +107,7 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 28.dp)) {
         // Design 4b: a real search field first.
-        Surface(onClick = { host.searchOnline("") }, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), color = colors.surface,
+        Surface(onClick = { host.searchOnline("") }, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), color = colors.surfaceContainer,
             border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant), modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 4.dp)) {
             Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(androidx.compose.ui.res.painterResource(app.atlante.library.R.drawable.ic_search), null, Modifier.size(22.dp), tint = colors.onSurfaceVariant)
@@ -146,7 +146,7 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
 
         // Charts and collections as rows.
         OutlinedCard(Modifier.fillMaxWidth().padding(top = 24.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-            colors = CardDefaults.outlinedCardColors(containerColor = colors.surface)) {
+            colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
             Text("CLASSIFICHE ITALIANE", Modifier.padding(start = 16.dp, top = 14.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium, color = colors.primary)
             listOf(Triple("IBS", "Classifica libri, aggiornata ogni giorno", "https://www.ibs.it/classifica/libri"),
                 Triple("laFeltrinelli", "I più venduti in libreria", "https://www.lafeltrinelli.it/classifica/libri")).forEach { (name, sub, url) ->
@@ -159,7 +159,7 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
             }
         }
         OutlinedCard(onClick = onCollections, modifier = Modifier.fillMaxWidth().padding(top = 12.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-            colors = CardDefaults.outlinedCardColors(containerColor = colors.surface)) {
+            colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Le tue collezioni", style = MaterialTheme.typography.titleMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))
@@ -214,7 +214,7 @@ private fun PickCard(p: Discover.Pick?, host: SagaHost, saved: Boolean, onSave: 
             }
             if (p != null) Box(Modifier.align(Alignment.BottomEnd).size(44.dp).clickable { onSave(p) }
                 .semantics { contentDescription = if (saved) "Togli da Da leggere" else "Aggiungi a Da leggere" }, contentAlignment = Alignment.Center) {
-                Surface(shape = androidx.compose.foundation.shape.CircleShape, color = if (saved) colors.primary else colors.surface, shadowElevation = 2.dp, modifier = Modifier.size(32.dp)) {
+                Surface(shape = androidx.compose.foundation.shape.CircleShape, color = if (saved) colors.primary else colors.surfaceContainer, shadowElevation = 2.dp, modifier = Modifier.size(32.dp)) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(androidx.compose.ui.res.painterResource(if (saved) app.atlante.library.R.drawable.ic_bookmark_filled else app.atlante.library.R.drawable.ic_bookmark), null,
                             Modifier.size(18.dp), tint = if (saved) colors.onPrimary else colors.primary)
