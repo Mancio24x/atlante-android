@@ -267,7 +267,8 @@ print('Saga carousels completed.')
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.
 back();tap('Impostazioni');tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
 assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
-# Qualità del catalogo: every check with its count.
+# Qualità del catalogo: every check with its count (its button is above the cache section: scroll back up first).
+for _ in range(4): adb('shell','input','swipe','540','600','540','1400','250');time.sleep(.3)
 tap('Qualità del catalogo',True)
 for _ in range(20):
     if any('libri controllati' in n.get('text','') for n in dump().iter('node')): break
