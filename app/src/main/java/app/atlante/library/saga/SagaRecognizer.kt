@@ -82,16 +82,25 @@ object SagaRecognizer {
     }
 
     object Live : Sources {
-        override fun workForIsbn(isbn: String) = runCatching { OpenLibraryWorks.workForIsbn(isbn) }.getOrNull()
-        override fun searchOpenLibrary(title: String, author: String) = runCatching { OpenLibraryWorks.search(title, author) }.getOrDefault(emptyList())
-        override fun linksForOpenLibrary(work: String) = runCatching { Wikidata.linksForOpenLibrary(work) }.getOrNull()
-        override fun linksForItem(qid: String) = runCatching { Wikidata.linksForItem(qid) }.getOrNull()
+        /**
+         * Requests that failed (no connection, server error) on this thread since [resetFailures]: an empty answer
+         * after a failure is not "not found", and must not be saved as "Saga non identificata".
+         */
+        private val failed = ThreadLocal.withInitial { 0 }
+        fun resetFailures() = failed.set(0)
+        fun failures(): Int = failed.get()
+        private fun <T> safe(fallback: T, call: () -> T): T = try { call() } catch (e: Exception) { failed.set(failed.get() + 1); fallback }
+
+        override fun workForIsbn(isbn: String) = safe(null) { OpenLibraryWorks.workForIsbn(isbn) }
+        override fun searchOpenLibrary(title: String, author: String) = safe(emptyList()) { OpenLibraryWorks.search(title, author) }
+        override fun linksForOpenLibrary(work: String) = safe(null) { Wikidata.linksForOpenLibrary(work) }
+        override fun linksForItem(qid: String) = safe(null) { Wikidata.linksForItem(qid) }
         override fun members(seriesQid: String): List<WdMember>? = when {
-            seriesQid.startsWith(Hardcover.SERIES) -> if (Hardcover.enabled) runCatching { Hardcover.members(seriesQid) }.getOrNull() else null
-            else -> runCatching { Wikidata.members(seriesQid) }.getOrNull()
+            seriesQid.startsWith(Hardcover.SERIES) -> if (Hardcover.enabled) safe(null) { Hardcover.members(seriesQid) } else null
+            else -> safe(null) { Wikidata.members(seriesQid) }
         }
-        override fun hardcover(book: Book) = if (Hardcover.enabled) runCatching { Hardcover.identify(book) }.getOrNull() else null
-        override fun searchWikidata(text: String, language: String) = runCatching { Wikidata.fullText(text) }.getOrDefault(emptyList())
+        override fun hardcover(book: Book) = if (Hardcover.enabled) safe(null) { Hardcover.identify(book) } else null
+        override fun searchWikidata(text: String, language: String) = safe(emptyList()) { Wikidata.fullText(text) }
     }
 
     /** Full pipeline for one book: Hardcover first, then Wikidata; stops as soon as one source is sure. */

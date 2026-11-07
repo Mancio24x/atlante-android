@@ -16,7 +16,7 @@ class SagaRepair(private val dao: SagaDao, private val repo: SagaRepository) {
         var keptByUser: Int = 0, var filled: Int = 0, var removed: Int = 0, var failed: Int = 0, var pruned: Int = 0,
     )
 
-    suspend fun run(books: List<Book>, everything: Boolean, fill: (Book, String, String?) -> Boolean, progress: (Int, Int, Book) -> Unit): Report {
+    suspend fun run(books: List<Book>, everything: Boolean, fill: (Book, String, String?) -> Boolean, progress: suspend (Int, Int, Book) -> Unit): Report {
         val report = Report()
         val ids = books.map { it.id }.toSet()
         for (l in dao.links()) if (l.bookId.isNotEmpty() && l.bookId !in ids) { dao.deleteLink(l.bookId); report.removed++ }
@@ -92,5 +92,12 @@ class SagaRepair(private val dao: SagaDao, private val repo: SagaRepository) {
     suspend fun refuse(issue: MapIssue) {
         if (issue.bookId == null || issue.ordinal == null) return
         dao.putOverride(app.atlante.library.saga.db.UserOverride("series", issue.seriesId.toString(), "refused:${issue.bookId}", issue.ordinal, System.currentTimeMillis()))
+    }
+
+    companion object {
+        /** "No, tengo il mio" from Operazioni in background (off the main thread). */
+        @JvmStatic fun refuseBlocking(context: android.content.Context, seriesId: Long, bookId: String, ordinal: String) = kotlinx.coroutines.runBlocking {
+            app.atlante.library.saga.db.AtlanteDatabase.get(context).saga().putOverride(app.atlante.library.saga.db.UserOverride("series", seriesId.toString(), "refused:$bookId", ordinal, System.currentTimeMillis()))
+        }
     }
 }

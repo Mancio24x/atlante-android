@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit
 class SagaScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         Hardcover.configure(applicationContext)
+        SagaRepository.configureCatalog(applicationContext)
         val books = runCatching { LibraryStore.shared(applicationContext).snapshot() }.getOrElse { return Result.retry() }
         val dao = AtlanteDatabase.get(applicationContext).saga()
         val repo = SagaRepository(dao).apply { refreshDays = CacheSettings(applicationContext).sagaRefreshDays }

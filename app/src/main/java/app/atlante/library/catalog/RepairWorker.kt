@@ -1,0 +1,293 @@
+package app.atlante.library.catalog
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.work.*
+import app.atlante.library.MainActivity
+import app.atlante.library.R
+import app.atlante.library.model.Book
+import app.atlante.library.saga.CacheSettings
+import app.atlante.library.saga.SagaRepair
+import app.atlante.library.saga.SagaRepository
+import app.atlante.library.saga.Suggestions
+import app.atlante.library.saga.db.AtlanteDatabase
+import app.atlante.library.saga.db.RepairJob
+import app.atlante.library.saga.db.SagaDao
+import app.atlante.library.storage.LibraryStore
+import app.atlante.library.sync.HardcoverAuth
+import app.atlante.library.sync.HardcoverSync
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Every repair runs here, in the background: the app stays usable, a notification shows the real progress
+ * ("650 / 1.000 libri analizzati — 65%") with "Interrompi", the bar in the app and "Operazioni in background"
+ * read the same record (table repair_jobs).
+ * - One repair at a time (unique work, queued), never during a Hardcover sync.
+ * - Local first: the offline catalog and the library index answer before any online source.
+ * - Certain results (same work verified, no conflict) are applied; the others wait for you as proposals.
+ * - Stopped by Android: it starts again after the books already analysed (checkpoint). Stopped by you: what was
+ *   applied stays, nothing half-done (each merge is one save).
+ */
+class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    private lateinit var dao: SagaDao
+    private lateinit var job: RepairJob
+    private var lastSaved = 0L
+
+    override suspend fun doWork(): Result {
+        val c = applicationContext
+        dao = AtlanteDatabase.get(c).saga()
+        val type = inputData.getString(TYPE) ?: return Result.failure()
+        val id = id.toString()
+        job = dao.job(id)?.let { it.copy(state = "running", message = if (it.checkpoint > 0) "Ripresa da ${it.checkpoint} libri già analizzati" else "") }
+            ?: RepairJob(id, type, "running", "Preparazione", System.currentTimeMillis())
+        save(force = true)
+        channel(c)
+        runCatching { setForeground(info()) }
+        SagaRepository.configureCatalog(c)
+        app.atlante.library.saga.Hardcover.configure(c)
+        return try {
+            while (HardcoverSync.syncing) { phase("In attesa della sincronizzazione con Hardcover"); delay(2000) }
+            val store = LibraryStore.shared(c)
+            when (type) {
+                LIBRARY, HARDCOVER -> duplicates(c, store, type == HARDCOVER)
+                SAGAS -> sagas(c, store)
+                MAPS -> maps(store)
+                METADATA -> metadata(c, store)
+            }
+            job = job.copy(state = "done", phase = "Completato", finishedAt = System.currentTimeMillis())
+            save(force = true); finished(c)
+            Result.success()
+        } catch (e: CancellationException) {
+            // You stopped it: "cancelled"; Android stopped it: it will start again from the checkpoint.
+            val byYou = stopReason == WorkInfo.STOP_REASON_CANCELLED_BY_APP
+            job = job.copy(state = if (byYou) "cancelled" else "queued",
+                phase = if (byYou) "Annullato" else "In pausa", finishedAt = System.currentTimeMillis(),
+                message = if (byYou) "Interrotta da te: le modifiche già applicate restano" else "Interrotta da Android: riprende da sola")
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { save(force = true) }
+            throw e
+        } catch (e: Exception) {
+            job = job.copy(state = "failed", phase = "Errore", finishedAt = System.currentTimeMillis(), message = e.message ?: e.javaClass.simpleName, errors = job.errors + 1)
+            save(force = true); finished(c)
+            Result.failure()
+        }
+    }
+
+    // ---- the repairs -----------------------------------------------------------------------------------------
+
+    /** Library (or only Hardcover's records): same work twice → one record; certain pairs at once, the rest proposed. */
+    private suspend fun duplicates(c: Context, store: LibraryStore, hardcoverOnly: Boolean) {
+        phase("Analisi locale")
+        // The index first: every book linked to its catalog work (only changed books are looked at again).
+        LibraryIndex.syncNow(c)
+        val books = store.snapshot()
+        job = job.copy(total = books.size); save(force = true)
+        val identities = identities(books)
+        job = job.copy(done = books.size, offline = identities.values.count { it.catalogWork != null }); save()
+        var pairs = BibliographicEngine.duplicates(books, identities)
+        if (hardcoverOnly) pairs = pairs.filter { BibliographicEngine.hardcoverBook(it.other) != null || BibliographicEngine.hardcoverBook(it.keep) != null }
+        // Hardcover's English copies that only Hardcover can tie to the Italian book (its editions list).
+        if (hardcoverOnly && HardcoverAuth.connected(c)) {
+            phase("Recupero online da Hardcover")
+            val s = HardcoverSync.Settings().apply { token = HardcoverAuth.token(c) }
+            val online = runCatching { HardcoverSync.duplicates(store, s, object : HardcoverSync.Progress { override fun update(message: String) { if (isStopped) s.cancelled = true } }) }.getOrDefault(emptyList())
+            val known = pairs.map { setOf(it.keep.id, it.other.id) }.toSet()
+            for (d in online) if (setOf(d.copy.id, d.original.id) !in known)
+                pairs = pairs + BibliographicEngine.Pair(d.original, d.copy, if (d.certain) BibliographicEngine.Confidence.VERIFIED else BibliographicEngine.Confidence.PROBABLE,
+                    listOf(if (d.certain) "Hardcover: stessa opera (ISBN o edizione italiana)" else "Hardcover: titolo e autore simili"), BibliographicEngine.conflicts(d.original, d.copy))
+        }
+        phase("Verifica dei risultati")
+        job = job.copy(duplicates = pairs.size); save(force = true)
+        phase("Applicazione delle modifiche")
+        val proposals = JSONArray(); var applied = 0
+        for (p in pairs) {
+            if (isStopped) break
+            if (p.automatic) {
+                val keep = store.find(p.keep.id); val other = store.find(p.other.id)
+                if (keep == null || other == null) continue                 // already merged (resumed job)
+                runCatching { store.merge(BibliographicEngine.merged(keep, other), other) }.onSuccess { applied++ }.onFailure { job = job.copy(errors = job.errors + 1) }
+            } else proposals.put(proposal(p))
+            job = job.copy(applied = applied, proposals = proposals.length()); save()
+        }
+        job = job.copy(result = JSONObject().put("merges", proposals).toString(), message = "$applied unioni certe applicate" +
+            if (proposals.length() > 0) " · ${proposals.length()} da decidere" else ""); save(force = true)
+        if (applied > 0) { LibraryIndex.syncNow(c); app.atlante.library.widget.Widgets.libraryChanged(c) }
+    }
+
+    private suspend fun identities(books: List<Book>): Map<String, BibliographicEngine.Identity> {
+        val catalog = dao.catalogLinks().associate { it.bookId to it.catalogWork.toLongOrNull() }
+        val graph = dao.links().filter { it.status in setOf("auto", "confirmed", "manual", "no_saga") }.associate { it.bookId to it.workId }
+        return books.associate { b -> b.id to BibliographicEngine.Identity(b.id, catalog[b.id], BibliographicEngine.hardcoverBook(b), graph[b.id]) }
+    }
+
+    /** Ripara saghe: every book, the offline catalog first, online only for what it does not know. */
+    private suspend fun sagas(c: Context, store: LibraryStore) {
+        phase("Analisi locale e online")
+        val repo = SagaRepository(dao).apply { refreshDays = CacheSettings(c).sagaRefreshDays }
+        val books = store.snapshot().sortedBy { it.id }
+        job = job.copy(total = books.size); save(force = true)
+        val base = job.checkpoint
+        val todo = books.drop(base)
+        // progress(i) comes before book i: the checkpoint counts the books already finished.
+        val report = SagaRepair(dao, repo).run(todo, everything = inputData.getBoolean(EVERYTHING, false), fill = { b, name, ordinal -> fillSeries(store, b, name, ordinal) }) { i, _, _ ->
+            if (isStopped) throw CancellationException()
+            job = job.copy(done = base + i + 1, checkpoint = base + i); save()
+        }
+        job = job.copy(done = books.size, checkpoint = books.size, found = report.linked + report.toConfirm, proposals = report.toConfirm,
+            message = "${report.linked} saghe sicure · ${report.toConfirm} da confermare · ${report.filled} schede completate"); save(force = true)
+    }
+
+    private fun fillSeries(store: LibraryStore, b: Book, name: String, ordinal: String?): Boolean {
+        val x = store.find(b.id) ?: return false
+        if (x.series.isNotEmpty()) return false
+        val copy = Book.from(x.json()); copy.series = name
+        ordinal?.replace(',', '.')?.toDoubleOrNull()?.let { copy.number = it }
+        return runCatching { store.replace(copy) }.isSuccess
+    }
+
+    /** Ripara mappe: the same checks as "Controlla le mappe", proposals to confirm. */
+    private suspend fun maps(store: LibraryStore) {
+        phase("Analisi delle mappe")
+        val books = store.snapshot()
+        job = job.copy(total = books.size); save(force = true)
+        val issues = SagaRepair(dao, SagaRepository(dao)).mapIssues(Suggestions(dao, { books }), books)
+        val list = JSONArray()
+        for (i in issues) list.put(JSONObject().put("series", i.series).put("seriesId", i.seriesId).put("text", i.text).put("bookId", i.bookId ?: JSONObject.NULL)
+            .put("ordinal", i.ordinal ?: JSONObject.NULL).put("source", i.source))
+        job = job.copy(done = books.size, found = issues.size, proposals = issues.count { it.bookId != null }, result = JSONObject().put("maps", list).toString(),
+            message = if (issues.isEmpty()) "Mappe coerenti con le fonti" else "${issues.size} cose da guardare"); save(force = true)
+    }
+
+    /**
+     * Completa metadati: from the offline catalog first (original and Italian title, year, genre, saga with its
+     * verified number, Open Library id), then a cover online for books without one. Only empty fields are filled:
+     * what you wrote, your edition and your chosen cover stay.
+     */
+    private suspend fun metadata(c: Context, store: LibraryStore) {
+        phase("Analisi locale")
+        LibraryIndex.syncNow(c)
+        val catalog = runCatching { CatalogDatabase.get(c).catalog() }.getOrNull()
+        val links = dao.catalogLinks().associate { it.bookId to it.catalogWork.toLongOrNull() }
+        val books = store.snapshot().sortedBy { it.id }
+        job = job.copy(total = books.size); save(force = true)
+        var filled = job.found; var covers = 0; var offline = job.offline
+        val changed = ArrayList<Book>()
+        for ((i, b) in books.withIndex()) {
+            if (i < job.checkpoint) continue
+            if (isStopped) throw CancellationException()
+            val work = links[b.id]?.let { catalog?.work(it) }
+            if (work != null && catalog != null) {
+                offline++
+                val copy = Book.from(b.json()); var any = false
+                if (copy.meta.optString("originalTitle").isEmpty() && work.originalTitle.isNotBlank() && app.atlante.library.model.SearchIndex.normalize(work.originalTitle) != app.atlante.library.model.SearchIndex.normalize(copy.title)) {
+                    copy.meta.put("originalTitle", work.originalTitle); any = true }
+                if (copy.year.isEmpty() && work.year != null) { copy.year = work.year.toString(); any = true }
+                if (copy.genre.isEmpty() && work.genre != null) { copy.genre = work.genre; any = true }
+                val ids = copy.meta.optJSONObject("ids") ?: JSONObject()
+                if (ids.optString("wikidata").isEmpty()) { ids.put("wikidata", "Q${work.id}"); any = true }
+                if (work.openLibraryId != null && ids.optString("openlibrary").isEmpty()) { ids.put("openlibrary", work.openLibraryId); any = true }
+                copy.meta.put("ids", ids)
+                if (copy.series.isEmpty()) catalog.entriesOf(work.id).filter { it.ordinal != null }.minByOrNull { it.sortKey ?: Double.MAX_VALUE }?.let { e ->
+                    catalog.series(e.seriesId)?.let { s -> copy.series = s.italianName ?: s.name; copy.number = e.sortKey ?: 0.0; any = true } }
+                if (any) {
+                    val sources = copy.meta.optJSONObject("sources") ?: JSONObject(); sources.put("catalog", "Catalogo offline (Wikidata, Open Library)"); copy.meta.put("sources", sources)
+                    changed += copy; filled++
+                }
+            }
+            // No cover at all: one online search (the catalog has no images, only their addresses).
+            if (!store.cover(b).isFile && b.meta.optString("coverSource") !in setOf("gallery", "online")) {
+                phase("Recupero online delle copertine")
+                val cover = runCatching { app.atlante.library.online.CoverSearch.best(b) }.getOrNull()
+                if (cover != null) runCatching { store.saveDownloadedCover(b, cover.bytes); covers++ }
+                phase("Analisi locale")
+            }
+            if (changed.size >= 50) { store.replaceAll(changed); changed.clear() }
+            job = job.copy(done = i + 1, checkpoint = if (changed.isEmpty()) i + 1 else job.checkpoint, found = filled, offline = offline, applied = filled + covers); save()
+        }
+        if (changed.isNotEmpty()) store.replaceAll(changed)
+        job = job.copy(done = books.size, checkpoint = books.size, applied = filled + covers,
+            message = "$filled schede completate dal catalogo offline · $covers copertine trovate online"); save(force = true)
+    }
+
+    private fun proposal(p: BibliographicEngine.Pair) = JSONObject().put("keep", p.keep.id).put("other", p.other.id)
+        .put("keepLine", line(p.keep)).put("otherLine", line(p.other)).put("confidence", p.confidence.label)
+        .put("reasons", JSONArray(p.reasons)).put("conflicts", JSONArray(p.conflicts))
+
+    private fun line(b: Book) = listOf("«${b.title}» · ${b.author}", b.status, b.isbn.takeIf { it.isNotBlank() }?.let { "ISBN $it" },
+        b.format.takeIf { it != "CATALOGO" }, b.finished.takeIf { it.isNotBlank() }?.let { "letto il $it" },
+        app.atlante.library.model.ReadingJournal.rating(b).takeIf { it > 0 }?.let { "voto $it" },
+        (b.journal.optJSONArray("sessions")?.length() ?: 0).takeIf { it > 0 }?.let { "$it sessioni" }).filterNotNull().joinToString(" · ")
+
+    // ---- progress: the record, the notification, the work data -----------------------------------------------
+
+    private suspend fun phase(name: String) { if (job.phase != name) { job = job.copy(phase = name); save(force = true) } }
+
+    /** At most twice a second: the record (bar in the app), WorkManager's progress and the notification. */
+    private suspend fun save(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - lastSaved < 500) return
+        lastSaved = now
+        dao.putJob(job)
+        runCatching { setProgress(workDataOf("done" to job.done, "total" to job.total)) }
+        if (job.state == "running") runCatching { setForeground(info()) }
+    }
+
+    private fun info(): ForegroundInfo {
+        val c = applicationContext
+        val text = if (job.total > 0) "${"%,d".format(job.done).replace(',', '.')} / ${"%,d".format(job.total).replace(',', '.')} libri analizzati — ${job.done * 100 / job.total}%" else job.phase
+        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_sync).setContentTitle(title(job.type))
+            .setContentText(text).setSubText(job.phase).setOnlyAlertOnce(true).setOngoing(true).setSilent(true).setContentIntent(open(c))
+            .setProgress(job.total, job.done, job.total == 0)
+            .addAction(0, "Interrompi", WorkManager.getInstance(c).createCancelPendingIntent(id)).build()
+        return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(NOTICE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else ForegroundInfo(NOTICE, n)
+    }
+
+    private fun finished(c: Context) {
+        val title = when (job.state) { "done" -> title(job.type) + ": fatto"; "failed" -> title(job.type) + ": errore"; else -> title(job.type) }
+        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_sync).setContentTitle(title)
+            .setContentText(job.message.ifEmpty { job.phase }).setAutoCancel(true).setContentIntent(open(c)).build()
+        runCatching { c.getSystemService(NotificationManager::class.java).notify(DONE, n) }
+    }
+
+    companion object {
+        const val TYPE = "type"; const val EVERYTHING = "everything"
+        const val LIBRARY = "library"; const val HARDCOVER = "hardcover"; const val SAGAS = "sagas"; const val MAPS = "maps"; const val METADATA = "metadata"
+        const val NAME = "atlante-repair"; const val TAG = "repair"
+        private const val CHANNEL = "repair"; private const val NOTICE = 4201; private const val DONE = 4202
+
+        @JvmStatic fun title(type: String) = when (type) {
+            LIBRARY -> "Ripara duplicati della libreria"; HARDCOVER -> "Ripara duplicati Hardcover"; SAGAS -> "Ripara saghe"
+            MAPS -> "Ripara mappe delle saghe"; METADATA -> "Completa metadati"; else -> "Riparazione"
+        }
+
+        private fun channel(c: Context) {
+            if (Build.VERSION.SDK_INT >= 26) c.getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(NotificationChannel(CHANNEL, "Riparazioni del catalogo", NotificationManager.IMPORTANCE_LOW).apply { description = "Avanzamento di duplicati, saghe e metadati" })
+        }
+
+        private fun open(c: Context) = PendingIntent.getActivity(c, 1, Intent(c, MainActivity::class.java).setAction(MainActivity.OPEN_OPERATIONS).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        /** Queued after the repair already running, if any: two repairs never change the same records together. */
+        @JvmStatic fun start(c: Context, type: String): java.util.UUID = start(c, type, false)
+
+        @JvmStatic fun start(c: Context, type: String, everything: Boolean): java.util.UUID {
+            val request = OneTimeWorkRequestBuilder<RepairWorker>().setInputData(workDataOf(TYPE to type, EVERYTHING to everything)).addTag(TAG).build()
+            WorkManager.getInstance(c).enqueueUniqueWork(NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+            // Shown at once as "In attesa" in the bar and in "Operazioni in background".
+            val app = c.applicationContext
+            Thread { kotlinx.coroutines.runBlocking { AtlanteDatabase.get(app).saga().putJob(RepairJob(request.id.toString(), type, "queued", "In attesa", System.currentTimeMillis())) } }.start()
+            return request.id
+        }
+
+        @JvmStatic fun cancel(c: Context, id: String) = WorkManager.getInstance(c).cancelWorkById(java.util.UUID.fromString(id))
+    }
+}

@@ -45,8 +45,12 @@ object CoverPickerView {
     fun interface Chosen { fun chosen(bytes: ByteArray, origin: String) }
 
     @JvmStatic
-    fun create(activity: ComponentActivity, palette: ThemePalette, book: Book, onChosen: Chosen, onClose: Runnable): View = ComposeView(activity).apply {
-        setContent { AtlanteTheme(palette) { CoverPicker(book, { c -> onChosen.chosen(c.bytes, c.origin) }) { onClose.run() } } }
+    fun create(activity: ComponentActivity, palette: ThemePalette, book: Book, onChosen: Chosen, onClose: Runnable): View = create(activity, palette, book, emptyList(), onChosen, onClose)
+
+    /** [local]: covers already saved with this work (alternatives kept from merged records and editions). */
+    @JvmStatic
+    fun create(activity: ComponentActivity, palette: ThemePalette, book: Book, local: List<java.io.File>, onChosen: Chosen, onClose: Runnable): View = ComposeView(activity).apply {
+        setContent { AtlanteTheme(palette) { CoverPicker(book, local, { c -> onChosen.chosen(c.bytes, c.origin) }) { onClose.run() } } }
     }
 }
 
@@ -62,7 +66,7 @@ fun CoverSearch.Cover.fits(f: CoverFilter) = when (f) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CoverPicker(book: Book, onChosen: (CoverSearch.Cover) -> Unit, onClose: () -> Unit) {
+fun CoverPicker(book: Book, local: List<java.io.File> = emptyList(), onChosen: (CoverSearch.Cover) -> Unit, onClose: () -> Unit) {
     val covers = remember(book.id) { mutableStateListOf<CoverSearch.Cover>() }
     var searching by remember(book.id) { mutableStateOf(true) }
     // The preferred kind (Impostazioni › Copertine) is the first filter once one such cover is there; a tap decides.
@@ -72,6 +76,11 @@ fun CoverPicker(book: Book, onChosen: (CoverSearch.Cover) -> Unit, onClose: () -
     LaunchedEffect(book.id) {
         withContext(Dispatchers.IO) {
             val slots = Semaphore(6); val sizes = HashSet<Int>()
+            for (f in local) runCatching {
+                val bytes = f.readBytes(); val (w, h) = CoverSearch.dimensions(bytes) ?: return@runCatching
+                val cover = CoverSearch.Cover(bytes, "Le tue copertine", w, h, false, detail = "di un’altra edizione unita")
+                withContext(Dispatchers.Main) { if (sizes.add(bytes.size)) covers.add(cover) }
+            }
             coroutineScope {
                 for (c in CoverSearch.candidates(book).distinctBy { it.url }.take(48)) launch {
                     val cover = slots.withPermit { runCatching { CoverSearch.download(c) }.getOrNull() } ?: return@launch

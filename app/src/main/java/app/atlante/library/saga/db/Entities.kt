@@ -138,3 +138,47 @@ data class CacheEntry(@PrimaryKey val key: String, val kind: String, val json: S
 
 /** A title of a library book's work (query result, not a table). */
 data class BookTitles(val bookId: String, val title: String, val other: String?, val more: String)
+
+/**
+ * Full-text index (FTS4) of the personal library: titles (also the original and Italian ones of the work), authors,
+ * sagas. Kept up to date by LibraryIndex when books are added, changed or removed; only searchable text is here,
+ * the books themselves stay in library.json. [hash] tells whether the row is current; [catalogWork] links the book
+ * to the offline catalog's work (so the same work is never listed twice).
+ */
+@androidx.room.Fts4(notIndexed = ["bookId", "hash", "catalogWork"])
+@Entity(tableName = "library_fts")
+data class LibraryFts(
+    @PrimaryKey @androidx.room.ColumnInfo(name = "rowid") val rowid: Long,
+    val bookId: String, val titles: String, val authors: String, val series: String, val hash: String, val catalogWork: String,
+)
+
+/** A row of the index without its text. */
+data class LibraryFtsState(val rowid: Long, val bookId: String, val hash: String, val catalogWork: String)
+
+data class BookCatalogLink(val bookId: String, val catalogWork: String)
+
+/**
+ * A background repair ("Ripara duplicati", "Ripara saghe e mappe", "Completa metadati"…), as shown in
+ * "Operazioni in background". [checkpoint]: books already analysed (a resumed job starts after them);
+ * [result]: the proposals waiting for you (JSON). States: queued, running, done, failed, cancelled.
+ */
+@Entity(tableName = "repair_jobs", indices = [Index("state")])
+data class RepairJob(
+    @PrimaryKey val id: String,
+    val type: String,
+    val state: String,
+    val phase: String = "",
+    val startedAt: Long = 0,
+    val finishedAt: Long = 0,
+    val total: Int = 0,
+    val done: Int = 0,
+    val found: Int = 0,
+    val duplicates: Int = 0,
+    val proposals: Int = 0,
+    val applied: Int = 0,
+    val errors: Int = 0,
+    val offline: Int = 0,
+    val checkpoint: Int = 0,
+    val message: String = "",
+    val result: String = "",
+)

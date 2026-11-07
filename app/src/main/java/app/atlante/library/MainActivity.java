@@ -105,6 +105,7 @@ public final class MainActivity extends AppCompatActivity {
     private ScrollView companionScroll;
     private boolean shelfView, editingPage;
     private final Map<String,String> destinationQueries = new HashMap<>();
+    private app.atlante.library.ui.compose.CatalogStripView.Handle catalogStrip;
     private String timerBook;
     private long timerAccumulated, timerMark, timerBoot, timerWall;
     private int timerFrom;
@@ -146,6 +147,7 @@ public final class MainActivity extends AppCompatActivity {
         app.atlante.library.saga.CacheManager.cleanupAsync(this);
         app.atlante.library.saga.Hardcover.configure(this);
         app.atlante.library.online.CoverSearch.setPrefer(getPreferences(MODE_PRIVATE).getString("coverPrefer", "italian"));
+        app.atlante.library.saga.SagaRepository.configureCatalog(this);
         try { app.atlante.library.saga.SagaRefreshWorker.schedule(this); app.atlante.library.saga.SagaScanWorker.start(this); }
         catch (RuntimeException ignored) { /* WorkManager unavailable: sagas are recognized when a book is opened. */ }
         fontSize = Math.max(8, Math.min(80, prefs.getFloat("fontSize", 20)));
@@ -260,9 +262,10 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(text("Scarica le copertine mancanti e sostituisce quelle piccole o sfocate con una più nitida della stessa edizione o dello stesso titolo e autore. Le copertine scelte da te non vengono toccate.",12,MUTED,false)); gap(panel,8);
         coverPreference(panel); gap(panel,12);
         panel.addView(button("Qualità del catalogo",false,this::catalogQuality));
+        panel.addView(button("Operazioni in background",R.style.Atlante_Button_Text,this::showOperations));
         panel.addView(text("Libri senza copertina, autore, ISBN, genere o pagine, possibili doppioni, saghe senza numero o da verificare: in un posto solo, con le azioni per sistemarli.",12,MUTED,false)); gap(panel,12);
         LinearLayout sagas = column();
-        sagas.addView(app.atlante.library.ui.compose.SagaRepairView.create(this, palette, sagaHost)); gap(sagas,8);
+        sagas.addView(app.atlante.library.ui.compose.SagaRepairView.create(this, palette, (type, everything) -> startRepair(type, everything), this::showOperations)); gap(sagas,8);
         sagas.addView(text("Proposte rapide dai titoli e dai metadati già presenti, senza connessione:",14,MUTED,false));
         sagas.addView(button("Riconosci saghe e ordine di lettura",false,this::recognizeSeries));
         panel.addView(expander("Ripara saghe e mappe", sagas, false));
@@ -333,7 +336,8 @@ public final class MainActivity extends AppCompatActivity {
                 if (!dialog.isShowing()) return;
                 panel.removeView(wait);
                 panel.addView(text(all.size() + " libri controllati.", 14, MUTED, false)); gap(panel, 8);
-                qualityRow(panel, dialog, "Possibili doppioni", "Stesso titolo e autore, o stesso ISBN. Aprili e decidi tu: niente viene unito da solo.", doubles, null, null);
+                qualityRow(panel, dialog, "Possibili doppioni", "Stesso titolo e autore, o stesso ISBN. «Ripara duplicati» unisce da solo quelli certi (stesso ISBN, stessa opera nel catalogo, stesso libro su Hardcover) e ti propone gli altri.", doubles,
+                    "Ripara duplicati della libreria", () -> { dialog.dismiss(); startRepair(app.atlante.library.catalog.RepairWorker.LIBRARY); });
                 if (app.atlante.library.sync.HardcoverAuth.connected(this))
                     qualityRow(panel, dialog, "Doppioni di Hardcover da verificare", "Sync unisce da sola i doppioni certi; qui quelli dubbi, con l’anteprima.", null, "Ripara duplicati Hardcover", () -> { dialog.dismiss(); repairHardcoverDuplicates(); });
                 qualityRow(panel, dialog, "Saghe da verificare", "Il motore delle saghe non è sicuro: conferma o correggi in Ripara saghe.", sagaCheck, "Riconosci saghe e ordine", () -> { dialog.dismiss(); recognizeSeries(); });
@@ -344,7 +348,9 @@ public final class MainActivity extends AppCompatActivity {
                 qualityRow(panel, dialog, "Senza ISBN", "Senza ISBN il riconoscimento delle edizioni usa titolo e autore.", noIsbn, null, null);
                 qualityRow(panel, dialog, "Senza genere", "", noGenre, null, null);
                 qualityRow(panel, dialog, "Senza numero di pagine", "", noPages, null, null);
-                panel.addView(text("Per completare autore, ISBN, genere e pagine apri il libro › «Completa i dati online»: vedi le proposte prima di salvarle.", 12, MUTED, false));
+                panel.addView(button("Completa metadati (catalogo offline, poi online)", false, () -> { dialog.dismiss(); startRepair(app.atlante.library.catalog.RepairWorker.METADATA); }));
+                panel.addView(text("Riempie solo i campi vuoti: quello che hai scritto, la tua edizione e la copertina scelta restano. Per un solo libro: apri il libro › «Completa i dati online».", 12, MUTED, false));
+                panel.addView(button("Operazioni in background", R.style.Atlante_Button_Text, () -> { dialog.dismiss(); showOperations(); }));
             });
         });
     }
@@ -636,6 +642,14 @@ public final class MainActivity extends AppCompatActivity {
         });
         setContentView(screen); root.requestApplyInsets();
     }
+    private static String joinNonEmpty(String sep, String... parts) {
+        StringBuilder out = new StringBuilder(); for (String p : parts) if (p != null && !p.isEmpty()) out.append(sep).append(p); return out.toString();
+    }
+
+    /** The offline catalog (read-only, indexed): null if it cannot be opened. */
+    app.atlante.library.catalog.CatalogDao catalogDao() {
+        try { return app.atlante.library.catalog.CatalogDatabase.get(this).catalog(); } catch (Exception e) { return null; }
+    }
     void error(Exception e) { dialogBuilder().setTitle("Operazione non completata").setMessage(message(e)).setPositiveButton("Chiudi", null).show(); }
     static String message(Exception e) { return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(); }
     void save() { try { store.save(); } catch (Exception e) { error(e); } }
@@ -700,6 +714,10 @@ public final class MainActivity extends AppCompatActivity {
         line.addView(genreChip, lp); line.addView(authorChip, new LinearLayout.LayoutParams(lp));
         Chip suggestion = new Chip(this); suggestion.setVisibility(View.GONE); suggestion.setChipIconResource(R.drawable.ic_tune); suggestion.setChipIconVisible(true);
         header.addView(suggestion, new LinearLayout.LayoutParams(-2, -2));
+        // The offline catalog in the same search: works not in the library yet (one bar for everything).
+        app.atlante.library.ui.compose.CatalogStripView.Handle strip0 = app.atlante.library.ui.compose.CatalogStripView.create(this, palette, sagaHost);
+        header.addView(strip0.getView(), new LinearLayout.LayoutParams(-1, -2));
+        catalogStrip = strip0; strip0.update(query);
         Runnable suggest = () -> {
             String[] s = suggestionFor(query);
             if (s == null) { suggestion.setVisibility(View.GONE); return; }
@@ -714,7 +732,7 @@ public final class MainActivity extends AppCompatActivity {
             public void beforeTextChanged(CharSequence s, int a, int c, int f) { }
             public void onTextChanged(CharSequence s, int a, int b, int c) { query = s.toString(); updateBack();
                 if (filterTask != null) uiHandler.removeCallbacks(filterTask);
-                filterTask = () -> { if (reading == null) { renderContent(); suggest.run(); } }; uiHandler.postDelayed(filterTask, 180); }
+                filterTask = () -> { if (reading == null) { renderContent(); suggest.run(); if (catalogStrip != null) catalogStrip.update(query); } }; uiHandler.postDelayed(filterTask, 180); }
             public void afterTextChanged(Editable e) { }
         });
         search.setOnEditorActionListener((v, action, event) -> { hideKeyboard(v); return true; });
@@ -1159,6 +1177,18 @@ public final class MainActivity extends AppCompatActivity {
             if (b.source.matches("/works/OL[0-9]+W")) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://openlibrary.org" + b.source)));
         }));
         panel.addView(expander("Dettagli della scheda", info, false));
+        // Other editions of the same work (merged duplicates, EPUBs of another edition): one record, many editions.
+        org.json.JSONArray eds = b.meta.optJSONArray("editions");
+        if (eds != null && eds.length() > 0) {
+            LinearLayout list = column();
+            for (int i = 0; i < eds.length(); i++) {
+                org.json.JSONObject e = eds.optJSONObject(i); if (e == null) continue;
+                String line = e.optString("title") + joinNonEmpty(" · ", e.optString("isbn").isEmpty() ? "" : "ISBN " + e.optString("isbn"), e.optString("publisher"), e.optString("year"),
+                    e.optString("language"), e.optString("format").equals("CATALOGO") ? "" : e.optString("format"), e.optString("file").isEmpty() ? "" : "file salvato");
+                list.addView(text(line, 14, INK, false));
+            }
+            panel.addView(expander("Edizioni di quest’opera · " + eds.length(), list, false));
+        }
         gap(panel, 12);
 
         panel.addView(button("Completa i dati online", R.style.Atlante_Button_Tonal, () -> completeMetadata(b)), new LinearLayout.LayoutParams(-1, -2));
@@ -1429,12 +1459,15 @@ public final class MainActivity extends AppCompatActivity {
         gap(panel, 12);
         // Already in the library? Same ISBN, or same title and author.
         ArrayList<Book> others = new ArrayList<>(); for (Book x : store.snapshot()) if (!x.id.equals(b.id)) others.add(x);
-        Book duplicate = file ? app.atlante.library.model.BookMatcher.best(b, others, x -> x) : null;
-        boolean canAttach = duplicate != null && (duplicate.format.equals("CATALOGO") || !store.original(duplicate).exists());
+        // One work = one record: the same work already here (same file, ISBN, catalog work, title and author) is never added twice.
+        Book duplicate = app.atlante.library.catalog.BibliographicEngine.sameWorkIn(others, b, catalogDao());
+        boolean canAttach = file && duplicate != null && (duplicate.format.equals("CATALOGO") || !store.original(duplicate).exists());
         if (duplicate != null) {
             LinearLayout warn = surface(panel, "GIÀ NELLA TUA LIBRERIA");
-            warn.addView(text("«" + duplicate.title + "» di " + duplicate.author + (canAttach ? " · scheda senza file" : " · formato " + duplicate.format), 15, INK, false));
-            warn.addView(text(canAttach ? "Puoi collegare questo file alla scheda esistente: voti, note e avanzamento restano." : "Il libro ha già un file. Per non creare un doppione, l’importazione viene annullata.", 13, MUTED, false));
+            warn.addView(text("«" + duplicate.title + "» di " + duplicate.author + (canAttach ? " · scheda senza file" : duplicate.format.equals("CATALOGO") ? "" : " · formato " + duplicate.format), 15, INK, false));
+            warn.addView(text(canAttach ? "Il file viene collegato alla scheda esistente: voti, note e avanzamento restano."
+                : file ? "La scheda ha già un file: questo diventa un’altra edizione della stessa scheda, senza crearne una nuova."
+                : "Non viene creata una seconda scheda: puoi aggiungere questa edizione (ISBN, editore) alla scheda che hai già.", 13, MUTED, false));
             gap(panel, 12);
         }
         bibliographic(panel, b); gap(panel, 14); panel.addView(text("Trama", 20, INK, true));
@@ -1446,6 +1479,7 @@ public final class MainActivity extends AppCompatActivity {
         AlertDialog.Builder builder = dialogBuilder().setTitle(file ? "Importa eBook" : "Anteprima del libro").setView(scroll).setNegativeButton(duplicate != null ? "Annulla" : "Non aggiungere", null);
         if (duplicate == null) builder.setPositiveButton("Aggiungi alla mia libreria", null);
         else if (canAttach) builder.setPositiveButton("Collega il file", null);
+        else builder.setPositiveButton("Aggiungi come edizione", null);
         if(file)builder.setNeutralButton("Cerca metadati online",null);
         AlertDialog dialog = builder.create();
         dialog.setOnShowListener(d -> {
@@ -1462,8 +1496,9 @@ public final class MainActivity extends AppCompatActivity {
                         if (t.isEmpty()) { editedTitle.setError("Inserisci il titolo"); return; }
                         b.title = t; b.author = a.isEmpty() ? "Autore sconosciuto" : a;
                     }
-                    if(duplicate==null && file && app.atlante.library.model.BookMatcher.best(b,store.snapshot(),x->x)!=null){dialog.dismiss();preview(b,next);return;}
-                    if (duplicate != null) { Book linked = store.attachFile(b, duplicate); forgetCover(linked.id); Toast.makeText(this, "File collegato a «" + linked.title + "»", Toast.LENGTH_SHORT).show(); }
+                    if(duplicate==null && app.atlante.library.catalog.BibliographicEngine.sameWorkIn(store.snapshot(),b,catalogDao())!=null){dialog.dismiss();preview(b,next);return;}
+                    if (duplicate != null && canAttach) { Book linked = store.attachFile(b, duplicate); forgetCover(linked.id); Toast.makeText(this, "File collegato a «" + linked.title + "»", Toast.LENGTH_SHORT).show(); }
+                    else if (duplicate != null) { Book linked = store.addEdition(b, duplicate); forgetCover(linked.id); Toast.makeText(this, "Edizione aggiunta a «" + linked.title + "»: nessuna scheda doppia", Toast.LENGTH_SHORT).show(); }
                     else store.addCatalog(b);
                     dialog.dismiss(); next.run();
                 }
@@ -1876,7 +1911,8 @@ public final class MainActivity extends AppCompatActivity {
     /** Covers found online for one book; the one you tap replaces the current cover. */
     private void chooseOnlineCover(Book b) {
         View[] holder = new View[1];
-        holder[0] = app.atlante.library.ui.compose.CoverPickerView.create(this, palette, b, (bytes, origin) -> {
+        java.util.List<File> local = new ArrayList<>(); File[] alt = new File(store.directory(b), "covers").listFiles(); if (alt != null) local.addAll(Arrays.asList(alt));
+        holder[0] = app.atlante.library.ui.compose.CoverPickerView.create(this, palette, b, local, (bytes, origin) -> {
             screen.removeView(holder[0]);
             worker.execute(() -> {
                 try {
@@ -2073,44 +2109,57 @@ public final class MainActivity extends AppCompatActivity {
      * Sheets made by an earlier sync from an English Hardcover record while the Italian book was already here:
      * found, shown side by side and merged only when the user ticks them. The Italian book stays.
      */
-    private void repairHardcoverDuplicates() {
-        if(busy) return; busy=true;
-        HardcoverSync.Settings s=new HardcoverSync.Settings();
-        AlertDialog[] dialog=new AlertDialog[1]; TextView label=progressDialog("Duplicati Hardcover",dialog,()->s.cancelled=true);
-        worker.execute(()->{
+    /** Ripara duplicati Hardcover: in the background (notification, bar in the app); proposals in Operazioni in background. */
+    private void repairHardcoverDuplicates() { startRepair(app.atlante.library.catalog.RepairWorker.HARDCOVER); }
+
+    /** Every repair: queued in the background; the app stays usable; the bar and the notification show the progress. */
+    void startRepair(String type) { startRepair(type, false); }
+    void startRepair(String type, boolean everything) {
+        if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},8);
+        app.atlante.library.catalog.RepairWorker.start(this, type, everything);
+        Toast.makeText(this, app.atlante.library.catalog.RepairWorker.title(type) + ": avviata in background. Puoi continuare a usare l’app.", Toast.LENGTH_LONG).show();
+    }
+
+    /** Operazioni in background: active, queued and finished repairs, their results and the proposals to decide. */
+    private void showOperations() {
+        View[] holder = new View[1];
+        holder[0] = app.atlante.library.ui.compose.RepairViews.operations(this, palette, operationsHost, () -> { screen.removeView(holder[0]); renderAfterRepair(); });
+        screen.addView(holder[0], new FrameLayout.LayoutParams(1, 1));
+    }
+
+    private void renderAfterRepair() { if (isFinishing() || isDestroyed()) return; if (reading == null && detailId == null) { if (destination.equals("Biblioteca") || destination.equals("Cerca")) showLibrary(); else showCompanion(); } }
+
+    private final app.atlante.library.ui.compose.OperationsHost operationsHost = new app.atlante.library.ui.compose.OperationsHost() {
+        @Override public void start(String type) { startRepair(type); }
+        @Override public void cancel(String id) { app.atlante.library.catalog.RepairWorker.cancel(MainActivity.this, id); }
+        @Override public void openBook(String id) { Book x = store.find(app.atlante.library.storage.MergeHistory.redirect(MainActivity.this, id)); if (x != null) details(x); }
+        @Override public String merge(String keepId, String otherId, boolean ratingFromOther, boolean reviewFromOther) {
+            Book keep = store.find(keepId), other = store.find(otherId);
+            if (keep == null || other == null) return "Uno dei due libri non c’è più (forse già unito).";
             try {
-                s.token=app.atlante.library.sync.HardcoverAuth.token(this);
-                List<HardcoverSync.Duplicate> found=HardcoverSync.duplicates(store,s,m->runOnUiThread(()->label.setText(m)));
-                runOnUiThread(()->{ dialog[0].dismiss(); busy=false; if(isFinishing()||isDestroyed()) return; showDuplicates(found); });
-            } catch(Exception e){ runOnUiThread(()->{ dialog[0].dismiss(); busy=false; error(e); }); }
-        });
-    }
+                store.merge(app.atlante.library.catalog.BibliographicEngine.INSTANCE.merged(keep, other,
+                    new app.atlante.library.catalog.BibliographicEngine.Choices(ratingFromOther, reviewFromOther)), other);
+                runOnUiThread(() -> { forgetCover(keepId); });
+                return null;
+            } catch (Exception e) { return message(e); }
+        }
+        @Override public void different(String keepId, String otherId) {
+            worker.execute(() -> { Book a = store.find(keepId), b = store.find(otherId); if (a == null || b == null) return;
+                try { Book copy = Book.from(a.json()); app.atlante.library.catalog.BibliographicEngine.INSTANCE.rememberDifferent(copy, b); store.replace(copy); } catch (Exception ignored) { } });
+        }
+        @Override public void applyNumber(String bookId, String series, String ordinal) { runOnUiThread(() -> sagaHost.applySeries(bookId, series, ordinal, true)); }
+        @Override public void refuseNumber(long seriesId, String bookId, String ordinal) {
+            worker.execute(() -> app.atlante.library.saga.SagaRepair.refuseBlocking(MainActivity.this, seriesId, bookId, ordinal));
+        }
+        @Override public String undoLastMerge() {
+            org.json.JSONObject last = app.atlante.library.storage.MergeHistory.removeLast(MainActivity.this);
+            if (last == null) return "Nessuna unione da annullare.";
+            try { store.undoMerge(last); return "Unione annullata: «" + last.getJSONObject("other").optString("title") + "» è di nuovo una scheda a sé."; }
+            catch (Exception e) { return message(e); }
+        }
+    };
 
-    private String duplicateLine(Book b) {
-        return "«"+b.title+"» · "+b.author+"\n"+b.status+(b.isbn.isEmpty()?"":" · ISBN "+b.isbn)+(b.totalPages>0?" · "+b.totalPages+" pagine":"")+(b.rating>0?" · voto "+b.rating:"")+(b.finished.isEmpty()?"":" · letto il "+b.finished);
-    }
-
-    private void showDuplicates(List<HardcoverSync.Duplicate> found) {
-        if(found.isEmpty()){ dialogBuilder().setTitle("Nessun duplicato").setMessage("Nessuna scheda creata da Hardcover doppia di un libro già presente.").setPositiveButton("OK",null).show(); return; }
-        String[] labels=new String[found.size()]; boolean[] chosen=new boolean[found.size()]; Arrays.fill(chosen,true);
-        for(int i=0;i<found.size();i++) labels[i]="Copia da Hardcover:\n"+duplicateLine(found.get(i).copy)+"\n\nResta il tuo libro:\n"+duplicateLine(found.get(i).original);
-        dialogBuilder().setTitle(found.size()+" possibili duplicati")
-            .setMultiChoiceItems(labels,chosen,(d,w,c)->chosen[w]=c)
-            // Spuntato: stesso libro (unito). Non spuntato: libri diversi (ricordato, non viene più proposto). "Verifica dopo": niente cambia.
-            .setNegativeButton("Verifica dopo",null)
-            .setPositiveButton("Conferma",(d,w)->{
-                List<HardcoverSync.Duplicate> pick=new ArrayList<>(), apart=new ArrayList<>();
-                for(int i=0;i<found.size();i++) (chosen[i]?pick:apart).add(found.get(i));
-                worker.execute(()->{
-                    try {
-                        HardcoverSync.merge(store,pick); HardcoverSync.markDifferent(store,apart);
-                        runOnUiThread(()->{ Toast.makeText(this,pick.size()+" uniti (resta il tuo libro)"+(apart.isEmpty()?"":", "+apart.size()+" ricordati come libri diversi"),Toast.LENGTH_LONG).show(); renderContent(); });
-                    }
-                    catch(Exception e){ runOnUiThread(()->error(e)); }
-                });
-            }).show();
-        Toast.makeText(this,"Spunta quelli che sono lo stesso libro: resta il tuo, con note, voto e progressi. Quelli non spuntati sono ricordati come libri diversi.",Toast.LENGTH_LONG).show();
-    }
 
     private org.json.JSONArray hardcoverConflicts() {
         try { return new org.json.JSONArray(getPreferences(MODE_PRIVATE).getString("hardcoverConflicts","[]")); } catch (Exception e) { return new org.json.JSONArray(); }
@@ -2554,7 +2603,8 @@ public final class MainActivity extends AppCompatActivity {
     // ---- Home screen widgets: they open a book, its progress editor, the statistics or the library -------------
 
     public static final String OPEN_BOOK = "app.atlante.library.OPEN_BOOK", OPEN_PROGRESS = "app.atlante.library.OPEN_PROGRESS",
-        OPEN_STATS = "app.atlante.library.OPEN_STATS", OPEN_LIBRARY = "app.atlante.library.OPEN_LIBRARY", EXTRA_BOOK = "bookId";
+        OPEN_STATS = "app.atlante.library.OPEN_STATS", OPEN_LIBRARY = "app.atlante.library.OPEN_LIBRARY", EXTRA_BOOK = "bookId",
+        OPEN_OPERATIONS = "app.atlante.library.OPEN_OPERATIONS";
     private Intent widgetIntent;
 
     /** The widgets reuse the running app (singleTop): the request is handled when the screen is back in front. */
@@ -2568,11 +2618,12 @@ public final class MainActivity extends AppCompatActivity {
     @Override protected void onResume() {
         super.onResume();
         // Other titles of the books (original, Italian, editions) for the search, as the saga engine knows them now.
-        if (worker != null) worker.execute(() -> { if (app.atlante.library.saga.SearchAliases.load(this)) runOnUiThread(() -> { if (searching() && reading == null && detailId == null) renderContent(); }); });
+        if (worker != null) worker.execute(() -> { app.atlante.library.catalog.LibraryIndex.syncBlocking(this); runOnUiThread(() -> { if (searching() && reading == null && detailId == null) renderContent(); }); });
         if (store == null || widgetIntent == null) return;
         Intent i = widgetIntent; widgetIntent = null;
         String action = i.getAction();
         if (OPEN_STATS.equals(action)) { if (reading == null) navigate("Statistiche"); return; }
+        if (OPEN_OPERATIONS.equals(action)) { if (reading == null) showOperations(); return; }
         if (OPEN_LIBRARY.equals(action)) { if (reading == null) navigate("Biblioteca"); return; }
         Book b = store.find(i.getStringExtra(EXTRA_BOOK) == null ? "" : i.getStringExtra(EXTRA_BOOK));
         if (b == null) { Toast.makeText(this, "Questo libro non è più nella libreria.", Toast.LENGTH_LONG).show(); navigate("Biblioteca"); return; }
@@ -2620,7 +2671,10 @@ public final class MainActivity extends AppCompatActivity {
         for(int i=0;i<names.length;i++) { nav.getMenu().add(0,i+1,i,names[i]).setIcon(icons[i]); if(names[i].equals(destination)) nav.setSelectedItemId(i+1); }
         nav.setOnItemSelectedListener(item -> { String next=names[item.getItemId()-1]; if(!destination.equals(next)) navigate(next); return true; });
         nav.setOnApplyWindowInsetsListener((v,insets)->insets); // root already pads for the system bars
-        nav.setPadding(0,0,0,0); root.addView(nav,new LinearLayout.LayoutParams(-1,-2));
+        nav.setPadding(0,0,0,0);
+        // Repairs in the background: a slim bar above the navigation (nothing when no repair runs or waits).
+        if (store != null) root.addView(app.atlante.library.ui.compose.RepairViews.bar(this, palette, this::showOperations), new LinearLayout.LayoutParams(-1,-2));
+        root.addView(nav,new LinearLayout.LayoutParams(-1,-2));
     }
     private LinearLayout companionPage(String title, String subtitle) {
         reading=null; pages=null; body=null; grid=null; detailId=null; base(PAPER);

@@ -63,6 +63,25 @@ class SagaDatabaseTest {
     }
 
     /** The exported schema of version 1 opens and validates: the starting point of every future migration test. */
+    /** 1 → 2 adds the library index and keeps everything else: links, manual choices, works. */
+    @Test fun migrationToTwoKeepsTheData() {
+        val packaged = runCatching { InstrumentationRegistry.getInstrumentation().context.assets.open("${AtlanteDatabase::class.java.name}/2.json").close() }.isSuccess
+        org.junit.Assume.assumeTrue(packaged)
+        migrations.createDatabase("migration-data", 1).apply {
+            execSQL("INSERT INTO works (id, originalTitle, altTitles, italianTitle, kind, updatedAt) VALUES (7, 'The Final Empire', '', 'L''ultimo impero', '', 0)")
+            execSQL("INSERT INTO book_links (bookId, workId, seriesId, score, status, reasons, checkedAt) VALUES ('${"a".repeat(64)}', 7, NULL, 95, 'manual', '', 1)")
+            execSQL("INSERT INTO user_overrides (entityType, entityId, field, value, updatedAt) VALUES ('series', '3', 'order', '7,8', 1)")
+            close()
+        }
+        val db = migrations.runMigrationsAndValidate("migration-data", 2, true, *AtlanteDatabase.MIGRATIONS)
+        db.query("SELECT originalTitle, italianTitle FROM works WHERE id = 7").use { c -> assertTrue(c.moveToFirst()); assertEquals("L'ultimo impero", c.getString(1)) }
+        db.query("SELECT status FROM book_links").use { c -> assertTrue(c.moveToFirst()); assertEquals("manual", c.getString(0)) }
+        db.query("SELECT value FROM user_overrides").use { c -> assertTrue(c.moveToFirst()); assertEquals("7,8", c.getString(0)) }
+        db.execSQL("INSERT INTO library_fts (rowid, bookId, titles, authors, series, hash, catalogWork) VALUES (1, 'b', 'L''ultimo impero | The Final Empire', 'Brandon Sanderson', 'Mistborn', 'h', '')")
+        db.query("SELECT bookId FROM library_fts WHERE library_fts MATCH 'final* empir*'").use { c -> assertTrue(c.moveToFirst()); assertEquals("b", c.getString(0)) }
+        db.close()
+    }
+
     @Test fun exportedSchemaVersionOneIsValid() {
         // Schemas are packaged only in debug assets (kept out of the APK); build.sh runs this test on debug too.
         val packaged = runCatching { InstrumentationRegistry.getInstrumentation().context.assets.open("${AtlanteDatabase::class.java.name}/1.json").close() }.isSuccess

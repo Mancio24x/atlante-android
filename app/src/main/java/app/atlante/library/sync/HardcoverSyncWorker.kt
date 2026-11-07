@@ -34,6 +34,8 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
         settings.createMissing = prefs.getBoolean("hardcoverCreate", true); settings.sendToRead = prefs.getBoolean("hardcoverToRead", false)
         return try {
             settings.token = HardcoverAuth.token(c)
+            HardcoverSync.catalog = runCatching { app.atlante.library.catalog.CatalogDatabase.get(c).catalog() }.getOrNull()
+            runCatching { app.atlante.library.catalog.LibraryIndex.syncNow(c) }
             val store = LibraryStore.shared(c)
             val report = HardcoverSync.sync(store, settings, object : HardcoverSync.Progress {
                 override fun update(message: String) { if (isStopped) settings.cancelled = true; notice(message) }

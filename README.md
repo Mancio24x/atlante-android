@@ -150,6 +150,56 @@ Le saghe vengono ricostruite da **Wikidata** (serie P179, numero P1545, autore P
 
 I test (`SagaRecognizerTest`, `SagaDatabaseTest`) usano risposte reali di Wikidata salvate in `app/src/test/resources/wikidata`.
 
+## Catalogo offline e riparazioni in background
+
+**Catalogo offline (10.000 opere reali).** `app/src/main/assets/catalog/atlante-catalog.db` è un database SQLite già popolato e indicizzato (FTS4), aperto con Room (`catalog/CatalogDatabase.kt`) in sola lettura. Contiene opere scelte e descritte solo da fonti ridistribuibili, Wikidata e Open Library (entrambe CC0):
+- titolo originale e titolo italiano;
+- autori;
+- anno di prima pubblicazione;
+- generi normalizzati con le stesse regole dell'app;
+- saghe e sotto-serie, con la numerazione di Wikidata (P179 + P1545);
+- relazioni precede/segue;
+- edizioni italiane e inglesi con ISBN;
+- identificativi Wikidata e Open Library;
+- indirizzi delle copertine di Open Library (le immagini non sono incluse).
+
+Hardcover resta una fonte online, usata con il collegamento dell'utente. Il database si rigenera con `python3 scripts/catalog/build_catalog.py`:
+- le risposte vengono salvate in `scripts/catalog/cache/`;
+- le tabelle sono create con l'SQL esportato da Room in `app/schemas/`.
+
+**Indice della biblioteca (FTS4).** La tabella `library_fts` del database bibliografico (versione 2, migrazione 1→2 non distruttiva) indicizza titoli, autori, saghe e i titoli della stessa opera nel catalogo.
+- Si aggiorna da sola a ogni salvataggio: riscrive solo i libri aggiunti, cambiati o rimossi, riconosciuti da un'impronta del testo.
+- Con 10.000 libri, una ricerca nella biblioteca richiede circa 10 ms.
+
+**Ricerca unificata.** C'è una sola barra di ricerca:
+- in alto i libri della biblioteca;
+- sotto, "Dal catalogo offline", con le opere non ancora possedute, il titolo italiano, la saga e il numero;
+- Open Library, Wikidata e Hardcover restano a un tocco.
+
+La stessa opera non compare mai due volte.
+
+**Una sola opera = una sola scheda.** `catalog/BibliographicEngine.kt` decide per tutta l'app se due record sono la stessa opera.
+- Le prove sono: stesso file, stesso ISBN, stesso libro su Hardcover, stessa opera nel catalogo o nel motore delle saghe. Il solo titolo non basta mai.
+- Se hanno lo stesso titolo ma autori diversi, restano due opere.
+- Lo usano Sync con Hardcover, l'importazione di EPUB e schede online, "Ripara duplicati", "Ripara saghe e mappe" e "Completa metadati".
+- Un EPUB o una scheda di un'opera già presente diventa un'altra edizione della stessa scheda.
+
+**Fusione sicura.** La fusione (`LibraryStore.merge`) avviene in un solo salvataggio. Conserva:
+- sessioni e riletture, scartando i doppi;
+- note, recensione, voto, preferiti e collezioni;
+- ISBN ed edizioni;
+- i file, nella cartella `editions/` della scheda;
+- le copertine alternative, in `covers/`.
+
+Le schede unite restano in `files/merged/` e nello storico, da cui "Annulla l'ultima unione" le ripristina.
+
+**Operazioni in background.** `catalog/RepairWorker.kt` esegue tutte le riparazioni con WorkManager.
+- Una notifica mostra l'avanzamento reale e il pulsante "Interrompi"; nell'app c'è una barra sopra la navigazione.
+- La schermata "Operazioni in background" mostra stato, risultati e proposte da decidere: "Unisci", "Non unire" (viene ricordato) o "Dopo".
+- Le riparazioni si mettono in coda e non lavorano mai insieme.
+- Lavorano prima con il catalogo locale e vanno online solo quando non basta.
+- Se Android interrompe un lavoro, riprende da un checkpoint.
+
 ## Copertine: motore di ricerca
 
 `CoverSearch` raccoglie le copertine candidate da fonti pubbliche e gratuite, senza chiavi, e tiene la più nitida che appartiene davvero al libro.

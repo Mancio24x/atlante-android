@@ -63,6 +63,22 @@ interface SagaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putLink(l: BookLink)
     @Query("SELECT * FROM book_links") suspend fun links(): List<BookLink>
 
+    // ---- background repairs ----
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putJob(j: RepairJob)
+    @Query("SELECT * FROM repair_jobs WHERE id = :id") suspend fun job(id: String): RepairJob?
+    @Query("SELECT * FROM repair_jobs ORDER BY startedAt DESC LIMIT 30") fun jobs(): kotlinx.coroutines.flow.Flow<List<RepairJob>>
+    @Query("SELECT * FROM repair_jobs WHERE state IN ('queued', 'running') ORDER BY startedAt") fun activeJobs(): kotlinx.coroutines.flow.Flow<List<RepairJob>>
+    /** A job left "running" by a process that died: shown as interrupted, resumable. */
+    @Query("UPDATE repair_jobs SET state = 'failed', message = 'Interrotta: puoi riprenderla' WHERE state = 'running' AND id NOT IN (:alive)") suspend fun markDead(alive: List<String>)
+
+    // ---- personal library index (FTS4) ----
+    @Query("SELECT rowid, bookId, hash, catalogWork FROM library_fts") suspend fun libraryIndexState(): List<LibraryFtsState>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putLibraryIndex(rows: List<LibraryFts>)
+    @Query("DELETE FROM library_fts WHERE rowid IN (:rowids)") suspend fun deleteLibraryIndex(rowids: List<Long>)
+    /** [match]: an FTS4 query ("ultim* imper*"). */
+    @Query("SELECT bookId FROM library_fts WHERE library_fts MATCH :match") suspend fun searchLibrary(match: String): List<String>
+    @Query("SELECT bookId, catalogWork FROM library_fts WHERE catalogWork != ''") suspend fun catalogLinks(): List<BookCatalogLink>
+
     /** Other titles of the library's books through their identified work (original, Italian, alternative, editions). */
     @Query("""SELECT l.bookId AS bookId, w.originalTitle AS title, w.italianTitle AS other, w.altTitles AS more FROM book_links l
               JOIN works w ON w.id = l.workId WHERE l.status IN ('auto', 'confirmed', 'manual', 'no_saga')

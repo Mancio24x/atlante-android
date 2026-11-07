@@ -15,6 +15,8 @@ object SearchAliases {
             list += r.title; r.other?.let { list += it }
             r.more.split('\n').filter { it.isNotBlank() }.take(20).forEach { list += it }
         }
+        // Titles of the same work in the offline catalog (original, Italian, editions), linked by LibraryIndex.
+        for ((id, titles) in app.atlante.library.catalog.LibraryIndex.catalogTitles) map.getOrPut(id) { ArrayList() }.addAll(titles)
         val clean = map.mapValues { (_, v) -> v.filter { it.isNotBlank() }.distinct() }
         val changed = clean != SearchIndex.aliases
         if (changed) SearchIndex.aliases = clean

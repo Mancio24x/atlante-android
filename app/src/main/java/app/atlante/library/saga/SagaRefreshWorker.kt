@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit
 class SagaRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         Hardcover.configure(applicationContext)
+        SagaRepository.configureCatalog(applicationContext)
         val settings = CacheSettings(applicationContext)
         val dao = AtlanteDatabase.get(applicationContext).saga()
         val repo = SagaRepository(dao).apply { refreshDays = settings.sagaRefreshDays }

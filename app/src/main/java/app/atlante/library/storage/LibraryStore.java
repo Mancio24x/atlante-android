@@ -62,6 +62,7 @@ public final class LibraryStore implements SyncStore {
         }
         version++;
         app.atlante.library.widget.Widgets.libraryChanged(context);
+        app.atlante.library.catalog.LibraryIndex.libraryChanged(context);   // the FTS4 index of the library follows
     }
 
     public File directory(Book b) { return new File(root, b.id); }
@@ -225,6 +226,106 @@ public final class LibraryStore implements SyncStore {
         }
         deleteTree(directory(candidate));
         return target;
+    }
+
+    /**
+     * Two records of the same work become one, in one save: [merged] (the kept record, already holding the other's
+     * data, see BibliographicEngine.merged) replaces the kept one and [removed] goes. Files: the other's eBook comes
+     * here when this record has none (else it is kept as another edition's file), its cover becomes this record's
+     * cover when this has none (else an alternative cover). The removed record's folder is moved, not deleted, to
+     * files/merged/ and the merge is written in merge-history.json: "Annulla l'ultima unione" brings it back.
+     * On any failure nothing changes.
+     */
+    public synchronized Book merge(Book merged, Book removed) throws Exception {
+        Book keep = find(merged.id), other = find(removed.id);
+        if (keep == null || other == null || keep == other) throw new IOException("Unione non più possibile: uno dei due libri è cambiato");
+        File dir = directory(keep); if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Impossibile preparare la cartella del libro");
+        ArrayList<File[]> moves = new ArrayList<>();
+        Book result = Book.from(merged.json());
+        try {
+            File otherFile = original(other);
+            if (!other.format.equals("CATALOGO") && otherFile.isFile()) {
+                if (keep.format.equals("CATALOGO") || !original(keep).exists()) {
+                    result.format = other.format;
+                    File to = original(result); move(otherFile, to, moves);
+                    result.meta.put("fileSha256", other.meta.optString("fileSha256", other.id));
+                } else {
+                    File to = new File(new File(dir, "editions"), other.id + "." + other.format.toLowerCase(Locale.ROOT)); move(otherFile, to, moves);
+                    tagEditionFile(result, other.id, "editions/" + to.getName());
+                }
+            }
+            File otherCover = cover(other);
+            if (otherCover.isFile()) {
+                if (!cover(keep).isFile()) move(otherCover, cover(result), moves);
+                else move(otherCover, new File(new File(dir, "covers"), "alt-" + other.id), moves);
+            }
+            ArrayList<Book> before = new ArrayList<>(books);
+            books.set(books.indexOf(keep), result); books.remove(other);
+            try { save(); } catch (Exception e) { books.clear(); books.addAll(before); throw e; }
+        } catch (Exception e) {
+            for (int i = moves.size() - 1; i >= 0; i--) moves.get(i)[1].renameTo(moves.get(i)[0]);
+            throw e;
+        }
+        // Kept for "Annulla l'ultima unione": the other's folder and both records as they were.
+        File trash = new File(new File(context.getFilesDir(), "merged"), other.id);
+        if (directory(other).isDirectory()) { trash.getParentFile().mkdirs(); deleteTree(trash); directory(other).renameTo(trash); }
+        try { MergeHistory.add(context, keep, other, moves); } catch (Exception ignored) { /* the merge itself is saved */ }
+        return result;
+    }
+
+    private static void tagEditionFile(Book b, String otherId, String path) throws org.json.JSONException {
+        org.json.JSONArray eds = b.meta.optJSONArray("editions");
+        for (int i = 0; eds != null && i < eds.length(); i++) { org.json.JSONObject e = eds.optJSONObject(i); if (e != null && otherId.equals(e.optString("from"))) { e.put("file", path); return; } }
+    }
+
+    private static void move(File from, File to, ArrayList<File[]> moves) throws IOException {
+        if (!to.getParentFile().isDirectory() && !to.getParentFile().mkdirs()) throw new IOException("Impossibile spostare " + from.getName());
+        if (!from.renameTo(to)) throw new IOException("Impossibile spostare " + from.getName());
+        moves.add(new File[]{from, to});
+    }
+
+    /** Undoes a merge written in merge-history.json: both records as they were, files back in their place. */
+    public synchronized void undoMerge(org.json.JSONObject entry) throws Exception {
+        Book keep = Book.from(entry.getJSONObject("keep")), other = Book.from(entry.getJSONObject("other"));
+        if (find(keep.id) == null) throw new IOException("Il libro unito non c’è più");
+        if (find(other.id) != null) throw new IOException("Unione già annullata");
+        File trash = new File(new File(context.getFilesDir(), "merged"), other.id);
+        if (trash.isDirectory()) { File d = directory(other); d.getParentFile().mkdirs(); trash.renameTo(d); }
+        org.json.JSONArray moves = entry.optJSONArray("moves");
+        for (int i = moves == null ? -1 : moves.length() - 1; i >= 0; i--) {
+            org.json.JSONArray m = moves.getJSONArray(i); File from = new File(m.getString(0)), to = new File(m.getString(1));
+            if (to.isFile()) { from.getParentFile().mkdirs(); to.renameTo(from); }
+        }
+        ArrayList<Book> before = new ArrayList<>(books);
+        books.set(books.indexOf(find(keep.id)), keep); books.add(other);
+        try { save(); } catch (Exception e) { books.clear(); books.addAll(before); throw e; }
+    }
+
+    /**
+     * An edition of a work already here (an EPUB when the record already has a file, a sheet found online): it joins
+     * the existing record as one of its editions (ISBN, publisher, file in editions/), never as a second record.
+     */
+    public synchronized Book addEdition(Book candidate, Book existing) throws Exception {
+        Book target = find(existing.id);
+        if (target == null) throw new IOException("Libro non disponibile");
+        Book result = app.atlante.library.catalog.BibliographicEngine.INSTANCE.merged(target, candidate, new app.atlante.library.catalog.BibliographicEngine.Choices());
+        File dir = directory(target); ArrayList<File[]> moves = new ArrayList<>();
+        File from = original(candidate);
+        try {
+            if (!candidate.format.equals("CATALOGO") && from.isFile()) {
+                File to = new File(new File(dir, "editions"), candidate.id + "." + candidate.format.toLowerCase(Locale.ROOT));
+                move(from, to, moves); tagEditionFile(result, candidate.id, "editions/" + to.getName());
+            }
+            if (cover(candidate).isFile() && cover(target).isFile()) move(cover(candidate), new File(new File(dir, "covers"), "alt-" + candidate.id), moves);
+            else if (cover(candidate).isFile()) move(cover(candidate), cover(result), moves);
+            Book before = target; books.set(books.indexOf(target), result);
+            try { save(); } catch (Exception e) { books.set(books.indexOf(result), before); throw e; }
+        } catch (Exception e) {
+            for (int i = moves.size() - 1; i >= 0; i--) moves.get(i)[1].renameTo(moves.get(i)[0]);
+            throw e;
+        }
+        if (!candidate.id.equals(target.id)) deleteTree(directory(candidate));
+        return result;
     }
 
     public synchronized void discardCandidate(Book candidate) {

@@ -23,6 +23,9 @@ public final class HardcoverSync {
     private static long nextRequest;
 
     public static final class Settings { public String token = ""; public boolean createMissing = true, sendToRead = false; public volatile boolean cancelled; }
+    /** The offline catalog (set by the app and the sync worker); null in tests that do not use it. */
+    public static volatile app.atlante.library.catalog.CatalogDao catalog;
+
     /** True while a sync runs: the background saga scan waits, so the sync gets Hardcover's whole request budget. */
     public static volatile boolean syncing;
     /** A book searched on Hardcover without result is not searched again for this long. */
@@ -219,7 +222,14 @@ public final class HardcoverSync {
             if (bestIdentity(store.snapshot(), ub) != null) { report.recognized++; continue; }
             // Same author, title only in Italian here and not among Hardcover's editions: the book here is looked up on
             // Hardcover (once: the answer is kept with it) and, when it is the same Hardcover book, it is linked.
-            Book same = sameBookByAuthor(api, store, ub, matched, progress);
+            Book same = null;
+            // The offline catalog first (no request): the English record and the Italian book are one work there.
+            if (catalog != null) {
+                Book viaCatalog = app.atlante.library.catalog.BibliographicEngine.sameWorkIn(store.snapshot(), b, catalog);
+                JSONObject l = viaCatalog == null ? null : SyncCore.link(viaCatalog, SERVICE);
+                if (viaCatalog != null && (l == null || l.optInt("id") == 0)) same = viaCatalog;
+            }
+            if (same == null) same = sameBookByAuthor(api, store, ub, matched, progress);
             if (same != null) {
                 Book copy = Book.from(same.json());
                 SyncCore.remember(copy, SERVICE, new JSONObject().put("id", ub.getInt("id")).put("book", ub.optInt("book_id")), SyncCore.Snapshot.of(copy));

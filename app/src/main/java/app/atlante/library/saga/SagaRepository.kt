@@ -26,7 +26,19 @@ class SagaRepository(
         // A failed search (often just no connection) is retried after a day, not after the full interval.
         val interval = if (known?.status == "unidentified") minOf(refreshMs, 86_400_000L) else refreshMs
         if (known != null && !force && now() - known.checkedAt < interval) return known
-        val match = withContext(Dispatchers.IO) { SagaRecognizer.identify(book, sources) }
+        val (match, failures) = withContext(Dispatchers.IO) {
+            SagaRecognizer.Live.resetFailures()
+            SagaRecognizer.identify(book, sources) to SagaRecognizer.Live.failures()
+        }
+        // Nothing found because the sources did not answer (no connection, server errors): what was known stays,
+        // and the book is checked again next time instead of being marked "Saga non identificata" for a day.
+        // Not found online (or offline): the catalog shipped with the app knows 10,000 works with their sagas.
+        if (match.status == SagaMatch.Status.INSUFFICIENT) fromCatalog(book)?.let { dao.putLink(it); return it }
+        if (match.status == SagaMatch.Status.INSUFFICIENT && failures > 0) {
+            val kept = known ?: BookLink(book.id, status = "unidentified", reasons = "Fonti non raggiungibili: nuovo tentativo alla prossima apertura", checkedAt = 0)
+            if (known == null) dao.putLink(kept)
+            return kept
+        }
         var seriesId: Long? = null
         val sagaIds = ArrayList<Pair<WdSeriesLink, Long>>()
         if (match.status != SagaMatch.Status.INSUFFICIENT && match.workQid != null) {
@@ -56,6 +68,37 @@ class SagaRepository(
         }, match.reasons.joinToString("\n"), now())
         dao.putLink(link)
         return link
+    }
+
+    /**
+     * The book in the offline catalog (same ISBN as an edition, or a whole title and an author in common): its work,
+     * its sagas with the numbers Wikidata gives. Catalog ids are Wikidata ids, the same ones the online path uses,
+     * so a later online answer updates these records instead of adding new ones. A saga already filled online
+     * keeps its volumes.
+     */
+    private suspend fun fromCatalog(book: Book): BookLink? {
+        val c = catalog ?: return null
+        val workQ = runCatching { app.atlante.library.catalog.LibraryIndex.match(c, book) }.getOrNull() ?: return null
+        val w = c.work(workQ) ?: return null
+        val workId = upsertWork("Q$workQ", w.originalTitle, w.italianTitle, w.openLibraryId, w.year?.toString(), w.authors.split(" & ").filter { it.isNotBlank() })
+        var seriesId: Long? = null
+        for (e in c.entriesOf(workQ).sortedBy { it.sortKey ?: Double.MAX_VALUE }) {
+            val s = c.series(e.seriesId) ?: continue
+            val parent = s.parentId?.let { p -> c.series(p)?.let { upsertSeries("Q${it.id}", it.italianName ?: it.name, null) } }
+            val sid = upsertSeries("Q${s.id}", s.italianName ?: s.name, parent)
+            if (dao.series(sid)?.manual == true) { seriesId = seriesId ?: sid; continue }
+            if (dao.volumes(sid).isEmpty()) {
+                val entries = c.entries(s.id).mapNotNull { m ->
+                    val mw = c.work(m.workId) ?: return@mapNotNull null
+                    SeriesEntry(sid, upsertWork("Q${mw.id}", mw.originalTitle, mw.italianTitle, mw.openLibraryId, mw.year?.toString(), mw.authors.split(" & ").filter { it.isNotBlank() }),
+                        m.ordinal, m.sortKey ?: Double.MAX_VALUE, "volume", "catalog")
+                }
+                dao.replaceAutomaticEntries(sid, entries)
+            }
+            // The main saga first when the work is in a saga and in one of its sub-series.
+            if (seriesId == null || s.parentId == null) seriesId = sid
+        }
+        return BookLink(book.id, workId, seriesId, 90, if (seriesId != null) "auto" else "no_saga", "Catalogo offline (Wikidata e Open Library)", now())
     }
 
     /** The user's choice: confirm the proposal, pick another saga, or leave the book without saga. */
@@ -145,6 +188,11 @@ class SagaRepository(
     companion object {
         /** Statuses chosen by the user: automatic recognition never changes them. */
         val USER_STATUSES = setOf("confirmed", "manual", "none")
+        /** The offline catalog, when the app has opened it (null in tests that do not set it). */
+        @JvmStatic @Volatile var catalog: app.atlante.library.catalog.CatalogDao? = null
+        @JvmStatic fun configureCatalog(context: android.content.Context) {
+            if (catalog == null) catalog = runCatching { app.atlante.library.catalog.CatalogDatabase.get(context).catalog() }.getOrNull()
+        }
         private val EDITION_SERIES = listOf("audiobook", "audiolibr", "edition", "edizion", "box set", "cofanetto")
     }
 }

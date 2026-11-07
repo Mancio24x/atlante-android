@@ -40,9 +40,10 @@ public final class OnlineCatalog {
                     if (!temporary.renameTo(file)) temporary.delete();
                 } finally { temporary.delete(); }
                 File[] entries = cacheDirectory.listFiles();
-                if (entries != null && entries.length > 64) {
+                // Online answers are kept to make the next searches fast (the 300 most recent; covers have their own cache).
+                if (entries != null && entries.length > 300) {
                     Arrays.sort(entries,Comparator.comparingLong(File::lastModified));
-                    for(int i=0;i<entries.length-64;i++) entries[i].delete();
+                    for(int i=0;i<entries.length-300;i++) entries[i].delete();
                 }
             } catch (IOException ignored) { /* Searches also work when the cache is full. */ }
         }

@@ -173,7 +173,7 @@ private fun Card(item: ShelfItem, number: String?, kind: String, lane: String?, 
     val scheme = MaterialTheme.colorScheme
     val owned = item.ownedBookId != null
     val state = when { item.read -> "Letto"; owned -> "In biblioteca"; else -> "Mancante" }
-    val source = when (item.source) { "hardcover" -> "Hardcover"; "wikidata" -> "Wikidata"; "manual" -> "scelta tua"; else -> "" }
+    val source = when (item.source) { "hardcover" -> "Hardcover"; "wikidata" -> "Wikidata"; "catalog" -> "catalogo offline"; "manual" -> "scelta tua"; else -> "" }
     val description = listOfNotNull(number?.let { "Numero $it" }, item.title, state, kind.ifEmpty { null }, lane?.let { "sotto-serie $it" },
         source.ifEmpty { null }?.let { "posizione da $it" }).joinToString(", ")
     Row(modifier.fillMaxWidth().padding(end = 12.dp).clickable(onClick = onTap).semantics(mergeDescendants = true) { contentDescription = description },

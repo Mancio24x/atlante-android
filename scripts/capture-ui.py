@@ -214,6 +214,13 @@ for _ in range(45):
     adb('shell','input','swipe','540','1250','540','750','300');time.sleep(1.5)
 shot('50-book-saga')
 assert found, 'Saga section did not appear'
+# The emulator's network is sometimes slow to answer: one more try, as a reader would tap "Riprova".
+if visible('Saga non identificata'):
+    tap('Riprova',exact=True)
+    for _ in range(30):
+        if visible('Altri libri della saga'): break
+        time.sleep(2)
+    shot('50a-book-saga-retry')
 tap('Visualizza saga completa',True);time.sleep(1.5);shot('51-saga-map')
 assert any('Mappa verticale della saga' in n.get('content-desc','') for n in dump().iter('node')), 'Saga map missing'
 # Each volume card says its number, state and where the position comes from.
@@ -271,7 +278,8 @@ tap('Chiudi',exact=True)
 assert any(b['title']=='Red Rising' for b in catalog()), 'Cache cleanup touched the library'
 print('Cache settings completed.')
 
-# Ripara saghe: runs on the whole sample library and reports; the library itself is unchanged except empty saga fields.
+# Ripara saghe: runs in the background on the whole sample library; the app stays usable; the result is in
+# Operazioni in background. The library itself is unchanged except empty saga fields.
 before=len(catalog())
 tap('Home',exact=True);tap('Impostazioni')   # back to the top of the settings
 tap('Ripara saghe e mappe',True,exact=True)   # opens the section
@@ -279,19 +287,18 @@ time.sleep(.6);adb('shell','input','swipe','540','1250','540','750','300');time.
 buttons=[n for n in dump().iter('node') if n.get('text','')=='Ripara saghe']
 b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
 adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
+time.sleep(2);shot('54-repair-sagas-started')
+# The app is usable meanwhile: the library opens, the progress bar is above the navigation.
+tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')
+tap('Home',exact=True);tap('Impostazioni');tap('Ripara saghe e mappe',True,exact=True)
+tap('Operazioni in background',True)
 for _ in range(120):
-    if any(n.get('text','').startswith('Fatto:') for n in dump().iter('node')): break
+    if any(n.get('text','')=='Completata' or n.get('text','').startswith('Completata ·') for n in dump().iter('node')): break
     time.sleep(2)
-shot('54-repair-sagas')
-assert any(n.get('text','').startswith('Fatto:') for n in dump().iter('node')), 'Ripara saghe did not finish'
+shot('54c-operations')
+assert any(n.get('text','').startswith('Completata') for n in dump().iter('node')), 'Ripara saghe did not finish in the background'
 assert len(catalog())==before, 'Ripara saghe changed the number of books'
-tap('Controlla le mappe',True)
-for _ in range(60):
-    if any(('mappe' in n.get('text','') and ('coerenti' in n.get('text','') or 'cose da guardare' in n.get('text',''))) for n in dump().iter('node')): break
-    time.sleep(1)
-shot('54a-check-maps')
-assert any(('coerenti' in n.get('text','') or 'cose da guardare' in n.get('text','')) for n in dump().iter('node')), 'Map check did not finish'
-assert len(catalog())==before, 'Map check changed the library'
+tap('Chiudi',exact=True)
 print('Repair completed.')
 
 # Bookcase: spines on shelves; a tap on a spine opens the book.

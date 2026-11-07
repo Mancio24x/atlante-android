@@ -114,7 +114,8 @@ object Widgets {
      */
     fun shown(context: Context, state: Preferences, withGoals: Boolean, coverPx: Int): Shown {
         val books = store(context)?.snapshot() ?: emptyList()
-        val chosenId = state[BOOK]
+        // A book merged into another one (Ripara duplicati) is followed to the record that stayed.
+        val chosenId = state[BOOK]?.let { app.atlante.library.storage.MergeHistory.redirect(context, it) }
         val chosen = chosenId?.let { id -> books.firstOrNull { it.id == id } }
         val book = chosen?.takeIf { it.status != Book.READ } ?: reading(books).firstOrNull()
         val goals = if (withGoals) goals(context, books) else emptyList()
