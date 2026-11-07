@@ -70,7 +70,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             // You stopped it: "cancelled"; Android stopped it: it will start again from the checkpoint.
             // Android 12+ says why; before, WorkManager's own record says whether the work was cancelled.
             val byYou = if (Build.VERSION.SDK_INT >= 31) stopReason == WorkInfo.STOP_REASON_CANCELLED_BY_APP
-                else runCatching { WorkManager.getInstance(c).getWorkInfoById(id).get(2, java.util.concurrent.TimeUnit.SECONDS)?.state == WorkInfo.State.CANCELLED }.getOrDefault(true)
+                else runCatching { WorkManager.getInstance(c).getWorkInfoById(this@RepairWorker.id).get(2, java.util.concurrent.TimeUnit.SECONDS)?.state == WorkInfo.State.CANCELLED }.getOrDefault(true)
             job = job.copy(state = if (byYou) "cancelled" else "queued",
                 phase = if (byYou) "Annullato" else "In pausa", finishedAt = System.currentTimeMillis(),
                 message = if (byYou) "Interrotta da te: le modifiche già applicate restano" else "Interrotta da Android: riprende da sola")

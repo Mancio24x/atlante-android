@@ -50,7 +50,7 @@ private object DiscoverSession {
 
 /**
  * Scopri: a grid of six covers, the most read books (with an Italian edition) or, with a genre chosen,
- * six books of that genre. Tapping a cover opens the online search for it: nothing is added by itself.
+ * six books of that genre. Tapping a cover opens the book's sheet (found online): nothing is added by itself.
  */
 @Composable
 fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit, onCollections: () -> Unit) {
@@ -149,7 +149,7 @@ private fun Grid(items: List<Discover.Pick?>, host: SagaHost) {
 
 @Composable
 private fun PickCard(p: Discover.Pick?, host: SagaHost, modifier: Modifier) {
-    Column(modifier.then(if (p != null) Modifier.clickable { host.searchOnline(p.query) }.semantics { contentDescription = "${p.title} di ${p.author}" } else Modifier)) {
+    Column(modifier.then(if (p != null) Modifier.clickable { host.openWork(p.title, p.author) }.semantics { contentDescription = "${p.title} di ${p.author}" } else Modifier)) {
         val url = p?.coverUrl
         // Same book in this place (workKey): the Italian cover replaces the first one only when it is ready.
         BookCover(p?.workKey, url, p?.title ?: "", Modifier.fillMaxWidth().aspectRatio(0.66f)) {

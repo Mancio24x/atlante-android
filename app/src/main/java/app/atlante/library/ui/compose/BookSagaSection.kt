@@ -37,6 +37,8 @@ interface SagaHost {
     fun openBook(bookId: String)
     /** Opens the online search with this text: suggestions are never added to the library by themselves. */
     fun searchOnline(query: String)
+    /** A book not in the library (Scopri, carousels, catalog): its sheet opens directly; the search only when it is not found. */
+    fun openWork(title: String, author: String)
     /** Writes the saga in the book's record; [chosen] = picked by the user (otherwise only fills an empty field). */
     fun applySeries(bookId: String, name: String, ordinal: String?, chosen: Boolean)
     fun coverFile(bookId: String): String?
@@ -211,7 +213,7 @@ private fun Shelf(items: List<ShelfItem>, host: SagaHost) {
 
 @Composable
 private fun ShelfCard(item: ShelfItem, host: SagaHost) {
-    val open = { if (item.ownedBookId != null) host.openBook(item.ownedBookId) else host.searchOnline(item.query) }
+    val open = { if (item.ownedBookId != null) host.openBook(item.ownedBookId) else host.openWork(item.title, item.author) }
     val state = when { item.read -> "Letto"; item.ownedBookId != null -> "In biblioteca"; else -> "Non in biblioteca" }
     Column(Modifier.width(96.dp).clickable(onClick = open).semantics { contentDescription = "${item.title}, $state" }) {
         Cover(item, host, Modifier.size(96.dp, 144.dp).alpha(if (item.ownedBookId == null) 0.75f else 1f))
@@ -273,7 +275,7 @@ internal fun FullSaga(s: SagaShelf, book: Book, host: SagaHost, onClose: () -> U
     val scope = rememberCoroutineScope()
     other?.let { o -> FullSaga(o, book, host) { other = null } }
     var tab by remember { mutableIntStateOf(0) }
-    val open: (ShelfItem) -> Unit = { v -> if (v.ownedBookId != null) { onClose(); host.openBook(v.ownedBookId) } else host.searchOnline(v.query) }
+    val open: (ShelfItem) -> Unit = { v -> if (v.ownedBookId != null) { onClose(); host.openBook(v.ownedBookId) } else host.openWork(v.title, v.author) }
     FullScreen(s.series!!.name, onClose) {
         Column(Modifier.padding(horizontal = 20.dp)) {
             Text("${s.owned} di ${s.total} in biblioteca · ${s.items.count { it.read }} letti", style = MaterialTheme.typography.bodyMedium)
@@ -306,7 +308,7 @@ private fun FullList(title: String, items: List<ShelfItem>, host: SagaHost, onCl
 @Composable
 private fun VolumeRow(v: ShelfItem, current: Boolean, host: SagaHost) {
     val color = when { v.read -> MaterialTheme.colorScheme.primary; v.ownedBookId != null -> MaterialTheme.colorScheme.secondary; else -> MaterialTheme.colorScheme.outline }
-    Row(Modifier.fillMaxWidth().clickable { if (v.ownedBookId != null) host.openBook(v.ownedBookId) else host.searchOnline(v.query) }.padding(vertical = 4.dp),
+    Row(Modifier.fillMaxWidth().clickable { if (v.ownedBookId != null) host.openBook(v.ownedBookId) else host.openWork(v.title, v.author) }.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Surface(Modifier.size(36.dp), shape = CircleShape, color = if (v.ownedBookId != null) color else MaterialTheme.colorScheme.surface, border = BorderStroke(2.dp, color)) {
             Box(contentAlignment = Alignment.Center) {

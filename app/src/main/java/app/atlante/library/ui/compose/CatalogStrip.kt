@@ -50,8 +50,8 @@ fun CatalogStrip(query: String, host: SagaHost) {
             items(results, key = { it.work.id }) { r ->
                 val w = r.work
                 val saga = r.series?.let { s -> s + (r.ordinal?.let { " · n. $it" } ?: "") }
-                Column(Modifier.width(92.dp).clickable { host.searchOnline("${w.title} ${w.authors.substringBefore(" & ")}") }
-                    .semantics(mergeDescendants = true) { contentDescription = "${w.title} di ${w.authors}" + (saga?.let { ", $it" } ?: "") + ", dal catalogo: tocca per cercarlo online" }) {
+                Column(Modifier.width(92.dp).clickable { host.openWork(w.title, w.authors.substringBefore(" & ")) }
+                    .semantics(mergeDescendants = true) { contentDescription = "${w.title} di ${w.authors}" + (saga?.let { ", $it" } ?: "") + ", dal catalogo: tocca per aprirne la scheda" }) {
                     BookCover("cat:${w.id}", w.coverUrl, w.title, Modifier.width(92.dp).aspectRatio(0.66f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                         w.coverUrl?.let { u -> SuggestionCovers.bytes(u)?.let { CoverImages.decode(it, null, 280) } }

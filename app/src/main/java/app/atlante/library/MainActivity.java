@@ -1101,6 +1101,7 @@ public final class MainActivity extends AppCompatActivity {
     private final app.atlante.library.ui.compose.SagaHost sagaHost = new app.atlante.library.ui.compose.SagaHost() {
         @Override public void openBook(String id) { Book x = store.find(id); if (x != null) details(x); }
         @Override public void searchOnline(String q) { searchFor(q); }
+        @Override public void openWork(String title, String author) { openDiscovered(title, author); }
         @Override public void applySeries(String id, String name, String ordinal, boolean chosen) {
             Book x = store.find(id); if (x == null || (!chosen && !x.series.isEmpty())) return;
             double n = 0; try { if (ordinal != null) n = Double.parseDouble(ordinal.replace(',', '.')); } catch (NumberFormatException ignored) { }
@@ -1546,6 +1547,41 @@ public final class MainActivity extends AppCompatActivity {
         onlineSearch();
     }
     private boolean autoSearch, clearSearch;
+    /**
+     * A book seen in Scopri, a saga or the catalog: its sheet opens at once. Already in the library → your record.
+     * Otherwise the Italian catalog (SBN) and Open Library are asked in the background and the edition with the same
+     * title and author is shown (plot, cover, "Aggiungi alla mia libreria"); only when none is sure, the search page.
+     */
+    private void openDiscovered(String title, String author) {
+        Book wanted = new Book(); wanted.title = title; wanted.author = author.isEmpty() ? "Autore sconosciuto" : author;
+        Book mine = app.atlante.library.catalog.BibliographicEngine.sameWorkIn(store.snapshot(), wanted, catalogDao());
+        if (mine != null) { details(mine); return; }
+        AlertDialog loading = loading("Scheda del libro", "«" + title + "»: cerco l’edizione e la trama…");
+        catalogWorker.execute(() -> {
+            Book found = null;
+            try {
+                String term = (title + " " + author).trim();
+                ArrayList<Book> results = new ArrayList<>();
+                try { results.addAll(SbnCatalog.search(term)); } catch (Exception ignored) { }
+                try { results.addAll(OnlineCatalog.search(term, "ita", false)); } catch (Exception ignored) { }
+                int top = 0;
+                for (Book c : results) {
+                    int score = BookMatcher.score(c, wanted);
+                    if (c.language.equals("ita") || c.source.startsWith("sbn:")) score += 5;          // the Italian edition first
+                    if (score > top) { top = score; found = c; }
+                }
+                if (top < BookMatcher.SAME_TITLE_AND_AUTHOR) found = null;
+                if (found != null) { if (found.source.startsWith("sbn:")) SbnCatalog.enrich(found); else OnlineCatalog.enrich(found, "ita"); }
+            } catch (Exception ignored) { found = null; }
+            final Book book = found;
+            runOnUiThread(() -> {
+                loading.dismiss(); if (isFinishing() || isDestroyed()) return;
+                if (book != null) preview(book, () -> { if (reading == null && detailId == null) renderAfterRepair(); });
+                else searchFor((title + " " + author).trim());
+            });
+        });
+    }
+
 
     private void onlineSearch() {
         LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12));
