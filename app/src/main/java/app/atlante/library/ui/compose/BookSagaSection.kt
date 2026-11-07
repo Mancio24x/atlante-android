@@ -45,8 +45,11 @@ interface SagaHost {
     fun applySeries(bookId: String, name: String, ordinal: String?, chosen: Boolean)
     fun coverFile(bookId: String): String?
     fun library(): List<Book>
-    /** Scopri's bookmark: true = now in Da leggere. Only a record this bookmark created is ever taken back. */
-    fun toggleToRead(title: String, author: String, coverUrl: String?): Boolean = false
+    /**
+     * Scopri's bookmark: [on] = put in Da leggere, otherwise take it back. Returns the new state. Only a record this
+     * bookmark created is ever taken back; a book that was already in the library stays.
+     */
+    fun setToRead(title: String, author: String, coverUrl: String?, on: Boolean): Boolean = false
     /** Is this work already a record of the library? */
     fun inLibrary(title: String, author: String): Boolean = false
 }

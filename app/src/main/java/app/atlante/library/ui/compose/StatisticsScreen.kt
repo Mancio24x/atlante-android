@@ -227,7 +227,8 @@ private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minu
                 Text(if (goal > 0) "$done di $goal libri" else "$done " + if (done == 1) "libro" else "libri", Modifier.padding(top = 4.dp), style = MaterialTheme.typography.titleLarge.copy(fontFamily = Serif))
                 if (goal > 0 && done < goal) {
                     val weeks = ((today.lengthOfYear() - today.dayOfYear) / 7.0).coerceAtLeast(1.0)
-                    Text("Al tuo ritmo arrivi a $projected: servono " + String.format(Locale.ITALIAN, "%.1f", (goal - done) / weeks) + " libri a settimana.",
+                    val perWeek = String.format(Locale.ITALIAN, "%.1f", (goal - done) / weeks)
+                    Text(if (done == 0) "Per arrivare a $goal servono $perWeek libri a settimana." else "Al tuo ritmo arrivi a $projected: servono $perWeek libri a settimana.",
                         style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 } else if (goal > 0) Text("★ Obiettivo annuale raggiunto!", style = MaterialTheme.typography.bodySmall, color = palette.warmColor)
             }

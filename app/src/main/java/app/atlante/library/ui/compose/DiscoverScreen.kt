@@ -92,16 +92,19 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
     val colors = MaterialTheme.colorScheme
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    // Bookmarks shown on: saved here, or already in the library (so a tap never takes a library book away).
     var saved by remember { mutableStateOf(setOf<String>()) }
-    // Bookmark: Da leggere straight from the grid (a choice of yours; Annulla takes it back).
+    var unsaved by remember { mutableStateOf(setOf<String>()) }
+    val isSaved: (Discover.Pick) -> Boolean = { p -> p.workKey in saved || (p.workKey !in unsaved && host.inLibrary(p.title, p.author)) }
+    val setSaved: (Discover.Pick, Boolean) -> Unit = { p, on -> if (on) { saved = saved + p.workKey; unsaved = unsaved - p.workKey } else { saved = saved - p.workKey; unsaved = unsaved + p.workKey } }
     val toggle: (Discover.Pick) -> Unit = { p ->
-        val on = host.toggleToRead(p.title, p.author, p.coverUrl)
-        saved = if (on) saved + p.workKey else saved - p.workKey
-        if (on) scope.launch {
+        val wasInLibrary = host.inLibrary(p.title, p.author)
+        val on = host.setToRead(p.title, p.author, p.coverUrl, !isSaved(p))
+        setSaved(p, on)
+        if (on && !wasInLibrary) scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            if (snackbar.showSnackbar("«${p.title}» in Da leggere", "Annulla", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
-                if (!host.toggleToRead(p.title, p.author, p.coverUrl)) saved = saved - p.workKey
-            }
+            if (snackbar.showSnackbar("«${p.title}» in Da leggere", "Annulla", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed)
+                setSaved(p, host.setToRead(p.title, p.author, p.coverUrl, false))
         }
     }
     Box(Modifier.fillMaxSize()) {
@@ -130,12 +133,12 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
         val list = picks
         Crossfade(when { list == null -> 0; list.isEmpty() -> 1; else -> 2 }, label = "grid") { state ->
             when (state) {
-                0 -> Grid(List(6) { null }, host, saved, toggle)
+                0 -> Grid(List(6) { null }, host, isSaved, toggle)
                 1 -> Column {
                     Text("Nessun consiglio disponibile: serve la connessione a Internet.", style = MaterialTheme.typography.bodyLarge)
                     TextButton(onClick = { attempt++ }) { Text("Riprova") }
                 }
-                else -> Grid(picks ?: emptyList(), host, saved, toggle)
+                else -> Grid(picks ?: emptyList(), host, isSaved, toggle)
             }
         }
         val more = picks?.let { discover.hasMore(it.size, page) } == true
@@ -190,11 +193,11 @@ private fun GenreChip(label: String, on: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Grid(items: List<Discover.Pick?>, host: SagaHost, saved: Set<String>, onSave: (Discover.Pick) -> Unit) {
+private fun Grid(items: List<Discover.Pick?>, host: SagaHost, isSaved: (Discover.Pick) -> Boolean, onSave: (Discover.Pick) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         items.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { p -> PickCard(p, host, p != null && p.workKey in saved, onSave, Modifier.weight(1f)) }
+                row.forEach { p -> PickCard(p, host, p != null && isSaved(p), onSave, Modifier.weight(1f)) }
                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }

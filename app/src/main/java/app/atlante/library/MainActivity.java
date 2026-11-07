@@ -253,7 +253,7 @@ public final class MainActivity extends AppCompatActivity {
             if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing);
         }).start();
     }
-    private void settings() { if(!destination.equals("Impostazioni"))getPreferences(MODE_PRIVATE).edit().putString("settingsReturn",destination).apply(); navigate("Impostazioni"); }
+    private void settings() { settingsSection=""; if(!destination.equals("Impostazioni"))getPreferences(MODE_PRIVATE).edit().putString("settingsReturn",destination).apply(); navigate("Impostazioni"); }
 
     /** Impostazioni (design 6a): an index of seven rows with the current value; each opens its own page. */
     private String settingsSection = "";
@@ -774,7 +774,8 @@ public final class MainActivity extends AppCompatActivity {
         ImageView glass = new ImageView(this); glass.setImageResource(R.drawable.ic_search); glass.setColorFilter(MUTED); pill.addView(glass, new LinearLayout.LayoutParams(dp(20), dp(20)));
         EditText search = new EditText(this); search.setBackground(null); search.setSingleLine(true); search.setTextSize(15); search.setTextColor(INK); search.setHintTextColor(MUTED);
         int total = store.snapshot().size();
-        search.setHint("Cerca in " + total + (total == 1 ? " libro" : " libri")); search.setContentDescription("Cerca nella biblioteca");
+        // Narrow phones: the short hint, so it is never cut ("Cerca in 9 lib").
+        search.setHint(getResources().getConfiguration().screenWidthDp < 400 ? "Cerca" : "Cerca in " + total + (total == 1 ? " libro" : " libri")); search.setContentDescription("Cerca nella biblioteca");
         search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH); search.setText(query); search.setPadding(dp(10), 0, dp(4), 0);
         pill.addView(search, new LinearLayout.LayoutParams(0, -1, 1));
         int active = activeFilters();
@@ -1224,7 +1225,7 @@ public final class MainActivity extends AppCompatActivity {
         c.cell = column(); c.cell.setPadding(dp(gutter / 2f), 0, dp(gutter / 2f), dp(cols == 5 ? 10 : 14)); c.cell.setTag(c);
         c.art = new FrameLayout(this); c.art.setClipToOutline(true); GradientDrawable shape = background(LINE, Color.TRANSPARENT); shape.setCornerRadius(dp(6)); c.art.setBackground(shape); c.art.setElevation(dp(3));
         c.cell.addView(c.art, new LinearLayout.LayoutParams(-1, dp(c.height)));
-        c.fallback = text("", 11, SAGE, true); c.fallback.setPadding(dp(6), dp(8), dp(6), dp(8)); c.art.addView(c.fallback, new FrameLayout.LayoutParams(-1, -1));
+        c.fallback = text("", 11, SAGE, true); c.fallback.setPadding(dp(6), dp(26), dp(6), dp(8));   // below the saga number and the tick c.art.addView(c.fallback, new FrameLayout.LayoutParams(-1, -1));
         c.image = new ImageView(this); c.image.setScaleType(ImageView.ScaleType.CENTER_CROP); c.art.addView(c.image, new FrameLayout.LayoutParams(-1, -1));
         c.number = text("", 10, PAPER, false); c.number.setGravity(Gravity.CENTER); c.number.setPadding(dp(4), 0, dp(4), 0); c.number.setMinWidth(dp(18));
         GradientDrawable ng = background(INK, Color.TRANSPARENT); ng.setCornerRadius(dp(9)); c.number.setBackground(ng);
@@ -1474,11 +1475,15 @@ public final class MainActivity extends AppCompatActivity {
         @Override public String coverFile(String id) { Book x = store.find(id); if (x == null) return null; File f = store.cover(x); return f.exists() ? f.getPath() : null; }
         @Override public java.util.List<Book> library() { return store.snapshot(); }
         @Override public boolean inLibrary(String title, String author) { return discoverMatch(title, author) != null; }
-        @Override public boolean toggleToRead(String title, String author, String coverUrl) {
-            String key = title + "|" + author; String created = discoverSaved.remove(key);
-            if (created != null) { Book b = store.find(created); try { if (b != null) store.remove(b); } catch (Exception e) { error(e); } return false; }
+        @Override public boolean setToRead(String title, String author, String coverUrl, boolean on) {
+            String key = title + "|" + author;
+            if (!on) {
+                String created = discoverSaved.remove(key);
+                if (created == null) { boolean kept = discoverMatch(title, author) != null; if (kept) Toast.makeText(MainActivity.this, "Il libro era già nella tua biblioteca: resta lì", Toast.LENGTH_SHORT).show(); return kept; }
+                Book b = store.find(created); try { if (b != null) store.remove(b); } catch (Exception e) { error(e); return true; } return false;
+            }
             Book existing = discoverMatch(title, author);
-            if (existing != null) { Toast.makeText(MainActivity.this, "«" + existing.title + "» è già nella tua biblioteca", Toast.LENGTH_SHORT).show(); return true; }
+            if (existing != null) { if (!discoverSaved.containsKey(key)) Toast.makeText(MainActivity.this, "«" + existing.title + "» è già nella tua biblioteca", Toast.LENGTH_SHORT).show(); return true; }
             Book b = new Book(); b.id = UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
             b.format = "CATALOGO"; b.title = title; b.author = author.isEmpty() ? "Autore sconosciuto" : author; b.status = Book.TO_READ; b.addedAt = System.currentTimeMillis();
             try { store.addCatalog(b); discoverSaved.put(key, b.id); } catch (Exception e) { error(e); return false; }

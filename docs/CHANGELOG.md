@@ -6,6 +6,10 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Correzioni dopo i test**: il segnalibro di Scopri non toglie più un libro che è già in biblioteca (prima, tornando
+  in Scopri e toccandolo, il libro salvato veniva cancellato); le Impostazioni si aprono sempre dall'indice; ricerca
+  della Biblioteca non tagliata sui telefoni stretti; numero di saga che non copre il titolo sulle copertine senza
+  immagine; frase della rotta corretta a inizio anno.
 - **Impostazioni in Compose** (`SettingsScreen.kt`): indice con ricerca; Lettura con anteprima del lettore e cursore
   del testo; Lingua dei libri come scelta che si salva da sola (via «Salva lingua»); Privacy e progetto.
 - **Sync in Compose** (`SyncScreen.kt`), stesso aspetto (5a) e stesse azioni; schede bianche come nei design in
