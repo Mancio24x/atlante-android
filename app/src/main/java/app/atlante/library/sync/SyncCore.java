@@ -105,6 +105,17 @@ public final class SyncCore {
     }
 
     private static Response send(String method, String address, String body, Map<String, String> headers, String authorization, int limit) throws IOException {
+        if (LanHttp.applies(address)) {
+            java.util.LinkedHashMap<String, String> h = new java.util.LinkedHashMap<>();
+            h.put("User-Agent", "AtlanteLibraryAndroid (https://github.com/Mancio24x/atlante-android)"); h.put("Accept", "application/json");
+            if (headers != null) h.putAll(headers);
+            if (authorization != null) h.put("Authorization", authorization);
+            byte[] bytes = body == null ? null : body.getBytes(StandardCharsets.UTF_8);
+            if (bytes != null && !h.containsKey("Content-Type")) h.put("Content-Type", "application/json");
+            LanHttp.Raw raw = LanHttp.exchange(method, address, bytes, h, limit);
+            Response r = new Response(); r.status = raw.status; r.headers = raw.headers; r.body = new String(raw.body, StandardCharsets.UTF_8);
+            return r;
+        }
         HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
         c.setConnectTimeout(12000); c.setReadTimeout(30000); c.setRequestMethod(method); c.setInstanceFollowRedirects(headers == null || !headers.containsKey("x-auth-key"));
         c.setRequestProperty("User-Agent", "AtlanteLibraryAndroid (https://github.com/Mancio24x/atlante-android)");

@@ -178,6 +178,18 @@ public final class CalibreSync {
     /** Binary download (covers) with the same challenge handling as {@link SyncCore#http}. */
     private static byte[] bytes(Settings s, String url) throws IOException {
         String authorization = null;
+        if (LanHttp.applies(url)) {
+            for (int attempt = 0; attempt < 2; attempt++) {
+                java.util.Map<String, String> h = new java.util.HashMap<>(); if (authorization != null) h.put("Authorization", authorization);
+                LanHttp.Raw r = LanHttp.exchange("GET", url, null, h, 3 * 1024 * 1024);
+                if (r.status == 401 && authorization == null && !s.user.isEmpty()) {
+                    java.util.List<String> ch = r.headers.get("WWW-Authenticate");
+                    authorization = SyncCore.answer(ch == null || ch.isEmpty() ? null : ch.get(0), "GET", url, s.user, s.password); continue;
+                }
+                return r.status == 200 ? r.body : null;
+            }
+            return null;
+        }
         for (int attempt = 0; attempt < 2; attempt++) {
             java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
             c.setConnectTimeout(12000); c.setReadTimeout(30000);

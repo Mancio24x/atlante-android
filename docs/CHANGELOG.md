@@ -5,6 +5,8 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-08
+- **Calibre sulla rete di casa funziona di nuovo**: Android (target API 35) blocca le connessioni `http://` in chiaro, e il server di contenuti di Calibre è quasi sempre `http://192.168…:8080`. Le richieste `http://` verso indirizzi privati, link-local o locali passano ora da un client su socket (`sync/LanHttp.java`), con Basic/Digest come prima; verso internet resta solo HTTPS. `LanHttpTest` con un finto server.
+- Inglese: i titoli dei libri e i testi lunghi (trame, note) non vengono mai tradotti a pezzi.
 - **Ripara libreria** (Impostazioni › Biblioteca): tutte le riparazioni in una pagina, ognuna con il suo stato letto dallo stesso record della notifica (in coda dopo…, in corso con la percentuale, completata con modifiche applicate e decisioni rimaste, non riuscita) e Avvia / Annulla / Decidi: duplicati, duplicati di Hardcover, saghe, mappe, metadati, copertine, generi; in fondo Qualità del catalogo, tutte le operazioni e «Annulla l’ultima unione». «Libreria e catalogo» tiene importazione, copertine preferite e cache.
 - **Ripara duplicati** unisce davvero i doppioni più comuni: stesso titolo parola per parola (maiuscole e punteggiatura a parte) e stesso autore, anche senza ISBN, se non ci sono conflitti (voti, recensioni, file o date diversi restano da decidere). Prima finivano solo tra le proposte.
 - Statistiche: «Indicizza i generi» è un pulsante sotto il grafico dei generi.
