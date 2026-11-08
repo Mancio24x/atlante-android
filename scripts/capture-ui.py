@@ -19,7 +19,7 @@ def dump():
             last=e;time.sleep(1)
     raise RuntimeError('No fresh Android UI tree: '+str(last))
 def _save_logcat(kind, value, trace):
-    try: (out/'failure-logcat.txt').write_bytes(adb('logcat','-d','-t','400'))
+    try: (out/'failure-logcat.txt').write_bytes(adb('logcat','-d','-t','400')+b'\n--- crash buffer ---\n'+adb('logcat','-b','crash','-d'))
     except Exception: pass
     sys.__excepthook__(kind, value, trace)
 sys.excepthook=_save_logcat
@@ -309,6 +309,9 @@ adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
 time.sleep(1.5)
 if any(n.get('text','') in ('Allow','Consenti') for n in dump().iter('node')): tap('Allow') if any(n.get('text','')=='Allow' for n in dump().iter('node')) else tap('Consenti')
 time.sleep(2);shot('54-repair-sagas-started')
+# Evidence for the case where the app is no longer in front: Android's crash buffer and the resumed activity.
+(out/'54-crash-buffer.txt').write_bytes(adb('logcat','-b','crash','-d'))
+(out/'54-resumed.txt').write_bytes(adb('shell','dumpsys','activity','activities').split(b'\n')[0:1]+b'\n'.join(l for l in adb('shell','dumpsys','activity','activities').split(b'\n') if b'Resumed' in l or b'mFocusedApp' in l))
 # The app is usable meanwhile: the library opens, the progress bar is above the navigation.
 leave_settings();tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')   # Settings has no bottom bar
 tap('Home',exact=True);open_settings();tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)
