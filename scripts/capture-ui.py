@@ -363,14 +363,24 @@ for node in dump().iter('node'):
     if node.get('content-desc','') in ('Griglia','Elenco'):
         b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2));break
 time.sleep(.6);tap('Scaffale',exact=True);time.sleep(1.2)
-# Evidence: frames drawn while nobody touches the screen (a page that redraws for ever keeps counting) and CPU.
+# Evidence (the run used to stop here): is the app alive, what did Android and the app itself record, frames and CPU.
+def safe(*args):
+    try: return adb(*args,timeout=60).decode(errors='replace')
+    except Exception as e: return f'({" ".join(args)}: {e})'
+time.sleep(3)
+pid=safe('shell','pidof',package).strip()
+step(f'bookcase: app pid {pid or "NONE (the app is gone)"}')
+report=[f'pid: {pid}', '--- crash buffer ---', safe('logcat','-b','crash','-d'), '--- app reports (files/diagnostics) ---',
+        safe('shell','run-as',package,'sh','-c','cat files/diagnostics/*.txt 2>/dev/null | tail -300'), '--- top ---', safe('shell','top','-b','-n','1','-m','8')]
 def frames():
-    out=adb('shell','dumpsys','gfxinfo',package).decode(errors='replace')
-    m=re.search(r'Total frames rendered: (\d+)',out); return int(m.group(1)) if m else -1
+    m=re.search(r'Total frames rendered: (\d+)',safe('shell','dumpsys','gfxinfo',package)); return int(m.group(1)) if m else -1
 f0=frames();time.sleep(5);f1=frames()
+report.insert(1,f'frames in 5 s without touching: {f1-f0} ({f0} -> {f1})')
 step(f'bookcase idle: {f1-f0} frames in 5 s')
-(out/'60-bookcase-frames.txt').write_text(f'frames in 5 s without touching: {f1-f0}\n'+adb('shell','top','-b','-n','1','-m','8').decode(errors='replace')+'\n'+adb('shell','dumpsys','gfxinfo',package).decode(errors='replace')[:6000])
-(out/'60-bookcase-raw.png').write_bytes(adb('exec-out','screencap','-p'))
+report+=['--- logcat ---', safe('logcat','-d','-t','300')]
+(out/'60-bookcase-evidence.txt').write_text('\n'.join(report))
+try: (out/'60-bookcase-raw.png').write_bytes(adb('exec-out','screencap','-p',timeout=60))
+except Exception as e: step(f'screencap failed: {e}')
 shot('60-bookcase')
 spines=[n for n in dump().iter('node') if n.get('content-desc','').startswith('Red Rising, di Pierce Brown')]
 assert spines, 'Spine of Red Rising not found on the bookcase'
