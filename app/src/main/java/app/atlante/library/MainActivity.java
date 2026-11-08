@@ -3202,7 +3202,8 @@ public final class MainActivity extends AppCompatActivity {
         nav.setItemIconTintList(tint); nav.setItemTextColor(tint);
         for(int i=0;i<names.length;i++) { nav.getMenu().add(0,i+1,i,names[i]).setIcon(icons[i]); if(names[i].equals(destination)) nav.setSelectedItemId(i+1); }
         // A page that is none of the five (CrossPoint): no item looks selected.
-        if(!Arrays.asList(names).contains(destination)) nav.getMenu().setGroupCheckable(0,false,true);
+        if(!Arrays.asList(names).contains(destination)) { nav.getMenu().setGroupCheckable(0,false,true); nav.setItemActiveIndicatorEnabled(false); nav.setItemTextAppearanceActiveBoldEnabled(false);
+            android.content.res.ColorStateList muted=android.content.res.ColorStateList.valueOf(MUTED); nav.setItemIconTintList(muted); nav.setItemTextColor(muted); }
         nav.setOnItemSelectedListener(item -> { String next=names[item.getItemId()-1]; if(!destination.equals(next)) navigate(next); return true; });
         // Biblioteca again from Saghe, Mappa, Universi or a search: back to the whole library.
         nav.setOnItemReselectedListener(item -> { if(names[item.getItemId()-1].equals("Biblioteca") && destination.equals("Biblioteca") && (!statusPage() || !query.isEmpty())) { tab="Tutti i libri"; openSaga=""; query=""; showLibrary(); } });
