@@ -10,14 +10,31 @@ def dump():
     # Never reuse that stale tree to tap coordinates in a different dialog.
     last=None
     # A slow CI emulator may not be idle for a few seconds (a background job just finished): wait longer.
-    for _ in range(15):
+    for attempt in range(15):
         try:
             output=adb('shell','uiautomator','dump','/sdcard/atlante-ui.xml',stderr=subprocess.STDOUT)
             if b'dumped' not in output.lower(): raise RuntimeError(output.decode(errors='replace'))
             return ET.fromstring(adb('exec-out','cat','/sdcard/atlante-ui.xml'))
         except (subprocess.CalledProcessError,ET.ParseError,RuntimeError) as e:
-            last=e;time.sleep(1)
+            last=e
+            # Evidence when the screen never settles: what is on it, which window, what the app logged.
+            if attempt==2: evidence('not-idle')
+            time.sleep(1)
     raise RuntimeError('No fresh Android UI tree: '+str(last))
+_evidence=[0]
+def evidence(kind):
+    """Screenshot (works without an idle UI), focused window and the app's recent log, numbered."""
+    _evidence[0]+=1; n=_evidence[0]
+    if n>8: return
+    step(f'{kind}: saving evidence {n}')
+    try:
+        (out/f'stuck-{n}-{kind}.png').write_bytes(adb('exec-out','screencap','-p'))
+        (out/f'stuck-{n}-{kind}.txt').write_bytes(b'\n'.join(l for l in adb('shell','dumpsys','window','windows').split(b'\n') if b'mCurrentFocus' in l or b'mFocusedApp' in l)
+            +b'\n--- logcat ---\n'+adb('logcat','-d','-t','150'))
+    except Exception as e: print('evidence failed',e,flush=True)
+_t0=time.time()
+def step(message):
+    print(f'[{time.time()-_t0:6.0f}s] {message}',flush=True)
 def _save_logcat(kind, value, trace):
     try: (out/'failure-logcat.txt').write_bytes(adb('logcat','-d','-t','400')+b'\n--- crash buffer ---\n'+adb('logcat','-b','crash','-d'))
     except Exception: pass
@@ -39,6 +56,7 @@ def wait_for_app_files():
         except subprocess.CalledProcessError: time.sleep(.5)
     raise RuntimeError('App data directory not ready')
 def tap(label, scroll=False, editable=False, exact=False):
+    step('tap '+label)
     for attempt in range(7 if scroll else 3):
         tree=dump()
         if dismiss_system_dialog(tree): tree=dump()
@@ -56,6 +74,7 @@ def tap(label, scroll=False, editable=False, exact=False):
         time.sleep(.3)
     raise RuntimeError('UI control missing: '+label)
 def shot(name):
+    step('shot '+name)
     time.sleep(.4); dismiss_system_dialog(dump()); (out/(name+'.png')).write_bytes(adb('exec-out','screencap','-p'))
     (out/(name+'.xml')).write_bytes(ET.tostring(dump()))
 adb('shell','am','start','-n',package+'/app.atlante.library.MainActivity');time.sleep(2);wait_for_app_files()
