@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke-check real Android navigation and capture themes on an emulator (debug app only)."""
 from pathlib import Path
-import json, re, subprocess, time, xml.etree.ElementTree as ET
+import json, re, subprocess, sys, time, xml.etree.ElementTree as ET
 out=Path('ui-captures');out.mkdir(exist_ok=True)
 package='app.atlante.library.debug'
 def adb(*args,**kw): return subprocess.check_output(['adb',*args],**kw)
@@ -18,6 +18,11 @@ def dump():
         except (subprocess.CalledProcessError,ET.ParseError,RuntimeError) as e:
             last=e;time.sleep(1)
     raise RuntimeError('No fresh Android UI tree: '+str(last))
+def _save_logcat(kind, value, trace):
+    try: (out/'failure-logcat.txt').write_bytes(adb('logcat','-d','-t','400'))
+    except Exception: pass
+    sys.__excepthook__(kind, value, trace)
+sys.excepthook=_save_logcat
 def dismiss_system_dialog(tree):
     # Slow CI emulators sometimes show "<app> isn't responding" for the launcher over our app.
     texts=[n.get('text','') for n in tree.iter('node')]
@@ -293,9 +298,16 @@ before=len(catalog())
 leave_settings();tap('Home',exact=True);open_settings()   # Settings has no bottom bar: back to the page under them, then Home
 tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)   # opens the section
 time.sleep(.6);adb('shell','input','swipe','540','1250','540','750','300');time.sleep(.6)
-buttons=[n for n in dump().iter('node') if n.get('text','')=='Ripara saghe']
-b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
+# Tap the button only well inside the screen: near the bottom edge a tap is Android's home gesture.
+for _ in range(4):
+    tree=dump();screen=list(map(int,re.findall(r'\d+',tree.find('node').get('bounds','0,0,1080,1920'))))
+    buttons=[n for n in tree.iter('node') if n.get('text','')=='Ripara saghe']
+    b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
+    if (b[1]+b[3])//2 < screen[3]*0.8: break
+    adb('shell','input','swipe','540','1250','540','850','300');time.sleep(.6)
 adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
+time.sleep(1.5)
+if any(n.get('text','') in ('Allow','Consenti') for n in dump().iter('node')): tap('Allow') if any(n.get('text','')=='Allow' for n in dump().iter('node')) else tap('Consenti')
 time.sleep(2);shot('54-repair-sagas-started')
 # The app is usable meanwhile: the library opens, the progress bar is above the navigation.
 leave_settings();tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')   # Settings has no bottom bar
