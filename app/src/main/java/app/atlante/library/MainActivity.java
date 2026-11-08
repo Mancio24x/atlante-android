@@ -161,7 +161,9 @@ public final class MainActivity extends AppCompatActivity {
         }
         // The app always opens on Home. Only a restart made by the app itself (a theme change) keeps the page.
         boolean keepPage = state != null && prefs.getBoolean("keepPageOnce", false);
-        prefs.edit().remove("keepPageOnce").apply();
+        // A theme applied from a settings page reloads the app: come back to that page (Aspetto), not the index.
+        if (keepPage) settingsSection = prefs.getString("settingsSectionOnce", "");
+        prefs.edit().remove("keepPageOnce").remove("settingsSectionOnce").apply();
         destination = keepPage ? state.getString("destination", "Home") : "Home";
         if (destination.equals("Cerca")) destination = "Biblioteca"; // "Cerca" was replaced by Sync: the library has the search bar
         shelfView = prefs.getBoolean("shelfView", false);
@@ -3139,7 +3141,7 @@ public final class MainActivity extends AppCompatActivity {
     private long stoppedAt;
 
     /** Restart for a theme change, staying on the current page. */
-    private void recreateHere() { getPreferences(MODE_PRIVATE).edit().putBoolean("keepPageOnce", true).commit(); recreate(); }
+    private void recreateHere() { getPreferences(MODE_PRIVATE).edit().putBoolean("keepPageOnce", true).putString("settingsSectionOnce", settingsSection).commit(); recreate(); }
     @Override protected void onDestroy() {
         uiHandler.removeCallbacksAndMessages(null); worker.shutdown(); catalogWorker.shutdown(); coverWorker.shutdown(); covers.shutdown(); super.onDestroy();
     }

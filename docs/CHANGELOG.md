@@ -6,6 +6,8 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-07
 
+- **Temi**: scegliendo un tema dalla pagina Aspetto l'app, dopo essersi ricaricata, resta su Aspetto invece di tornare
+  all'indice delle Impostazioni.
 - **Vista Elenco** a righe compatte (copertina piccola, titolo, autore, stato, formato) al posto delle vecchie schede
   grandi; «Altri filtri e ordine» scorre, così «Ordina per» non viene più schiacciato sui telefoni bassi.
 - **Dall'emulatore**: niente «Aggiungi libro» sopra Saghe, Mappa e Universi; il tasto Biblioteca in basso riporta alla
