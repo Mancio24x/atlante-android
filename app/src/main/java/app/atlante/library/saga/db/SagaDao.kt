@@ -65,6 +65,8 @@ interface SagaDao {
 
     // ---- background repairs ----
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putJob(j: RepairJob)
+    /** Finished repairs with nothing left to decide are not kept: Operazioni shows only work in progress and decisions. */
+    @Query("DELETE FROM repair_jobs WHERE state IN ('done', 'failed', 'cancelled') AND proposals = 0") suspend fun dropSettled()
     /** One result per repair: the newer run replaces the older ones (their proposals are found again by it). */
     @Query("DELETE FROM repair_jobs WHERE type = :type AND id != :keep AND state IN ('done', 'failed', 'cancelled')") suspend fun dropOlderResults(type: String, keep: String)
     @Query("SELECT * FROM repair_jobs WHERE id = :id") suspend fun job(id: String): RepairJob?

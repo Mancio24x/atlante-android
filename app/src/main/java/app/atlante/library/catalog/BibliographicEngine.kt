@@ -113,7 +113,7 @@ object BibliographicEngine {
      * Every pair of records of the same work in [books] (a group of three gives two pairs with the same kept record).
      * [identities]: what LibraryIndex / Hardcover / the saga graph know of each book.
      */
-    fun duplicates(books: List<Book>, identities: Map<String, Identity>): List<Pair> {
+    fun duplicates(books: List<Book>, identities: Map<String, Identity>, stop: () -> Boolean = { false }): List<Pair> {
         // Candidate pairs only through shared keys, never all against all.
         val buckets = HashMap<String, MutableList<Book>>()
         fun add(key: String, b: Book) = buckets.getOrPut(key) { ArrayList() }.add(b)
@@ -133,6 +133,7 @@ object BibliographicEngine {
         val why = HashMap<kotlin.Pair<String, String>, kotlin.Pair<Confidence, List<String>>>()
         val byId = books.associateBy { it.id }
         for (group in buckets.values) {
+            if (stop()) throw kotlin.coroutines.cancellation.CancellationException("Annullata")   // «Annulla» stops it here too
             if (group.size < 2 || group.size > 40) continue          // 40+ books on one key is a generic title, not one work
             for (i in group.indices) for (j in i + 1 until group.size) {
                 val a = group[i]; val b = group[j]
@@ -144,9 +145,14 @@ object BibliographicEngine {
                 val ra = find(a.id); val rb = find(b.id); if (ra != rb) parent[rb] = ra
             }
         }
-        val groups = parent.keys.groupBy { find(it) }.values.filter { it.size > 1 }
+        val root = parent.keys.associateWith { find(it) }
+        val groups = parent.keys.groupBy { root[it]!! }.values.filter { it.size > 1 }
+        // The weakest reason of each group, found once (it was looked up again for every record: slow with many doubles).
+        val weakest = HashMap<String, kotlin.Pair<Confidence, List<String>>>()
+        for ((k, v) in why) { val r = root[k.first] ?: continue; val w = weakest[r]; if (w == null || v.first.ordinal > w.first.ordinal) weakest[r] = v }
         val out = ArrayList<Pair>()
         for (g in groups) {
+            if (stop()) throw kotlin.coroutines.cancellation.CancellationException("Annullata")
             val members = g.mapNotNull { byId[it] }
             // Kept: the record with the most personal data.
             val keep = members.reduce { x, y -> canonical(x, y).first }
@@ -154,7 +160,7 @@ object BibliographicEngine {
                 if (o.id == keep.id) continue
                 val k = if (keep.id < o.id) keep.id to o.id else o.id to keep.id
                 // The pair's own reason, else the weakest reason along the group (a group is as sure as its weakest link).
-                val c = why[k] ?: why.filterKeys { it.first in g && it.second in g }.values.minByOrNull { it.first.ordinal * -1 } ?: continue
+                val c = why[k] ?: weakest[root[o.id]] ?: continue
                 if (different(keep, o)) continue
                 out += Pair(keep, o, c.first, c.second, conflicts(keep, o))
             }

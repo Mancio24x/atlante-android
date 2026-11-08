@@ -26,8 +26,10 @@ class RepairRecordTest {
         val dao = AtlanteDatabase.get(context).saga()
         val ids = (0 until 4).map {
             val id = RepairWorker.start(context, RepairWorker.LIBRARY)
-            Thread.sleep(300)                                   // the record written by start()
-            assertEquals("run $it", "done", dao.job(id.toString())?.state)
+            // The record written by start() and the run itself: done within a few seconds.
+            var state: String? = null
+            for (wait in 0 until 100) { state = dao.job(id.toString())?.state; if (state == "done") break; Thread.sleep(100) }
+            assertEquals("run $it", "done", state)
             id.toString()
         }
         // Four runs, one result: the last one (the older results of the same repair are gone).

@@ -735,6 +735,8 @@ public final class MainActivity extends AppCompatActivity {
     private void reportCrashesSinceLastTime() {
         android.content.Context context = getApplicationContext();
         new Thread(() -> {
+            // Finished repairs with nothing to decide: gone (Operazioni keeps only work in progress and decisions).
+            try { kotlinx.coroutines.BuildersKt.runBlocking(kotlin.coroutines.EmptyCoroutineContext.INSTANCE, (scope, cont) -> app.atlante.library.saga.db.AtlanteDatabase.get(context).saga().dropSettled(cont)); } catch (Exception ignored) { }
             int crashes = app.atlante.library.diagnostics.CrashLog.exportNew(context);
             if (crashes > 0) try { app.atlante.library.diagnostics.ReportUploader.now(context); } catch (RuntimeException ignored) { }
             if (crashes > 0) runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return;

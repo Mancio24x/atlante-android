@@ -47,6 +47,15 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         dao = AtlanteDatabase.get(c).saga()
         val type = inputData.getString(TYPE) ?: return Result.failure()
         val id = id.toString()
+        // Stopped by Android again and again (a phone that no longer lets it run in the foreground): it does not
+        // start over for ever. After 3 times it stops and says so; you can start it again later.
+        val stops = c.getSharedPreferences("repair-stops", Context.MODE_PRIVATE)
+        if (stops.getInt(id, 0) >= 3) {
+            job = (dao.job(id) ?: RepairJob(id, type, "failed", "", System.currentTimeMillis())).copy(state = "failed", phase = "Errore", finishedAt = System.currentTimeMillis(),
+                message = "Interrotta da Android 3 volte: non riparte da sola. Avviala di nuovo con il telefono in carica o più tardi.")
+            dao.putJob(job); stops.edit().remove(id).apply(); finished(c)
+            return Result.failure()
+        }
         job = dao.job(id)?.let { it.copy(state = "running", message = if (it.checkpoint > 0) "Ripresa da ${it.checkpoint} libri già analizzati" else "") }
             ?: RepairJob(id, type, "running", "Preparazione", System.currentTimeMillis())
         save(force = true)
@@ -67,7 +76,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 GENRES -> genres(c, store)
             }
             job = job.copy(state = "done", phase = "Completato", finishedAt = System.currentTimeMillis())
-            save(force = true); finished(c); dao.dropOlderResults(type, id)
+            save(force = true); finished(c); dao.dropOlderResults(type, id); stops.edit().remove(id).apply()
             Result.success()
         } catch (e: CancellationException) {
             // You stopped it: "cancelled"; Android stopped it: it will start again from the checkpoint.
@@ -78,6 +87,13 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 phase = if (byYou) "Annullato" else "In pausa", finishedAt = System.currentTimeMillis(),
                 message = if (byYou) "Interrotta da te: le modifiche già applicate restano" else "Interrotta da Android: riprende da sola")
             if (byYou) dropImportFile()
+            else {
+                // Evidence: when, in which phase, after how long, and why Android stopped it (sent with the reports).
+                val why = if (Build.VERSION.SDK_INT >= 31) stopReason.toString() else "?"
+                stops.edit().putInt(id, stops.getInt(id, 0) + 1).apply()
+                app.atlante.library.diagnostics.CrashLog.error(c, "Riparazione interrotta da Android: ${title(type)} · fase «${job.phase}» · dopo ${(System.currentTimeMillis() - job.startedAt) / 1000} s · " +
+                    "${job.done}/${job.total} libri · motivo $why · volta ${stops.getInt(id, 0)} · API ${Build.VERSION.SDK_INT}", null)
+            }
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { save(force = true) }
             throw e
         } catch (e: Exception) {
@@ -105,7 +121,8 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         job = job.copy(total = books.size); save(force = true)
         val identities = identities(books)
         job = job.copy(done = books.size, offline = identities.values.count { it.catalogWork != null }); save()
-        var pairs = BibliographicEngine.duplicates(books, identities)
+        if (isStopped) throw CancellationException()
+        var pairs = BibliographicEngine.duplicates(books, identities) { isStopped }
         if (hardcoverOnly) pairs = pairs.filter { BibliographicEngine.hardcoverBook(it.other) != null || BibliographicEngine.hardcoverBook(it.keep) != null }
         // Hardcover's English copies that only Hardcover can tie to the Italian book (its editions list).
         if (hardcoverOnly && HardcoverAuth.connected(c)) {

@@ -57,7 +57,9 @@ object RepairViews {
 
     @JvmStatic fun operations(activity: ComponentActivity, palette: ThemePalette, host: OperationsHost, onClose: Runnable): View = ComposeView(activity).apply {
         val dao = AtlanteDatabase.get(activity).saga()
-        setContent { AtlanteTheme(palette) { val jobs by dao.jobs().collectAsState(emptyList()); Operations(jobs, host, dao) { onClose.run() } } }
+        // Only what is going on and what waits for a decision: finished repairs are said once (notification) and gone.
+        setContent { AtlanteTheme(palette) { val jobs by dao.jobs().collectAsState(emptyList())
+            Operations(jobs.filter { it.state == "running" || it.state == "queued" || it.proposals > 0 }, host, dao) { onClose.run() } } }
     }
 }
 
@@ -111,7 +113,7 @@ fun Operations(jobs: List<RepairJob>, host: OperationsHost, dao: app.atlante.lib
                         TextButton(onClick = { scope.launch { notice = withContext(Dispatchers.IO) { host.undoLastMerge() } } }) { Text("Annulla l’ultima unione") }
                         notice?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                     }
-                    if (jobs.isEmpty()) item { Text("Nessuna operazione finora.", style = MaterialTheme.typography.bodyLarge) }
+                    if (jobs.isEmpty()) item { Text("Niente in corso e niente da decidere.", style = MaterialTheme.typography.bodyLarge) }
                     items(jobs, key = { it.id }) { j -> JobCard(j, open == j.id, host, { open = if (open == j.id) null else j.id }) { updated ->
                         scope.launch(Dispatchers.IO) { dao.putJob(updated) } } }
                 }
