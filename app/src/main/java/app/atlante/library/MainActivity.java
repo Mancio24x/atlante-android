@@ -3417,7 +3417,7 @@ public final class MainActivity extends AppCompatActivity {
         return card(p);
     }
     private void bookActions(Book b) {
-        String[] actions={"Modifica scheda","Completa i dati online","Preferito: "+(b.journal.optBoolean("favorite")?"sì":"no"),"Collezioni","Inizia una rilettura","Apri con KOReader"};
+        String[] actions={"Modifica scheda","Completa i dati online","Preferito: "+(b.journal.optBoolean("favorite")?"sì":"no"),"Collezioni","Inizia una rilettura","Apri con KOReader","Invia a CrossPoint"};
         dialogBuilder().setTitle("Il tuo libro").setItems(actions,(d,w)->{
             if(w==0) edit(b);
             if(w==1) { completeMetadata(b); return; }
@@ -3428,6 +3428,7 @@ public final class MainActivity extends AppCompatActivity {
                 org.json.JSONArray a=ReadingJournal.array(c,"attempts"); a.put(new org.json.JSONObject().put("number",ReadingJournal.attempt(c)).put("started",c.started).put("finished",c.finished).put("page",c.currentPage).put("percent",c.percent)); ReadingJournal.put(c,"attempts",a); ReadingJournal.put(c,"attempt",ReadingJournal.attempt(c)+1); c.currentPage=0;c.percent=0;c.page=0;c.started=java.time.LocalDate.now().toString();c.finished="";c.status=Book.READING;
             })).show();
             if(w==5) openKoreader(b);
+            if(w==6) sendToCrosspoint(b);
         }).setNegativeButton("Chiudi",null).show();
     }
     private interface BookMutation { void apply(Book b) throws Exception; }
@@ -3441,6 +3442,25 @@ public final class MainActivity extends AppCompatActivity {
         if(names.isEmpty()) { collections(); return; }
         String[] labels=names.toArray(new String[0]); boolean[] checked=new boolean[labels.length]; for(int i=0;i<labels.length;i++) checked[i]=ReadingJournal.inCollection(b,labels[i]);
         dialogBuilder().setTitle("Collezioni del libro").setMultiChoiceItems(labels,checked,(d,w,on)->checked[w]=on).setNegativeButton("Annulla",null).setNeutralButton("Nuova",(d,w)->collections()).setPositiveButton("Salva",(d,w)->journalEdit(b,c->{org.json.JSONArray a=new org.json.JSONArray(); for(int i=0;i<labels.length;i++) if(checked[i]) a.put(labels[i]); ReadingJournal.put(c,"collections",a);})).show();
+    }
+    private void sendToCrosspoint(Book b) {
+        java.io.File file=store.original(b);
+        if(!file.isFile()) {error(new IOException("Questo libro non ha un file locale. Importa prima un ebook."));return;}
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        LinearLayout p=column(); p.setPadding(dp(20),dp(12),dp(20),dp(12));
+        p.addView(text("Accendi il Wi-Fi sul lettore CrossPoint (trasferimento file) e collega il telefono alla stessa rete. Atlante invia solo il file del libro, senza note né progressi.",14,MUTED,false));
+        EditText host=field(p,"Indirizzo del lettore",prefs.getString("crosspointHost",app.atlante.library.sync.CrosspointClient.DEFAULT_HOST));
+        dialogBuilder().setTitle("Invia a CrossPoint").setView(scrolled(p)).setNegativeButton("Annulla",null).setPositiveButton("Invia",(d,w)->{
+            String address=host.getText().toString().trim(); prefs.edit().putString("crosspointHost",address).apply();
+            String name=(b.title.isEmpty()?"libro":b.title)+(file.getName().contains(".")?file.getName().substring(file.getName().lastIndexOf('.')):"");
+            busy=true; AlertDialog loading=loading("CrossPoint","Invio di «"+b.title+"»…");
+            new Thread(()->{ Exception failure=null;
+                try { app.atlante.library.sync.CrosspointClient.INSTANCE.upload(address,file,name,"/"); } catch(Exception e){ failure=e; }
+                final Exception error=failure;
+                runOnUiThread(()->{ busy=false; loading.dismiss();
+                    if(error!=null) error(error); else Toast.makeText(this,"Libro inviato a CrossPoint",Toast.LENGTH_LONG).show(); });
+            }).start();
+        }).show();
     }
     private void openKoreader(Book b) {
         if(!store.original(b).isFile()) {error(new IOException("Questo libro non ha un file locale. Importa prima un ebook."));return;}
