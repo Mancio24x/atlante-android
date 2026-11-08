@@ -229,7 +229,7 @@ shot('50-book-saga')
 assert found, 'Saga section did not appear'
 # The emulator's network is sometimes slow to answer: one more try, as a reader would tap "Riprova".
 if visible('Saga non identificata'):
-    tap('Riprova',exact=True)
+    tap('Riprova',True,exact=True)
     for _ in range(30):
         if visible('Altri libri della saga'): break
         time.sleep(2)
