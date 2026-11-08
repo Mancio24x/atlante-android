@@ -50,7 +50,7 @@ class HomeShot {
         MainActivity::class.java.getDeclaredField("listView").apply { isAccessible = true }.setBoolean(a, false)
         MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, "Impostazioni"); shot(a, out, "impostazioni")
         val section = MainActivity::class.java.getDeclaredField("settingsSection").apply { isAccessible = true }
-        for (page in listOf("lettura", "lingua", "obiettivi")) { section.set(a, page); MainActivity::class.java.getDeclaredMethod("showCompanion").apply { isAccessible = true }.invoke(a); shot(a, out, "impostazioni-$page") }
+        for (page in listOf("lettura", "lingua", "obiettivi", "aspetto", "tema")) { section.set(a, page); MainActivity::class.java.getDeclaredMethod("showCompanion").apply { isAccessible = true }.invoke(a); shot(a, out, "impostazioni-$page") }
         section.set(a, "")
         for (page in listOf("Sync", "Statistiche", "Scopri", "CrossPoint")) {
             MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, page)

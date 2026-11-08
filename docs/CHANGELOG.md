@@ -5,6 +5,7 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-08
+- Aspetto: «Il mio tema» è un cerchio sopra i temi pronti e apre una pagina a tutto schermo (colori in alto, anteprima dal vivo in basso). Un solo tema personalizzato: niente più temi salvati con nome. Indietro da «Il mio tema» torna ad Aspetto; un test controlla il gesto indietro in ogni pagina delle impostazioni.
 
 - **CrossPoint sul suo Wi-Fi**: «Collegati al Wi-Fi del lettore» si collega alla rete aperta «CrossPoint-Reader» (senza
   internet, 192.168.4.1) e il traffico verso il lettore passa dal Wi-Fi anche con i dati mobili accesi.

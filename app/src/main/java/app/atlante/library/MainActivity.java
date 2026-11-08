@@ -265,11 +265,11 @@ public final class MainActivity extends AppCompatActivity {
         {"PERSONALE","lettura","Lettura","lettore testo dimensione scuro"},{"PERSONALE","lingua","Lingua dei libri","ricerca lingua"},
         {"BIBLIOTECA","libreria","Libreria e catalogo","importa ebook epub copertine saghe doppioni generi cache qualità operazioni"},{"BIBLIOTECA","hardcover","Hardcover","chiave saghe universi"},
         {"INFO","info","Privacy e progetto","privacy github aggiornamenti versione"}};
-    private String settingsTitle(String key) { for (String[] r : SETTINGS) if (r[1].equals(key)) return r[2]; return "Impostazioni"; }
+    private String settingsTitle(String key) { if (key.equals("tema")) return "Il mio tema"; for (String[] r : SETTINGS) if (r[1].equals(key)) return r[2]; return "Impostazioni"; }
     private String settingsValue(String key) {
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         switch (key) {
-            case "aspetto": return "Tema " + palette.name;
+            case "aspetto": return palette.id.equals("custom") ? "Il mio tema" : "Tema " + palette.name;
             case "obiettivi": { app.atlante.library.model.ReadingGoals g = new app.atlante.library.model.ReadingGoals(prefs); ArrayList<String> v = new ArrayList<>();
                 if (g.getYearOn()) v.add(g.getYearBooks() + " libri l’anno"); if (g.getMonthOn()) v.add(g.getMonthBooks() + " al mese"); if (g.getDailyPagesOn()) v.add(g.getDailyPages() + " pagine al giorno"); if (g.getDailyMinutesOn()) v.add(g.getDailyMinutes() + " minuti al giorno");
                 return v.isEmpty() ? "Nessun obiettivo" : TextUtils.join(" · ", v); }
@@ -286,15 +286,18 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void settingsPage(LinearLayout panel) {
         if (settingsSection.isEmpty()) { panel.addView(settingsCompose(""), new LinearLayout.LayoutParams(-1, -2)); return; }
-        TextView back = text("‹ Tutte le impostazioni", 14, SAGE, false); back.setMinHeight(dp(44)); back.setGravity(Gravity.CENTER_VERTICAL); back.setPadding(dp(4), 0, dp(4), 0);
-        back.setContentDescription("Torna a tutte le impostazioni"); back.setOnClickListener(v -> { settingsSection = ""; showCompanion(); }); panel.addView(back); gap(panel, 8);
+        boolean inTheme = settingsSection.equals("tema");
+        TextView back = text(inTheme ? "‹ Aspetto" : "‹ Tutte le impostazioni", 14, SAGE, false); back.setMinHeight(dp(44)); back.setGravity(Gravity.CENTER_VERTICAL); back.setPadding(dp(4), 0, dp(4), 0);
+        back.setContentDescription(inTheme ? "Torna ad Aspetto" : "Torna a tutte le impostazioni"); back.setOnClickListener(v -> goBack()); panel.addView(back); gap(panel, 8);
         switch (settingsSection) {
-            case "aspetto": panel.addView(hint("Tocca un tema: si applica subito a tutta l’app."));
+            case "aspetto": customThemeCircle(panel); gap(panel,16);
+        sectionHeader(panel, "Temi pronti", "", null); panel.addView(hint("Tocca un tema: si applica subito a tutta l’app."));
         LinearLayout themes = column(); themeTiles(themes);
         panel.addView(themes); gap(panel,20);
 
-        customThemes(panel); gap(panel,20);
+        appearanceMode(panel); gap(panel,20);
                 break;
+            case "tema": customThemePage(panel); break;
             case "obiettivi":
         panel.addView(app.atlante.library.ui.compose.GoalsView.create(this, palette, getPreferences(MODE_PRIVATE), store.snapshot())); gap(panel,20);
 
@@ -526,25 +529,37 @@ public final class MainActivity extends AppCompatActivity {
         if(changed&&!key.isEmpty()) try { app.atlante.library.saga.SagaScanWorker.recheck(this); } catch(RuntimeException ignored) { }
     }
 
-    private void customThemes(LinearLayout p) {
+    /** Light/dark mode, shared by every theme. */
+    private void appearanceMode(LinearLayout p) {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         Picker mode=new Picker(p,"Modalità",Arrays.asList("Tema scelto","Chiara","Scura","Automatica"),
             Arrays.asList("Tema scelto","Chiara","Scura","Automatica").get(Arrays.asList("theme","light","dark","auto").indexOf(prefs.getString("appearanceMode","theme"))));
         p.addView(button("Applica modalità",false,()->{prefs.edit().putString("appearanceMode",new String[]{"theme","light","dark","auto"}[mode.position()]).commit();recreateHere();}));
-        // Three colours chosen by touch (square + hue bar), stored as before ("#RRGGBB" strings in the preferences).
-        ArrayList<String> savedNames=new ArrayList<>();
-        try { JSONObject saved=new JSONObject(prefs.getString("savedThemes","{}")); Iterator<String> keys=saved.keys(); while(keys.hasNext()) savedNames.add(keys.next()); } catch(Exception ignored) { }
-        View custom=app.atlante.library.ui.compose.ThemeEditorView.create(this,palette,PAPER,WHITE,SAGE,savedNames,(name,paper,surface,accent)->{
+    }
+
+    /** The three colours of "Il mio tema" (stored as "#RRGGBB" strings); the current theme's until one is chosen. */
+    private int[] customColors() {
+        try { JSONObject j=new JSONObject(getPreferences(MODE_PRIVATE).getString("customPalette","{}"));
+            return new int[]{android.graphics.Color.parseColor(j.getString("paper")),android.graphics.Color.parseColor(j.getString("surface")),android.graphics.Color.parseColor(j.getString("accent"))}; }
+        catch(Exception e) { return new int[]{PAPER,WHITE,SAGE}; }
+    }
+
+    /** The round "Il mio tema" button: opens its own full-screen page. */
+    private void customThemeCircle(LinearLayout p) {
+        int[] c=customColors();
+        p.addView(app.atlante.library.ui.compose.ThemeEditorView.circle(this,palette,c[0],c[1],c[2],palette.id.equals("custom"),()->{settingsSection="tema";showCompanion();if(companionScroll!=null)companionScroll.post(()->{if(companionScroll!=null)companionScroll.scrollTo(0,0);});}),new LinearLayout.LayoutParams(-1,-2));
+    }
+
+    /** "Il mio tema": colours above, preview below; applying it is all there is (one custom theme, nothing to name or save). */
+    private void customThemePage(LinearLayout p) {
+        int[] c=customColors();
+        p.addView(app.atlante.library.ui.compose.ThemeEditorView.create(this,palette,c[0],c[1],c[2],(paper,surface,accent)->{
             try {
                 JSONObject colors=new JSONObject().put("paper",String.format(Locale.ROOT,"#%06X",paper&0xffffff)).put("surface",String.format(Locale.ROOT,"#%06X",surface&0xffffff)).put("accent",String.format(Locale.ROOT,"#%06X",accent&0xffffff));
-                JSONObject saved=new JSONObject(prefs.getString("savedThemes","{}")); saved.put(name,colors);
-                prefs.edit().putString("savedThemes",saved.toString()).putString("customPalette",colors.toString()).putString("theme","custom").commit();recreateHere();
+                getPreferences(MODE_PRIVATE).edit().putString("customPalette",colors.toString()).putString("theme","custom").remove("savedThemes").commit();
+                settingsSection="aspetto"; recreateHere();
             } catch(Exception e){error(e);}
-        },name->{
-            try { String colors=new JSONObject(prefs.getString("savedThemes","{}")).getJSONObject(name).toString(); prefs.edit().putString("customPalette",colors).putString("theme","custom").commit(); recreateHere(); }
-            catch(Exception e){error(e);}
-        });
-        p.addView(expander("I miei temi · tre colori",custom,false));
+        }),new LinearLayout.LayoutParams(-1,-2));
     }
 
     /** Applies the Material theme of a palette; "dynamic" takes Material You colors from the wallpaper (Android 12+). */
@@ -3115,7 +3130,7 @@ public final class MainActivity extends AppCompatActivity {
         else if (reading != null) { Book b = reading; rememberPage(); details(b); }
         else if (onlineBook != null) closeOnlineSheet();
         else if (detailId != null) { Book b=store.find(detailId); if(editingPage && b!=null) details(b); else showLibrary(); }
-        else if (destination.equals("Impostazioni") && !settingsSection.isEmpty()) { settingsSection = ""; showCompanion(); }
+        else if (destination.equals("Impostazioni") && !settingsSection.isEmpty()) { settingsSection = settingsSection.equals("tema") ? "aspetto" : ""; showCompanion(); }
         else if (destination.equals("Biblioteca") && tab.equals("Saghe") && !openSaga.isEmpty()) { openSaga = ""; showLibrary(); }
         else if (!destination.equals("Home")) { tab = "Tutti i libri"; openSaga = ""; navigate("Home"); }
         updateBack();

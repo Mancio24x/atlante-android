@@ -109,7 +109,7 @@ ricorda la sua fonte, visibile in *Dettagli della scheda*.
 - **Tocchi**: un tocco solleva il libro e apre la scheda; una pressione prolungata apre le azioni del libro.
 - **Ordine e filtri**: sono gli stessi di Griglia ed Elenco, e le mensole si caricano mentre scorri, quindi va bene anche con migliaia di libri.
 
-**I miei temi**: i tre colori (sfondo, schede, accento) si scelgono col dito, senza codici: un riquadro per saturazione e luminosità, una barra per la tonalità, alcune tinte pronte e un'anteprima dal vivo. I temi salvati prima restano.
+**Il mio tema**: un cerchio sopra i temi pronti apre una pagina tutta per sé: in alto i tre colori (sfondo, schede, accento) scelti col dito, senza codici (riquadro per saturazione e luminosità, barra della tonalità, tinte pronte), in basso l'anteprima dal vivo dell'app. Un solo tema personalizzato: «Applica il mio tema» e basta, niente da salvare o nominare.
 
 ## Scopri
 

@@ -28,19 +28,55 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import app.atlante.library.R
 import app.atlante.library.ui.ThemePalette
 import kotlin.math.roundToInt
 
-/** "I miei temi": three colours chosen by touch (no colour codes), with a live preview. */
+/** "Il mio tema": one custom theme, three colours chosen by touch (no colour codes), with a live preview. */
 object ThemeEditorView {
-    fun interface Save { fun save(name: String, paper: Int, surface: Int, accent: Int) }
-    fun interface Apply { fun apply(name: String) }
+    fun interface Apply { fun apply(paper: Int, surface: Int, accent: Int) }
 
+    /** The full-screen editor: colours in the top half, the theme as it will look in the bottom half. */
     @JvmStatic
-    fun create(activity: ComponentActivity, palette: ThemePalette, paper: Int, surface: Int, accent: Int, saved: List<String>, onSave: Save, onApply: Apply): View =
-        ComposeView(activity).apply { setContent { AtlanteTheme(palette) { ThemeEditor(Color(paper), Color(surface), Color(accent), saved, onSave, onApply) } } }
+    fun create(activity: ComponentActivity, palette: ThemePalette, paper: Int, surface: Int, accent: Int, onApply: Apply): View =
+        ComposeView(activity).apply { setContent { AtlanteTheme(palette) { ThemeEditor(Color(paper), Color(surface), Color(accent), onApply) } } }
+
+    /** The round "Il mio tema" button that sits above the ready-made themes. */
+    @JvmStatic
+    fun circle(activity: ComponentActivity, palette: ThemePalette, paper: Int, surface: Int, accent: Int, active: Boolean, onOpen: Runnable): View =
+        ComposeView(activity).apply { setContent { AtlanteTheme(palette) { CustomThemeCircle(Color(paper), Color(surface), Color(accent), active) { onOpen.run() } } } }
+}
+
+@Composable
+fun CustomThemeCircle(paper: Color, surface: Color, accent: Color, active: Boolean, onOpen: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(onClick = onOpen, shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer,
+        border = BorderStroke(if (active) 2.dp else 1.dp, if (active) scheme.primary else scheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {
+            contentDescription = "Il mio tema" + if (active) ", in uso" else ""; role = Role.Button
+        }) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            // Three slices: background, cards, accent.
+            Canvas(Modifier.size(72.dp)) {
+                val slices = listOf(paper, surface, accent)
+                slices.forEachIndexed { i, c -> drawArc(c, -90f + i * 120f, 120f, true) }
+                drawCircle(scheme.outlineVariant, size.minDimension / 2, style = Stroke(1.dp.toPx()))
+                drawCircle(accent, size.minDimension / 5)
+                drawCircle(Color.White, size.minDimension / 5, style = Stroke(2.dp.toPx()))
+            }
+            Column(Modifier.weight(1f)) {
+                Text("Il mio tema", style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
+                Text(if (active) "In uso · tocca per cambiare i colori" else "Scegli tu sfondo, schede e accento",
+                    style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            }
+            if (active) Icon(painterResource(R.drawable.ic_check), null, tint = scheme.primary)
+            Icon(painterResource(R.drawable.ic_chevron_right), null, tint = scheme.onSurfaceVariant)
+        }
+    }
 }
 
 /** Inside the scrolling settings page: a touch that starts here stays here (the page does not scroll). */
@@ -59,45 +95,47 @@ fun Color.hsv(): FloatArray = FloatArray(3).also { android.graphics.Color.colorT
 fun hsvColor(h: Float, s: Float, v: Float) = Color(android.graphics.Color.HSVToColor(floatArrayOf(h.coerceIn(0f, 360f), s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))))
 
 @Composable
-fun ThemeEditor(paper0: Color, surface0: Color, accent0: Color, saved: List<String>, onSave: ThemeEditorView.Save, onApply: ThemeEditorView.Apply) {
+fun ThemeEditor(paper0: Color, surface0: Color, accent0: Color, onApply: ThemeEditorView.Apply) {
     val colors = remember { mutableStateListOf(paper0, surface0, accent0) }
     var editing by remember { mutableIntStateOf(2) }
     val labels = listOf("Sfondo", "Schede", "Accento")
-    // No name to type: a new theme is "Tema 1", "Tema 2"… and the save button sits right under the colours.
-    val name = remember(saved) { generateSequence(1) { it + 1 }.map { "Tema $it" }.first { it !in saved } }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (saved.isNotEmpty())
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(saved) { s -> AssistChip(onClick = { onApply.apply(s) }, label = { Text(s) }) } }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            labels.forEachIndexed { i, label ->
-                Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { editing = i }
-                    .border(if (editing == i) 3.dp else 1.dp, if (editing == i) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                    .padding(8.dp).semantics { contentDescription = "Modifica il colore $label"; selected = editing == i },
-                    horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(8.dp)).background(colors[i]))
-                    Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 4.dp))
+    // The whole visible screen: top half for the colours, bottom half for the preview.
+    val height = (LocalConfiguration.current.screenHeightDp - 200).coerceAtLeast(560).dp
+    Column(Modifier.fillMaxWidth().height(height), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                labels.forEachIndexed { i, label ->
+                    val on = editing == i
+                    Row(Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).clickable { editing = i }
+                        .background(if (on) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                        .border(1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp).semantics { contentDescription = "Modifica il colore $label"; selected = on },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.size(18.dp).clip(CircleShape).background(colors[i]).border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape))
+                        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    }
                 }
             }
+            ColorPicker(colors[editing], labels[editing], Modifier.weight(1f)) { colors[editing] = it }
         }
-        Button(onClick = { onSave.save(name, colors[0].toArgb(), colors[1].toArgb(), colors[2].toArgb()) }, modifier = Modifier.fillMaxWidth()) {
-            Text("Salva e applica come «$name»")
+        Preview(colors[0], colors[1], colors[2], Modifier.weight(1f))
+        Button(onClick = { onApply.apply(colors[0].toArgb(), colors[1].toArgb(), colors[2].toArgb()) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Applica il mio tema")
         }
-        ColorPicker(colors[editing], labels[editing]) { colors[editing] = it }
-        Preview(colors[0], colors[1], colors[2])
     }
 }
 
 /** Saturation/brightness square, hue bar and a few ready shades; everything by touch. */
 @Composable
-fun ColorPicker(color: Color, label: String, onColor: (Color) -> Unit) {
+fun ColorPicker(color: Color, label: String, modifier: Modifier = Modifier, onColor: (Color) -> Unit) {
     val start = color.hsv()
     var hue by remember(label) { mutableFloatStateOf(start[0]) }
     var sat by remember(label) { mutableFloatStateOf(start[1]) }
     var value by remember(label) { mutableFloatStateOf(start[2]) }
     fun emit() = onColor(hsvColor(hue, sat, value))
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // Square: left to right more saturated, bottom to top brighter.
-        Canvas(Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(12.dp)).keepTouch()
+        Canvas(Modifier.fillMaxWidth().weight(1f).heightIn(min = 120.dp).clip(RoundedCornerShape(12.dp)).keepTouch()
             .semantics { contentDescription = "Saturazione e luminosità di $label"; stateDescription = "saturazione ${(sat * 100).roundToInt()}%, luminosità ${(value * 100).roundToInt()}%" }
             .pointerInput(label) {
                 fun set(p: Offset) { sat = (p.x / size.width).coerceIn(0f, 1f); value = 1f - (p.y / size.height).coerceIn(0f, 1f); emit() }
@@ -141,22 +179,43 @@ fun ColorPicker(color: Color, label: String, onColor: (Color) -> Unit) {
     }
 }
 
+/** A small Home as it will look: heading, the book being read, chips and the bottom bar. */
 @Composable
-private fun Preview(paper: Color, surface: Color, accent: Color) {
+private fun Preview(paper: Color, surface: Color, accent: Color, modifier: Modifier = Modifier) {
     val ink = if (paper.luminance() > 0.4f) Color(0xFF192126) else Color(0xFFF6F6F8)
     val cardInk = if (surface.luminance() > 0.4f) Color(0xFF192126) else Color(0xFFF6F6F8)
     val onAccent = if (accent.luminance() > 0.45f) Color.Black else Color.White
-    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = paper, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Anteprima", color = ink, style = MaterialTheme.typography.titleMedium)
-            Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = surface) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("Il nome della rosa", color = cardInk, style = MaterialTheme.typography.titleSmall)
-                    Text("Umberto Eco · pagina 120 di 503", color = cardInk.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall)
-                    LinearProgressIndicator(progress = { 0.24f }, color = accent, trackColor = cardInk.copy(alpha = 0.15f), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+    val line = ink.copy(alpha = 0.14f)
+    Surface(modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "Anteprima del tema" },
+        shape = RoundedCornerShape(24.dp), color = paper, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Column {
+            Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("ANTEPRIMA", color = accent, style = MaterialTheme.typography.labelSmall)
+                Text("Buongiorno", color = ink, style = MaterialTheme.typography.titleLarge)
+                Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = surface, border = BorderStroke(1.dp, line)) {
+                    Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(width = 36.dp, height = 52.dp).clip(RoundedCornerShape(6.dp)).background(accent.copy(alpha = 0.85f)))
+                        Column(Modifier.weight(1f)) {
+                            Text("Il nome della rosa", color = cardInk, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                            Text("Umberto Eco · pagina 120 di 503", color = cardInk.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                            LinearProgressIndicator(progress = { 0.24f }, color = accent, trackColor = cardInk.copy(alpha = 0.15f), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.clip(RoundedCornerShape(20.dp)).background(accent).padding(horizontal = 16.dp, vertical = 8.dp)) { Text("Riprendi", color = onAccent, style = MaterialTheme.typography.labelLarge) }
+                    Box(Modifier.clip(RoundedCornerShape(20.dp)).border(1.dp, line, RoundedCornerShape(20.dp)).padding(horizontal = 14.dp, vertical = 8.dp)) { Text("+10 pagine", color = ink, style = MaterialTheme.typography.labelLarge) }
                 }
             }
-            Box(Modifier.clip(RoundedCornerShape(20.dp)).background(accent).padding(horizontal = 18.dp, vertical = 8.dp)) { Text("Riprendi la lettura", color = onAccent) }
+            // Bottom bar: the selected place in the accent colour.
+            Row(Modifier.fillMaxWidth().background(surface).padding(vertical = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                listOf("Home", "Biblioteca", "Scopri").forEachIndexed { i, t ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(width = 40.dp, height = 6.dp).clip(RoundedCornerShape(3.dp)).background(if (i == 0) accent else cardInk.copy(alpha = 0.25f)))
+                        Text(t, color = if (i == 0) cardInk else cardInk.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            }
         }
     }
 }
