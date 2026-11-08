@@ -1644,6 +1644,19 @@ public final class MainActivity extends AppCompatActivity {
             identity.addView(image, size);
         }
         LinearLayout names = column(); identity.addView(names, new LinearLayout.LayoutParams(0, -2, 1));
+        // Preferito: a heart beside the cover, toggled at once (no menu, no reload).
+        boolean[] fav = { b.journal.optBoolean("favorite") };
+        MaterialButton heart = iconButton(fav[0] ? R.drawable.ic_favorite : R.drawable.ic_favorite_border, fav[0] ? "Togli dai preferiti" : "Aggiungi ai preferiti", () -> { });
+        heart.setIconTint(android.content.res.ColorStateList.valueOf(fav[0] ? COPPER : MUTED));
+        heart.setOnClickListener(v -> {
+            try { Book c = Book.from(store.find(b.id).json()); ReadingJournal.put(c, "favorite", !fav[0]); store.replace(c); b.journal = c.journal; fav[0] = !fav[0]; }
+            catch (Exception e) { error(e); return; }
+            heart.setIconResource(fav[0] ? R.drawable.ic_favorite : R.drawable.ic_favorite_border);
+            heart.setIconTint(android.content.res.ColorStateList.valueOf(fav[0] ? COPPER : MUTED));
+            heart.setContentDescription(fav[0] ? "Togli dai preferiti" : "Aggiungi ai preferiti");
+            heart.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
+        });
+        identity.addView(heart, new LinearLayout.LayoutParams(dp(48), dp(48)));
         names.addView(text(b.title, 24, INK, true));
         if (!b.subtitle.isEmpty()) names.addView(text(b.subtitle, 16, MUTED, true));
         gap(names, 4); names.addView(text(b.author, 15, SAGE, false));
@@ -1662,19 +1675,8 @@ public final class MainActivity extends AppCompatActivity {
             TextView plot = text(b.description, 15, INK, false); plot.setPadding(0, 0, 0, dp(8));
             panel.addView(expander("Trama", plot, false));
         }
-        panel.addView(chaptersSection(b));
         panel.addView(app.atlante.library.ui.compose.BookSagaView.create(this, palette, b, sagaHost));
 
-        LinearLayout info = column();
-        if (!b.tags.isEmpty()) info.addView(text("Tag: " + b.tags, 14, INK, false));
-        if (!b.location.isEmpty()) info.addView(text("Posizione: " + b.location, 14, INK, false));
-        info.addView(text((b.format.equals("CATALOGO") ? "Scheda senza file" : "File " + b.format) + (b.medium.isEmpty() ? "" : " · " + b.medium)
-            + (b.totalPages > 0 ? " · " + b.totalPages + " pagine" : ""), 14, INK, false));
-        gap(info, 4); bibliographic(info, b);
-        if (!b.source.isEmpty()) info.addView(button("Apri su Open Library", R.style.Atlante_Button_Text, () -> {
-            if (b.source.matches("/works/OL[0-9]+W")) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://openlibrary.org" + b.source)));
-        }));
-        panel.addView(expander("Dettagli della scheda", info, false));
         // Other editions of the same work (merged duplicates, EPUBs of another edition): one record, many editions.
         org.json.JSONArray eds = b.meta.optJSONArray("editions");
         if (eds != null && eds.length() > 0) {
@@ -1743,87 +1745,8 @@ public final class MainActivity extends AppCompatActivity {
         android.util.TypedValue value = new android.util.TypedValue(); getTheme().resolveAttribute(attribute, value, true); return value.resourceId;
     }
 
-    /** Chapters with the reader's stars and comments. EPUB chapters come from the table of contents. */
-    private View chaptersSection(Book b) {
-        LinearLayout list = column();
-        Runnable[] refresh = new Runnable[1];
-        refresh[0] = () -> {
-            list.removeAllViews();
-            if (b.chapters.isEmpty()) {
-                boolean loading = b.format.equals("EPUB") && !tocChecked.contains(b.id);
-                list.addView(text(loading ? "Lettura dell’indice…" : "Nessun capitolo. Puoi aggiungerli per votarli e commentarli.", 14, MUTED, false));
-            }
-            int rated = 0, sum = 0;
-            for (int i = 0; i < b.chapters.size(); i++) {
-                Book.Chapter c = b.chapters.get(i); int index = i;
-                if (c.rating > 0) { rated++; sum += c.rating; }
-                LinearLayout item = column(); item.setPadding(dp(16 * c.level), dp(10), 0, dp(10)); item.setClickable(true); item.setFocusable(true);
-                item.setBackgroundResource(outValue(android.R.attr.selectableItemBackground));
-                LinearLayout line = row(); item.addView(line);
-                TextView title = text(c.title, 15, INK, false); title.setMaxLines(2); title.setEllipsize(TextUtils.TruncateAt.END);
-                line.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-                if (c.rating > 0) line.addView(text(stars(c.rating), 13, COPPER, false));
-                if (!c.comment.isEmpty()) { TextView note = text(c.comment, 13, MUTED, false); note.setMaxLines(2); note.setEllipsize(TextUtils.TruncateAt.END); item.addView(note); }
-                item.setContentDescription(c.title + (c.rating > 0 ? ", " + c.rating + " stelle" : ", senza voto") + (c.comment.isEmpty() ? "" : ", con commento"));
-                item.setOnClickListener(v -> chapterDialog(b, index, refresh[0]));
-                list.addView(item);
-            }
-            MaterialButton add = button(b.chapters.isEmpty() ? "Aggiungi capitoli" : "Aggiungi altri capitoli", R.style.Atlante_Button_Text, () -> addChapters(b, refresh[0]));
-            add.setIconResource(R.drawable.ic_add); list.addView(add);
-            if (rated > 0) list.addView(text(String.format(app.atlante.library.ui.L.locale(), "%d capitoli votati · media %.1f ★", rated, (double) sum / rated), 13, COPPER, false), 0);
-        };
-        refresh[0].run();
-        if (b.format.equals("EPUB") && b.chapters.isEmpty() && tocChecked.add(b.id)) worker.execute(() -> {
-            List<Book.Chapter> titles;
-            try { titles = EbookParser.chapters(store.original(b)); } catch (Exception e) { titles = new ArrayList<>(); }
-            final List<Book.Chapter> found = titles;
-            runOnUiThread(() -> {
-                if (!found.isEmpty() && b.chapters.isEmpty()) { b.chapters.addAll(found); save(); }
-                refresh[0].run();
-            });
-        });
-        String label = "Capitoli" + (b.chapters.isEmpty() ? "" : " · " + b.chapters.size());
-        return expander(label, list, false);
-    }
 
-    private void chapterDialog(Book b, int index, Runnable refresh) {
-        Book.Chapter c = b.chapters.get(index);
-        LinearLayout panel = column(); panel.setPadding(dp(24), dp(8), dp(24), dp(4));
-        EditText title = field(panel, "Titolo del capitolo", c.title);
-        panel.addView(sectionLabel("IL TUO VOTO")); gap(panel, 4);
-        RatingBar rating = new RatingBar(this); rating.setNumStars(5); rating.setStepSize(1); rating.setRating(c.rating);
-        rating.setProgressTintList(android.content.res.ColorStateList.valueOf(COPPER));
-        rating.setSecondaryProgressTintList(android.content.res.ColorStateList.valueOf(COPPER));
-        rating.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE));
-        rating.setContentDescription("Voto del capitolo da 1 a 5 stelle");
-        LinearLayout stars = row(); stars.addView(rating, new LinearLayout.LayoutParams(-2, -2));
-        stars.addView(button("Nessun voto", R.style.Atlante_Button_Text, () -> rating.setRating(0)));
-        panel.addView(stars); gap(panel, 8);
-        EditText comment = field(panel, "Commento", c.comment); comment.setSingleLine(false); comment.setMinLines(3);
-        AlertDialog dialog = dialogBuilder().setTitle("Capitolo " + (index + 1)).setView(scrolled(panel))
-            .setNegativeButton("Annulla", null)
-            .setNeutralButton("Elimina", (d, w) -> dialogBuilder().setTitle("Eliminare il capitolo?").setMessage(c.title)
-                .setNegativeButton("Annulla", null).setPositiveButton("Elimina", (d2, w2) -> { b.chapters.remove(c); save(); refresh.run(); }).show())
-            .setPositiveButton("Salva", (d, w) -> {
-                String name = title.getText().toString().trim(); if (!name.isEmpty()) c.title = name;
-                c.rating = Math.round(rating.getRating()); c.comment = comment.getText().toString().trim();
-                save(); refresh.run();
-            }).create();
-        dialog.show();
-    }
 
-    /** Adds numbered chapters ("Capitolo N") chosen with a wheel, after the existing ones. */
-    private void addChapters(Book b, Runnable refresh) {
-        LinearLayout panel = column(); panel.setPadding(dp(24), dp(8), dp(24), dp(4)); panel.setGravity(Gravity.CENTER_HORIZONTAL);
-        panel.addView(text("Quanti capitoli vuoi aggiungere? Potrai rinominarli toccandoli.", 14, MUTED, false));
-        NumberPicker count = wheel(1, 200, 10); panel.addView(count);
-        dialogBuilder().setTitle("Aggiungi capitoli").setView(panel).setNegativeButton("Annulla", null)
-            .setPositiveButton("Aggiungi", (d, w) -> {
-                int start = b.chapters.size();
-                for (int i = 1; i <= count.getValue() && b.chapters.size() < EbookParser.MAX_CHAPTERS; i++) b.chapters.add(new Book.Chapter("Capitolo " + (start + i)));
-                save(); refresh.run();
-            }).show();
-    }
 
     private NumberPicker wheel(int min, int max, int value) {
         NumberPicker picker = new NumberPicker(this); picker.setMinValue(min); picker.setMaxValue(max);
@@ -3603,19 +3526,26 @@ public final class MainActivity extends AppCompatActivity {
         p.addView(button("Date, voto e note",R.style.Atlante_Button_Text,()->readingDialog(b)));
         return card(p);
     }
+    /** The book's other actions (⋮): a sheet with icons. Preferito is the heart beside the cover. */
     private void bookActions(Book b) {
-        String[] actions={"Modifica scheda","Completa i dati online","Preferito: "+(b.journal.optBoolean("favorite")?"sì":"no"),"Collezioni","Inizia una rilettura","Apri con KOReader"};
-        dialogBuilder().setTitle("Il tuo libro").setItems(actions,(d,w)->{
-            if(w==0) edit(b);
-            if(w==1) { completeMetadata(b); return; }
-            if(w==2) journalEdit(b,c->ReadingJournal.put(c,"favorite",!c.journal.optBoolean("favorite")));
-            if(w==3) editCollections(b);
-            if(w==4 && b.id.equals(timerBook)) { dialogBuilder().setTitle("Sessione in corso").setMessage("Concludi o scarta la sessione prima di iniziare una rilettura.").setPositiveButton("Apri sessione",(dd,ww)->timerScreen(b)).setNegativeButton("Annulla",null).show(); return; }
-            if(w==4) dialogBuilder().setTitle("Iniziare una nuova lettura?").setMessage("Sessioni e recensione precedenti vengono conservate. Il nuovo tentativo riparte da pagina zero.").setNegativeButton("Annulla",null).setPositiveButton("Inizia",(dd,ww)->journalEdit(b,c->{
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet = new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        if (sheet.getWindow() != null) app.atlante.library.ui.L.watch(sheet.getWindow().getDecorView());
+        LinearLayout p = column(); p.setPadding(dp(16), dp(12), dp(16), dp(24));
+        TextView head = text(b.title, 20, INK, true); head.setPadding(dp(4), 0, dp(4), dp(12)); head.setMaxLines(2); head.setEllipsize(TextUtils.TruncateAt.END); p.addView(head);
+        LinearLayout list = listCard(p);
+        listRow(list, R.drawable.ic_edit, "Modifica scheda", "Titolo, autore, saga, pagine", () -> { sheet.dismiss(); edit(b); });
+        listRow(list, R.drawable.ic_cloud, "Completa i dati online", "Copertina, trama, editore, ISBN", () -> { sheet.dismiss(); completeMetadata(b); });
+        listRow(list, R.drawable.ic_library, "Collezioni", "Le tue liste", () -> { sheet.dismiss(); editCollections(b); });
+        listRow(list, R.drawable.ic_book, "Inizia una rilettura", "Le letture precedenti restano", () -> { sheet.dismiss(); reread(b); });
+        if (!b.format.equals("CATALOGO")) listRow(list, R.drawable.ic_open_in_new, "Apri con KOReader", "Il file in un altro lettore", () -> { sheet.dismiss(); openKoreader(b); });
+        ScrollView scroll = new ScrollView(this); scroll.addView(p); scroll.setBackgroundColor(WHITE);
+        sheet.setContentView(scroll); sheet.show();
+    }
+    private void reread(Book b) {
+        if(b.id.equals(timerBook)) { dialogBuilder().setTitle("Sessione in corso").setMessage("Concludi o scarta la sessione prima di iniziare una rilettura.").setPositiveButton("Apri sessione",(dd,ww)->timerScreen(b)).setNegativeButton("Annulla",null).show(); return; }
+        else dialogBuilder().setTitle("Iniziare una nuova lettura?").setMessage("Sessioni e recensione precedenti vengono conservate. Il nuovo tentativo riparte da pagina zero.").setNegativeButton("Annulla",null).setPositiveButton("Inizia",(dd,ww)->journalEdit(b,c->{
                 org.json.JSONArray a=ReadingJournal.array(c,"attempts"); a.put(new org.json.JSONObject().put("number",ReadingJournal.attempt(c)).put("started",c.started).put("finished",c.finished).put("page",c.currentPage).put("percent",c.percent)); ReadingJournal.put(c,"attempts",a); ReadingJournal.put(c,"attempt",ReadingJournal.attempt(c)+1); c.currentPage=0;c.percent=0;c.page=0;c.started=java.time.LocalDate.now().toString();c.finished="";c.status=Book.READING;
             })).show();
-            if(w==5) openKoreader(b);
-        }).setNegativeButton("Chiudi",null).show();
     }
     private interface BookMutation { void apply(Book b) throws Exception; }
     private void journalEdit(Book b,BookMutation edit) {
@@ -3641,29 +3571,16 @@ public final class MainActivity extends AppCompatActivity {
         RatingBar stars=new RatingBar(this); stars.setNumStars(5); stars.setStepSize(.5f); stars.setRating((float)ReadingJournal.rating(b)); stars.setContentDescription("Il tuo voto, da zero a cinque stelle, mezze stelle disponibili");
         stars.setProgressTintList(android.content.res.ColorStateList.valueOf(COPPER)); p.addView(stars,new LinearLayout.LayoutParams(-2,-2));
         stars.setOnRatingBarChangeListener((rating,value,fromUser)->{if(fromUser) {try {Book c=Book.from(b.json()); ReadingJournal.put(c,"rating",(double)value); c.rating=Math.round(value);store.replace(c); b.journal=c.journal;b.rating=c.rating; if(motion()){rating.setScaleX(.96f);rating.setScaleY(.96f);rating.animate().scaleX(1).scaleY(1).setDuration(160).start();}}catch(Exception e){error(e);}}});
-        gap(p,12); org.json.JSONObject review=b.journal.optJSONObject("review");
-        if(review!=null) { p.addView(text(review.optString("title"),22,INK,true)); p.addView(text(review.optString("body"),15,INK,false)); p.addView(text(italianDate(review.optString("date")),13,MUTED,false)); }
-        p.addView(button(review==null?"Scrivi una recensione":"Modifica recensione",false,()->reviewEditor(b)));
         headline(p,"Il tuo taccuino"); p.addView(button("Aggiungi nota o citazione",false,()->noteEditor(b,-1)));
         EditText search=field(p,"Cerca nelle note",""); LinearLayout list=column(); p.addView(list);
         Runnable refresh=()->{list.removeAllViews();String q=search.getText().toString().toLowerCase(Locale.ROOT); org.json.JSONArray a=ReadingJournal.array(b,"notes");
             for(int i=a.length()-1;i>=0;i--){org.json.JSONObject n=a.optJSONObject(i);if(n==null||!n.toString().toLowerCase(Locale.ROOT).contains(q))continue;int index=i;LinearLayout item=surface(list,n.optString("type")+" · "+n.optString("date"));item.addView(text(n.optString("body"),15,INK,false));item.addView(text("Pagina "+n.optInt("page")+" · "+n.optString("tags"),13,MUTED,false));item.addView(button("Modifica nota",R.style.Atlante_Button_Text,()->noteEditor(b,index)));}
             if(a.length()==0)list.addView(text("Pensieri, citazioni, domande: ritrovali qui, anche offline.",14,MUTED,false));}; refresh.run();
         search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){refresh.run();}public void afterTextChanged(Editable e){}});
-        headline(p,"Storia della lettura"); activity(p,b,100);
     }
     private LinearLayout editorPage(String title,Book b) {
         base(PAPER); detailId=b.id; editingPage=true; timerLabel=null; uiHandler.removeCallbacks(timerTick); LinearLayout top=row();top.setPadding(dp(8),dp(4),dp(8),dp(4));root.addView(top);top.addView(iconButton(R.drawable.ic_back,"Annulla e torna al libro",()->details(b)));top.addView(text(title,22,INK,true));
         LinearLayout panel=column();panel.setPadding(dp(20),dp(16),dp(20),dp(24));ScrollView scroll=new ScrollView(this);scroll.addView(panel);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));updateBack();return panel;
-    }
-    private void reviewEditor(Book b) {
-        LinearLayout p=editorPage("La tua recensione",b);org.json.JSONObject review=b.journal.optJSONObject("review");if(review==null)review=new org.json.JSONObject();
-        EditText title=field(p,"Titolo della recensione",review.optString("title")),body=field(p,"La tua recensione",review.optString("body")); body.setSingleLine(false);body.setMinLines(8);
-        EditText date=field(p,"Data (AAAA-MM-GG)",review.optString("date",java.time.LocalDate.now().toString()));
-        RatingBar rating=new RatingBar(this);rating.setNumStars(5);rating.setStepSize(.5f);rating.setRating((float)ReadingJournal.rating(b));rating.setContentDescription("Voto della recensione");p.addView(rating);
-        p.addView(button("Salva recensione",true,()->{try{java.time.LocalDate.parse(date.getText().toString());}catch(Exception e){date.setError("Usa una data valida AAAA-MM-GG");return;}
-            journalEdit(b,c->{ReadingJournal.put(c,"review",new org.json.JSONObject().put("title",title.getText().toString()).put("body",body.getText().toString()).put("date",date.getText().toString()).put("rating",rating.getRating()));ReadingJournal.put(c,"rating",(double)rating.getRating());c.rating=Math.round(rating.getRating());});}));
-        if(b.journal.has("review"))p.addView(button("Elimina recensione",false,()->dialogBuilder().setTitle("Eliminare la recensione?").setNegativeButton("Annulla",null).setPositiveButton("Elimina",(d,w)->journalEdit(b,c->c.journal.remove("review"))).show()));
     }
     private void noteEditor(Book b,int index) {
         LinearLayout p=editorPage(index<0?"Una nuova nota":"Modifica nota",b);org.json.JSONObject old=index<0?new org.json.JSONObject():ReadingJournal.array(b,"notes").optJSONObject(index);if(old==null)old=new org.json.JSONObject();
@@ -3673,11 +3590,6 @@ public final class MainActivity extends AppCompatActivity {
         p.addView(button("Salva nota",true,()->{if(body.getText().toString().trim().isEmpty()){body.setError("Scrivi la tua nota");return;}int ref;try{ref=Integer.parseInt(page.getText().toString());if(ref<0)throw new NumberFormatException();}catch(Exception e){page.setError("Inserisci una pagina valida");return;}final int refPage=ref;
             journalEdit(b,c->{org.json.JSONArray a=ReadingJournal.array(c,"notes");org.json.JSONObject n=new org.json.JSONObject(previous.toString()).put("type",kind.value()).put("body",body.getText().toString()).put("page",refPage).put("tags",tags.getText().toString()).put("date",previous.optString("date",java.time.LocalDate.now().toString())).put("at",previous.optLong("at",System.currentTimeMillis())).put("editedAt",System.currentTimeMillis());if(index<0)a.put(n);else a.put(index,n);ReadingJournal.put(c,"notes",a);});}));
         if(index>=0)p.addView(button("Elimina nota",false,()->dialogBuilder().setTitle("Eliminare questa nota?").setNegativeButton("Annulla",null).setPositiveButton("Elimina",(d,w)->journalEdit(b,c->{org.json.JSONArray a=ReadingJournal.array(c,"notes");a.remove(index);ReadingJournal.put(c,"notes",a);})).show()));
-    }
-    private void activity(LinearLayout p,Book only,int limit) {
-        ArrayList<org.json.JSONObject> events=activityEvents(only);int count=0;
-        for(org.json.JSONObject e:events){if(count++>=limit)break;LinearLayout box=surface(p,italianDate(e.optString("date")));box.addView(text(e.optString("book"),18,INK,true));TextView label=text(e.optString("text"),14,MUTED,false);label.setMaxLines(4);box.addView(label);}
-        if(events.isEmpty())p.addView(text("Le tue sessioni, note e letture completate appariranno qui.",14,MUTED,false));
     }
     /** Home: the latest events as rows in one card, the day in serif on the left. */
     private void recentActivity(LinearLayout p,int limit) {

@@ -145,12 +145,17 @@ assert status('Il giardino delle storie')=='In pausa', 'Paused state not saved'
 tap('Date, voto e note',True);shot('12e-paused-editor');tap('Salva',exact=True);time.sleep(.6)
 assert status('Il giardino delle storie')=='In pausa', 'Editor changed the paused state'
 back();tap('Tutti  ')
-# Chapters: added with a wheel, then rated with stars and a comment.
-tap('Il sentiero di casa');tap('Capitoli',True);tap('Aggiungi capitoli',True);tap('Aggiungi',exact=True)
-tap('Capitolo 1',True,exact=True);shot('12f-chapter');tap('Salva',exact=True)
+# The book page, lean: a heart beside the cover (Preferito), no chapters, reading history, review or sheet details.
+tap('Il sentiero di casa');time.sleep(.6)
+texts=[v for n in dump().iter('node') for v in (n.get('text',''),n.get('content-desc',''))]
+for gone in ('Capitoli','Storia della lettura','Scrivi una recensione','Dettagli della scheda'):
+    assert not any(t.startswith(gone) for t in texts), gone+' is still on the book page'
+tap('Aggiungi ai preferiti',exact=True);time.sleep(.6);shot('12f-favorite')
 book=next(b for b in catalog() if b['title']=='Il sentiero di casa')
-assert len(book.get('chapters',[]))==10, 'Chapters not added'
-shot('12g-chapters');back()
+assert book.get('journal',{}).get('favorite') is True, 'The heart did not save the favourite'
+tap('Azioni del libro');time.sleep(.5);shot('12g-book-actions')
+assert not any(n.get('text','').startswith('Preferito') for n in dump().iter('node')), 'Preferito is still in the menu'
+back();back()
 # Manual cataloging must save only after confirmation, without requiring an ISBN.
 count=len(catalog())
 tap('Aggiungi libro');tap('Annulla')

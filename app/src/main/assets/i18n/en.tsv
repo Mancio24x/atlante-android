@@ -1113,3 +1113,10 @@ ordine: {}	order: {}
 ordine: titolo	order: title
 ordine: autore	order: author
 ordine: saga	order: series
+Aggiungi ai preferiti	Add to favourites
+Togli dai preferiti	Remove from favourites
+Titolo, autore, saga, pagine	Title, author, series, pages
+Copertina, trama, editore, ISBN	Cover, plot, publisher, ISBN
+Le tue liste	Your lists
+Le letture precedenti restano	Earlier readings stay
+Il file in un altro lettore	The file in another reader
