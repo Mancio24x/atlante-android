@@ -22,6 +22,11 @@ public final class LibraryStore implements SyncStore {
     private volatile long version;
 
     private static LibraryStore shared;
+    /**
+     * The library's own data (library.json, a backup's manifest, an Atlante catalog): what was saved must open again.
+     * It was 16 MB, which a big library with plots, notes and sessions passes: it saved, then never opened.
+     */
+    public static final int DATA_LIMIT = 256 * 1024 * 1024;
 
     /**
      * The one library of the process. The app, the home screen widgets and the background work read and write
@@ -42,7 +47,7 @@ public final class LibraryStore implements SyncStore {
         // AtomicFile restores a previous valid catalog after an interrupted write.
         if (catalog.getBaseFile().exists() || new File(catalog.getBaseFile()+".bak").exists()) {
             try (InputStream in = catalog.openRead()) {
-                JSONArray array = new JSONArray(new String(EbookParser.read(in, 16 * 1024 * 1024), "UTF-8"));
+                JSONArray array = new JSONArray(new String(EbookParser.read(in, DATA_LIMIT), "UTF-8"));
                 for (int i = 0; i < array.length(); i++) books.add(Book.from(array.getJSONObject(i)));
             }
         }

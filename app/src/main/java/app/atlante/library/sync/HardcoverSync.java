@@ -54,16 +54,33 @@ public final class HardcoverSync {
     /** The API is injected so that the merge can be tested without a network. */
     public static Report sync(SyncStore store, Settings s, Progress progress, Api api) throws Exception {
         syncing = true;
-        List<Book> pending = new ArrayList<>();
+        Pending pending = new Pending();
         try { return run(store, s, progress, api, pending); }
-        finally { syncing = false; store.replaceAll(pending); }
+        finally { syncing = false; flush(store, pending); }
+    }
+
+    /**
+     * Copies of books made by the sync, with each book as it was when its copy was made. The sync reads the library
+     * at the start and talks to Hardcover for minutes: a book you changed meanwhile (pages, state, rating) is not
+     * overwritten with the older copy. It is left as you made it; the next sync sends your change.
+     */
+    static final class Pending extends ArrayList<Book> {
+        final Map<String, String> before = new HashMap<>();
+    }
+
+    private static void flush(SyncStore store, List<Book> pending) throws Exception {
+        if (pending.isEmpty()) return;
+        store.replaceUnchanged(pending, pending instanceof Pending ? ((Pending) pending).before : new HashMap<>());
+        pending.clear(); if (pending instanceof Pending) ((Pending) pending).before.clear();
     }
 
     /** Changed books are saved in groups of 100 (and at the end, also when interrupted or failing). */
     private static void keep(SyncStore store, List<Book> pending, Book local, Book copy) throws Exception {
-        if (copy.json().toString().equals(local.json().toString())) return;
+        String was = local.json().toString();
+        if (copy.json().toString().equals(was)) return;
         pending.add(copy);
-        if (pending.size() >= 100) { store.replaceAll(pending); pending.clear(); }
+        if (pending instanceof Pending) ((Pending) pending).before.putIfAbsent(copy.id, was);
+        if (pending.size() >= 100) flush(store, pending);
     }
 
     private static Report run(SyncStore store, Settings s, Progress progress, Api api, List<Book> pending) throws Exception {
@@ -210,7 +227,7 @@ public final class HardcoverSync {
             } else SyncCore.remember(copy, SERVICE, newLink, here);
             keep(store, pending, local, copy);
         }
-        store.replaceAll(pending); pending.clear();
+        flush(store, pending);
         if (s.createMissing) for (JSONObject ub : remote) {
             if (s.cancelled) { report.notes.add("Sincronizzazione interrotta."); return report; }
             if (matched.contains(ub.getInt("id"))) continue;

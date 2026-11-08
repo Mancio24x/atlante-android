@@ -24,7 +24,7 @@ import org.xmlpull.v1.XmlPullParserFactory;
  * Nothing is written here: the caller shows a summary and restores after confirmation.
  */
 public final class CatalogImport {
-    public static final int TEXT_LIMIT = 32 * 1024 * 1024, COVER_LIMIT = 2 * 1024 * 1024, COVERS_TOTAL = 64 * 1024 * 1024, MAX_BOOKS = 20000;
+    public static final int TEXT_LIMIT = LibraryStore.DATA_LIMIT, COVER_LIMIT = 2 * 1024 * 1024, COVERS_TOTAL = 64 * 1024 * 1024, MAX_BOOKS = 20000;
     public static final String UNKNOWN = "Formato non riconosciuto. Puoi importare: backup di Atlante (ZIP, anche estratto o dentro un altro ZIP), "
         + "elenchi CSV (anche da Goodreads e StoryGraph), cataloghi HTML di Atlante e librerie Calibre (ZIP con i file metadata.opf).";
 

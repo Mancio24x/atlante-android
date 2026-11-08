@@ -25,7 +25,7 @@ public final class BackupArchive {
     public static final String MANIFEST = "atlante-backup.json";
     public static final String KIND = "atlante-backup";
     public static final int VERSION = 1;
-    public static final int MANIFEST_LIMIT = 16 * 1024 * 1024;
+    public static final int MANIFEST_LIMIT = LibraryStore.DATA_LIMIT;   // a backup of any library that opens can be restored
     public static final int COVER_LIMIT = 12 * 1024 * 1024;
     public static final long BOOK_LIMIT = 512L * 1024 * 1024;
     public static final int MAX_BOOKS = 100_000;

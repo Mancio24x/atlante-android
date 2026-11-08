@@ -60,7 +60,7 @@ public class SyncTest {
     }
 
     /** A Hardcover API that answers like the real one (schema of the official documentation). */
-    static final class FakeHardcover implements HardcoverSync.Api {
+    static class FakeHardcover implements HardcoverSync.Api {
         final List<String> mutations = new ArrayList<>();
         final Map<String, Integer> isbnBooks = new HashMap<>();
         /** Search answers: a word of the query → hits. */
@@ -284,5 +284,25 @@ public class SyncTest {
         assertTrue(h.startsWith("Digest username=\"u\", realm=\"calibre\", nonce=\"abc\", uri=\"/ajax/library-info\", response=\""));
         assertTrue(h.contains("qop=auth, nc=00000001"));
         assertEquals("5d41402abc4b2a76b9719d911017c592", SyncCore.md5("hello"));
+    }
+
+    /**
+     * You mark pages while a sync runs (it reads the library at the start and talks to Hardcover for minutes):
+     * your change is not overwritten by the sync's older copy of the book.
+     */
+    @Test public void aChangeMadeDuringTheSyncIsKept() throws Exception {
+        MemoryStore store = new MemoryStore();
+        Book rosa = book("Il nome della rosa", "Umberto Eco", "9788845292613", Book.READING, 120, 500); store.books.add(rosa);
+        FakeHardcover api = new FakeHardcover() {
+            boolean done;
+            @Override public JSONObject call(String q, JSONObject v) throws Exception {
+                // Halfway through the sync (it asks Hardcover about the ISBNs): you record 30 more pages.
+                if (!done && q.contains("isbn_13:{_in")) { done = true; Book now = Book.from(store.find(rosa.id).json()); now.currentPage = 150; store.replace(now); }
+                return super.call(q, v);
+            }
+        };
+        api.userBooks = new JSONArray().put(userBook(1, 2, 120, "Il nome della rosa", "Umberto Eco", "9788845292613", 0));
+        HardcoverSync.sync(store, new HardcoverSync.Settings(), m -> { }, api);
+        assertEquals(150, store.find(rosa.id).currentPage);
     }
 }

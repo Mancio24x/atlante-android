@@ -193,6 +193,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         var filled = job.found; var covers = 0; var offline = job.offline
         val conflicts = runCatching { JSONObject(job.result).optJSONArray("fields") }.getOrNull() ?: JSONArray()
         val changed = ArrayList<Book>()
+        val asCopied = HashMap<String, String>()   // each book as it was when copied: a change you make meanwhile is not overwritten
         for ((i, b) in books.withIndex()) {
             if (i < job.checkpoint) continue
             if (isStopped) throw CancellationException()
@@ -226,7 +227,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     catalog.series(e.seriesId)?.let { s -> copy.series = s.italianName ?: s.name; copy.number = e.sortKey ?: 0.0; any = true } }
                 if (any) {
                     val sources = copy.meta.optJSONObject("sources") ?: JSONObject(); sources.put("catalog", "Catalogo offline (Wikidata, Open Library)"); copy.meta.put("sources", sources)
-                    changed += copy; filled++
+                    changed += copy; asCopied[b.id] = b.json().toString(); filled++
                 }
             }
             // No cover at all: one online search (the catalog has no images, only their addresses).
@@ -236,10 +237,10 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 if (cover != null) runCatching { store.saveDownloadedCover(b, cover.bytes); covers++ }
                 phase("Analisi locale")
             }
-            if (changed.size >= 50) { store.replaceAll(changed); changed.clear() }
+            if (changed.size >= 50) { store.replaceUnchanged(changed, asCopied); changed.clear(); asCopied.clear() }
             job = job.copy(done = i + 1, checkpoint = if (changed.isEmpty()) i + 1 else job.checkpoint, found = filled, offline = offline, applied = filled + covers); save()
         }
-        if (changed.isNotEmpty()) store.replaceAll(changed)
+        if (changed.isNotEmpty()) store.replaceUnchanged(changed, asCopied)
         job = job.copy(done = books.size, checkpoint = books.size, applied = filled + covers, proposals = conflicts.length(),
             result = JSONObject().put("fields", conflicts).toString(),
             message = "$filled schede completate dal catalogo offline · $covers copertine trovate online" + if (conflicts.length() > 0) " · ${conflicts.length()} differenze da decidere" else ""); save(force = true)
@@ -337,6 +338,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         job = job.copy(total = books.size); save(force = true)
         var indexed = job.applied; var online = job.offline; var none = job.found
         val changed = ArrayList<Book>()
+        val asCopied = HashMap<String, String>()   // each book as it was when copied: a change you make meanwhile is not overwritten
         for ((i, b) in books.withIndex()) {
             if (i < job.checkpoint) continue
             if (isStopped) throw CancellationException()
@@ -360,13 +362,13 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 copy.meta.put("genres", JSONArray(found))
                 val sources = copy.meta.optJSONObject("sources") ?: JSONObject(); sources.put("genres", source); copy.meta.put("sources", sources)
                 if (copy.genre.isBlank()) copy.genre = found.joinToString(", ")
-                changed += copy; indexed++
+                changed += copy; asCopied[b.id] = b.json().toString(); indexed++
             }
-            if (changed.size >= 50) { store.replaceAll(changed); changed.clear() }
+            if (changed.size >= 50) { store.replaceUnchanged(changed, asCopied); changed.clear(); asCopied.clear() }
             job = job.copy(done = i + 1, checkpoint = if (changed.isEmpty()) i + 1 else job.checkpoint, applied = indexed, offline = online, found = none); save()
             if (job.phase != "Analisi locale") phase("Analisi locale")
         }
-        if (changed.isNotEmpty()) store.replaceAll(changed)
+        if (changed.isNotEmpty()) store.replaceUnchanged(changed, asCopied)
         job = job.copy(done = books.size, checkpoint = books.size, message = "$indexed libri indicizzati" + (if (online > 0) " ($online con fonti online)" else "") +
             if (none > 0) " · $none senza un genere affidabile: restano senza, nessun genere inventato" else "")
         save(force = true)

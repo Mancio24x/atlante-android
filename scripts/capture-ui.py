@@ -382,3 +382,16 @@ assert any(n.get('text','')=='Temi pronti' for n in dump().iter('node')), 'Not b
 back();time.sleep(.5);back();time.sleep(.8)
 assert json.loads(json.dumps(adb('exec-out','run-as',package,'sh','-c','cat shared_prefs/*.xml').decode(errors='replace'))).count('customPalette')>=1, 'Custom theme not saved'
 print('Theme editor completed.')
+
+# App language (Impostazioni › Lingua): English reloads the app on the same page, in English; then back to Italian.
+step('language switch')
+leave_settings();tap('Home',exact=True);open_settings();tap('Lingua',True);tap('English',True,exact=True);time.sleep(3)
+texts=[n.get('text','') for n in dump().iter('node')]
+shot('80-language-english')
+assert 'App language' in texts and 'Book language' in texts, 'After choosing English the app is not on the Language page in English: '+str(texts[:20])
+tap('Italian',True,exact=True);time.sleep(3)
+texts=[n.get('text','') for n in dump().iter('node')]
+shot('81-language-italian')
+assert 'Lingua dell’app' in texts, 'After choosing Italiano the app is not back on Lingua in Italian: '+str(texts[:20])
+print('Language switch completed.',flush=True)
+

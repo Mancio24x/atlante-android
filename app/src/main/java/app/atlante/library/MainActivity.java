@@ -725,7 +725,8 @@ public final class MainActivity extends AppCompatActivity {
     app.atlante.library.catalog.CatalogDao catalogDao() {
         try { return app.atlante.library.catalog.CatalogDatabase.get(this).catalog(); } catch (Exception e) { return null; }
     }
-    void error(Exception e) { dialogBuilder().setTitle("Operazione non completata").setMessage(message(e)).setPositiveButton("Chiudi", null).show(); }
+    /** A job that ends after the page is gone (rotation, leaving the app) reports nothing: a dialog on a closed activity crashes. */
+    void error(Exception e) { if (isFinishing() || isDestroyed()) return; dialogBuilder().setTitle("Operazione non completata").setMessage(message(e)).setPositiveButton("Chiudi", null).show(); }
     static String message(Exception e) { return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(); }
     void save() { try { store.save(); } catch (Exception e) { error(e); } }
 
