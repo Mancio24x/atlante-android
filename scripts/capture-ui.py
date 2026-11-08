@@ -3,6 +3,10 @@
 from pathlib import Path
 import json, re, subprocess, sys, time, xml.etree.ElementTree as ET
 out=Path('ui-captures');out.mkdir(exist_ok=True)
+# The whole Android log streamed to a file on the runner from the start: when the device stops answering, what
+# happened just before (a crash, the memory killer) is already saved.
+subprocess.run(['adb','logcat','-c'],timeout=30)
+_logcat=subprocess.Popen(['adb','logcat','-v','threadtime'],stdout=open(out/'logcat-stream.txt','wb'),stderr=subprocess.STDOUT)
 package='app.atlante.library.debug'
 def adb(*args,**kw):
     # Never wait for ever: a device that does not answer fails the step instead of the whole run timing out.
