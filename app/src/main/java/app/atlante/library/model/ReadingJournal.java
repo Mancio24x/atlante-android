@@ -58,7 +58,9 @@ public final class ReadingJournal {
         int n=0;
         for(Book b:books) {
             Set<String> finishes=new HashSet<>();
-            if(!b.finished.isEmpty()) finishes.add(b.finished);
+            // The current reading counts only while the book is "Letto" (put back to "Da leggere": not a book read);
+            // earlier readings finished before a reread always count.
+            if(!b.finished.isEmpty() && b.status.equals(Book.READ)) finishes.add(b.finished);
             JSONArray a=array(b,"attempts"); for(int i=0;i<a.length();i++) { JSONObject j=a.optJSONObject(i); if(j!=null) finishes.add(j.optString("finished")); }
             for(String date:finishes) try { LocalDate d=LocalDate.parse(date); if(d.getYear()==day.getYear() && (!monthly || d.getMonth()==day.getMonth())) n++; } catch(Exception ignored) { }
         } return n;
