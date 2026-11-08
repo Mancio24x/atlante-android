@@ -101,4 +101,18 @@ class DiscoverTest {
         assertTrue(Discover.looksItalian("Dune", "Dune"))
         assertTrue(Discover.looksItalian("Shining", "The Shining"))
     }
+
+    /** "Perché hai letto": from the last book finished, three books not in the library, by different authors. */
+    @Test fun becauseYouReadSuggestsThreeNewBooks() = runBlocking {
+        val older = Book().apply { id = "b"; title = "Dune"; author = "Frank Herbert"; status = Book.READ; finished = "2026-01-10" }
+        val last = Book().apply { id = "c"; title = "Harry Potter e la pietra filosofale"; author = "J. K. Rowling"; status = Book.READ; finished = "2026-10-02" }
+        library += listOf(older, last)
+        val d = discover
+        assertEquals("c", d.lastRead()?.id)
+        val picks = d.because(last)
+        assertEquals(3, picks.size)
+        assertTrue(fetched.any { "author" in java.net.URLDecoder.decode(it, "UTF-8") && "Rowling" in java.net.URLDecoder.decode(it, "UTF-8") })
+        assertEquals(3, picks.map { it.author.lowercase() }.toSet().size)
+        assertTrue(picks.none { it.title.startsWith("Harry Potter and the Philosopher") || it.title.startsWith("A Game of Thrones") })
+    }
 }

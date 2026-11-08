@@ -76,8 +76,8 @@ assert not any(x in texts for x in ['Importa catalogo','Catalogo e backup','Espo
 tap('Libreria e catalogo',True);texts=page_texts()
 assert 'Importa eBook' in texts
 back();tap('Obiettivi di lettura',True);texts=page_texts()
-assert 'Obiettivo di oggi' in texts, 'Goals ring missing'
-back();back();tap('Libro prova UI');tap('Aggiorna avanzamento',True);shot('update-wheels-pages')
+assert any(t.startswith('Pagine al giorno') for t in texts), 'Goal wheels missing'
+back();back();tap('Biblioteca',exact=True);tap('Libro prova UI')   # Back from the settings index goes Home;tap('Aggiorna avanzamento',True);shot('update-wheels-pages')
 tap('Percentuale',exact=True);tap('20%',exact=True)
 adb('shell','input','keyevent','KEYCODE_MOVE_END');adb('shell','input','keyevent','KEYCODE_DEL');adb('shell','input','keyevent','KEYCODE_DEL');adb('shell','input','text','75')
 tap('OK',exact=True);shot('update-wheels-percent');tap('Salva',True,exact=True);time.sleep(1)

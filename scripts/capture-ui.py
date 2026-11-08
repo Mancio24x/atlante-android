@@ -198,7 +198,7 @@ assert any(n.get('text','')=='KOReader' for n in dump().iter('node')), 'KOReader
 tap('KOReader',True);tap('Impostazioni di KOReader',True);shot('31-koreader-settings');tap('Annulla',exact=True)
 open_settings();shot('32-settings-page')
 assert any(v.startswith('Libreria e catalogo') for n in dump().iter('node') for v in (n.get('text',''),n.get('content-desc',''))), 'Settings is not a dedicated page'
-back();assert any(n.get('text','')=='KOReader' for n in dump().iter('node')), 'Back did not restore Sync'
+back();assert any(n.get('text','')=='Buona lettura.' for n in dump().iter('node')), 'Back from the settings did not go Home'
 
 # Multi-source metadata: the review page opens and lists the catalogs consulted (nothing is applied automatically).
 tap('Biblioteca',exact=True);tap('Tutti  ');tap('Il sentiero di casa',True)   # list view: the book may be further down

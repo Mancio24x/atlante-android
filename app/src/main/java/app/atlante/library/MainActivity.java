@@ -294,7 +294,7 @@ public final class MainActivity extends AppCompatActivity {
 
         customThemes(panel); gap(panel,20);
                 break;
-            case "obiettivi": panel.addView(hint("Compaiono in Home e in Statistiche."));
+            case "obiettivi":
         panel.addView(app.atlante.library.ui.compose.GoalsView.create(this, palette, getPreferences(MODE_PRIVATE), store.snapshot())); gap(panel,20);
 
                 break;
@@ -3071,19 +3071,20 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private boolean searching() { return !query.isEmpty() && !tab.equals("Mappa"); }
-    private boolean canGoBack() { return onlineBook != null || detailId != null || !destination.equals("Home") || drawer != null || reading != null || searching() || !tab.equals("Tutti i libri"); }
+    private boolean canGoBack() { return onlineBook != null || detailId != null || drawer != null || reading != null || !destination.equals("Home"); }
     private void updateBack() { back.setEnabled(store != null && canGoBack()); }
+    /**
+     * Back: a page opened inside another (a book, the sheet of a book online, a settings page, a saga's map, the
+     * reader) goes back to it; every main page goes straight to Home.
+     */
     private void goBack() {
         if (drawer != null) closeDrawer();
         else if (reading != null) { Book b = reading; rememberPage(); details(b); }
         else if (onlineBook != null) closeOnlineSheet();
         else if (detailId != null) { Book b=store.find(detailId); if(editingPage && b!=null) details(b); else showLibrary(); }
-        else if (destination.equals("Biblioteca") && tab.equals("Saghe") && !openSaga.isEmpty()) { openSaga = ""; showLibrary(); }
-        else if (searching()) { query = ""; showLibrary(); }
-        else if (!tab.equals("Tutti i libri")) { tab = "Tutti i libri"; showLibrary(); }
         else if (destination.equals("Impostazioni") && !settingsSection.isEmpty()) { settingsSection = ""; showCompanion(); }
-        else if (destination.equals("Impostazioni")) navigate(getPreferences(MODE_PRIVATE).getString("settingsReturn","Home"));
-        else if (!destination.equals("Home")) navigate("Home");
+        else if (destination.equals("Biblioteca") && tab.equals("Saghe") && !openSaga.isEmpty()) { openSaga = ""; showLibrary(); }
+        else if (!destination.equals("Home")) { tab = "Tutti i libri"; openSaga = ""; navigate("Home"); }
         updateBack();
     }
     @Override protected void onStop() {
@@ -3384,7 +3385,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /** Goals are edited in the settings ("Obiettivi di lettura"); this opens them. */
-    private void goals() { settings(); }
+    private void goals() { settings(); settingsSection = "obiettivi"; showCompanion(); }
 
     private void openLink(String url) { try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url))); } catch(ActivityNotFoundException e) { error(new IOException("Nessuna app disponibile per aprire il collegamento.")); } }
     private void collections() {

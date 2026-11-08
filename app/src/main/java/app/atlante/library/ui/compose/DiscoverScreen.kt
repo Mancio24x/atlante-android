@@ -147,18 +147,28 @@ fun DiscoverScreen(discover: Discover, host: SagaHost, onLink: (String) -> Unit,
             if (more) FilledTonalButton(onClick = { page++ }, Modifier.weight(1f).height(48.dp)) { Text("Mostra altri 6") }
         }
 
-        // Charts and collections as rows.
-        OutlinedCard(Modifier.fillMaxWidth().padding(top = 24.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-            colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
-            Text("CLASSIFICHE ITALIANE", Modifier.padding(start = 16.dp, top = 14.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium, color = colors.primary)
-            listOf(Triple("IBS", "Classifica libri, aggiornata ogni giorno", "https://www.ibs.it/classifica/libri"),
-                Triple("laFeltrinelli", "I più venduti in libreria", "https://www.lafeltrinelli.it/classifica/libri")).forEach { (name, sub, url) ->
-                HorizontalDivider(color = colors.outlineVariant)
-                Row(Modifier.fillMaxWidth().clickable { onLink(url) }.padding(horizontal = 16.dp, vertical = 10.dp).heightIn(min = 40.dp)
-                    .semantics { contentDescription = "$name ↗, $sub" }, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { Text(name, style = MaterialTheme.typography.titleSmall); Text(sub, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) }
-                    Icon(androidx.compose.ui.res.painterResource(app.atlante.library.R.drawable.ic_open_in_new), null, Modifier.size(20.dp), tint = colors.primary)
-                }
+        // "Perché hai letto «…»": three books close to the last one you finished (instead of the shop charts).
+        val last = remember { discover.lastRead() }
+        var because by remember { mutableStateOf<List<Discover.Pick>?>(null) }
+        LaunchedEffect(last?.id) {
+            val book = last ?: return@LaunchedEffect
+            val found = try { discover.because(book) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            because = found
+            found.forEachIndexed { i, p -> if (!p.italian) launch {
+                val it = try { discover.italian(p) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { p }
+                because = because?.toMutableList()?.also { l -> if (i < l.size && l[i].workKey == p.workKey) l[i] = it }
+            } }
+        }
+        if (last != null) {
+            Column(Modifier.fillMaxWidth().padding(top = 28.dp)) {
+                Text("PERCHÉ HAI LETTO", Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelMedium, color = colors.primary)
+                Text("«${last.title}»", Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.headlineSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("Tre libri vicini all’ultimo che hai finito: dello stesso autore o dello stesso genere.", Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 14.dp),
+                    style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                val list = because
+                if (list != null && list.isEmpty()) Text("Nessun consiglio ora: serve la connessione a Internet.", Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.bodyMedium)
+                else Grid(list ?: List(3) { null }, host, isSaved, toggle)
             }
         }
         OutlinedCard(onClick = onCollections, modifier = Modifier.fillMaxWidth().padding(top = 12.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),

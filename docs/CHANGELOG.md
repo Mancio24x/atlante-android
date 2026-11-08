@@ -4,6 +4,15 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 (non ogni commit corrisponde a una release). Il dettaglio è in `git log`; qui le modifiche che cambiano il
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
+## 2026-11-08
+
+- **Obiettivi di lettura**: la pagina si apre subito sulle rotelle orizzontali (Material 3) per libri all'anno, libri
+  al mese, pagine e minuti al giorno, ognuna con interruttore e avanzamento; da Home e Statistiche si arriva lì
+  direttamente. **Scopri**: via le classifiche IBS e laFeltrinelli, al loro posto «Perché hai letto «…»» con tre
+  libri vicini all'ultimo finito (stesso autore, poi stesso genere). **Indietro**: da ogni pagina principale torna
+  alla Home; le pagine aperte dentro un'altra (libro, sottopagina delle Impostazioni, mappa di una saga) tornano a
+  quella.
+
 ## 2026-11-07
 
 - **Temi**: scegliendo un tema dalla pagina Aspetto l'app, dopo essersi ricaricata, resta su Aspetto invece di tornare

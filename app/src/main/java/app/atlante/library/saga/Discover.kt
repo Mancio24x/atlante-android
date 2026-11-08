@@ -55,6 +55,54 @@ class Discover(
 
     fun hasMore(count: Int, page: Int) = count == 6 && page < 6
 
+    /** The last book you finished: the one "Perché hai letto" starts from (null when none is read yet). */
+    fun lastRead(): Book? = library().filter { it.status == Book.READ }.maxWithOrNull(compareBy<Book>({ it.finished }, { it.addedAt }))
+
+    /**
+     * "Perché hai letto «X»": three books close to it that you do not have yet. First another book by the same
+     * author (the most read with an Italian edition), then the most read of its genre, one per author.
+     */
+    suspend fun because(book: Book): List<Pick> {
+        val out = ArrayList<Pick>()
+        val books = library()
+        val owned = withContext(Dispatchers.Default) { TitleIndex(books) { it.title } }
+        /**
+         * Already yours (or the book itself)? Titles can be in another language ("A Game of Thrones" = "Il trono di
+         * spade"): for an author you already have, the pick is kept only when its Italian edition is known and is
+         * not one of your books; otherwise it is left out rather than suggesting a book you own.
+         */
+        suspend fun mine(p: Pick): Pick? {
+            if (Suggestions.bundle(p.title) || owned.matches(p.title).isNotEmpty()) return null
+            val surnames = BookMatcher.surnames(p.author)
+            val sameAuthor = books.filter { b -> BookMatcher.surnames(b.author).any { it in surnames } }
+            if (sameAuthor.isEmpty()) return p
+            val it = if (p.italian) p else runCatching { italian(p) }.getOrDefault(p)
+            if (!it.italian) return null
+            val probe = Book().apply { title = it.title; author = it.author }
+            return if (owned.matches(it.title).isNotEmpty() || sameAuthor.any { b -> BookMatcher.score(probe, b) >= BookMatcher.SAME_TITLE_AND_AUTHOR }) null else it
+        }
+        val author = book.author.takeIf { it.isNotBlank() && it != "Autore sconosciuto" }
+        if (author != null) {
+            val json = cached("because-author:${author.lowercase()}") {
+                fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode("author:\"$author\" language:ita", "UTF-8") + "&sort=readinglog&limit=20&lang=it"
+                    + "&fields=key,title,author_name,cover_i,first_publish_year,subject_key,editions,editions.title,editions.language,editions.cover_i")
+            }
+            val surnames = BookMatcher.surnames(author)
+            val byAuthor = json?.let { runCatching { parse(it) }.getOrNull() }.orEmpty().filter { p -> BookMatcher.surnames(p.author).any { it in surnames } }
+            for (p in byAuthor) { val kept = mine(p); if (kept != null) { out += kept; break } }
+        }
+        val genre = Genres.mainOf(book)?.let { name -> GENRES.firstOrNull { it.label == name } }
+        for (g in listOf(genre, null)) {
+            if (out.size >= 3) break
+            for (p in runCatching { picks(g, 0) + picks(g, 1) }.getOrDefault(emptyList())) {
+                if (out.size >= 3) break
+                if (out.any { it.workKey == p.workKey || it.author.equals(p.author, true) }) continue
+                mine(p)?.let { out += it }
+            }
+        }
+        return out.take(3)
+    }
+
     /** Italian edition of a work (title and cover), or the work as it is. */
     suspend fun italian(p: Pick): Pick {
         if (p.workKey.startsWith("hc:")) return p        // Hardcover picks already carry the Italian edition
