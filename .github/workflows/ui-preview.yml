@@ -16,9 +16,14 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+      # Gradle 8.9 downloaded directly, with retries: the setup action asks a version service that can answer 504.
+      - name: Gradle 8.9
+        run: |
+          for url in https://downloads.gradle.org/distributions/gradle-8.9-bin.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip; do
+            for i in 1 2 3 4; do curl -fsSL --retry 3 -o "$RUNNER_TEMP/gradle.zip" "$url" && break 2; sleep 15; done
+          done
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gradle-8.9/bin" >> "$GITHUB_PATH"
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - run: gradle --no-daemon :app:assembleDebug
       - name: Enable emulator acceleration
