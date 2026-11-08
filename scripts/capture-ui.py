@@ -4,7 +4,10 @@ from pathlib import Path
 import json, re, subprocess, sys, time, xml.etree.ElementTree as ET
 out=Path('ui-captures');out.mkdir(exist_ok=True)
 package='app.atlante.library.debug'
-def adb(*args,**kw): return subprocess.check_output(['adb',*args],**kw)
+def adb(*args,**kw):
+    # Never wait for ever: a device that does not answer fails the step instead of the whole run timing out.
+    kw.setdefault('timeout',90)
+    return subprocess.check_output(['adb',*args],**kw)
 def dump():
     # uiautomator can return success while reporting a null root and leaving an old file.
     # Never reuse that stale tree to tap coordinates in a different dialog.
@@ -351,7 +354,16 @@ leave_settings();tap('Biblioteca',exact=True);tap('Tutti  ')
 for node in dump().iter('node'):
     if node.get('content-desc','') in ('Griglia','Elenco'):
         b=list(map(int,re.findall(r'\d+',node.get('bounds',''))));adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2));break
-time.sleep(.6);tap('Scaffale',exact=True);time.sleep(1.2);shot('60-bookcase')
+time.sleep(.6);tap('Scaffale',exact=True);time.sleep(1.2)
+# Evidence: frames drawn while nobody touches the screen (a page that redraws for ever keeps counting) and CPU.
+def frames():
+    out=adb('shell','dumpsys','gfxinfo',package).decode(errors='replace')
+    m=re.search(r'Total frames rendered: (\d+)',out); return int(m.group(1)) if m else -1
+f0=frames();time.sleep(5);f1=frames()
+step(f'bookcase idle: {f1-f0} frames in 5 s')
+(out/'60-bookcase-frames.txt').write_text(f'frames in 5 s without touching: {f1-f0}\n'+adb('shell','top','-b','-n','1','-m','8').decode(errors='replace')+'\n'+adb('shell','dumpsys','gfxinfo',package).decode(errors='replace')[:6000])
+(out/'60-bookcase-raw.png').write_bytes(adb('exec-out','screencap','-p'))
+shot('60-bookcase')
 spines=[n for n in dump().iter('node') if n.get('content-desc','').startswith('Red Rising, di Pierce Brown')]
 assert spines, 'Spine of Red Rising not found on the bookcase'
 # Look of the bookcase: one compact button opens the options over the shelf; they apply at once, a tap outside closes them.
