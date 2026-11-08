@@ -6,6 +6,9 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-08
 
+- **Crash corretto**: «Ripara saghe» (e le altre riparazioni o la sincronizzazione Hardcover in background) chiudeva
+  l'app con «Bad notification for startForeground»: l'icona della notifica prendeva il colore dal tema, che il
+  sistema non può leggere. Nuova icona `ic_notification` senza attributi di tema (`NotificationIconTest`).
 - **Obiettivi di lettura**: la pagina si apre subito sulle rotelle orizzontali (Material 3) per libri all'anno, libri
   al mese, pagine e minuti al giorno, ognuna con interruttore e avanzamento; da Home e Statistiche si arriva lì
   direttamente. **Scopri**: via le classifiche IBS e laFeltrinelli, al loro posto «Perché hai letto «…»» con tre

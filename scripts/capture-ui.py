@@ -311,7 +311,8 @@ if any(n.get('text','') in ('Allow','Consenti') for n in dump().iter('node')): t
 time.sleep(2);shot('54-repair-sagas-started')
 # Evidence for the case where the app is no longer in front: Android's crash buffer and the resumed activity.
 (out/'54-crash-buffer.txt').write_bytes(adb('logcat','-b','crash','-d'))
-(out/'54-resumed.txt').write_bytes(adb('shell','dumpsys','activity','activities').split(b'\n')[0:1]+b'\n'.join(l for l in adb('shell','dumpsys','activity','activities').split(b'\n') if b'Resumed' in l or b'mFocusedApp' in l))
+(out/'54-resumed.txt').write_bytes(b'\n'.join(l for l in adb('shell','dumpsys','activity','activities').split(b'\n') if b'Resumed' in l or b'mFocusedApp' in l))
+assert b'FATAL EXCEPTION' not in adb('logcat','-b','crash','-d'), 'The app crashed after Ripara saghe (see 54-crash-buffer.txt)'
 # The app is usable meanwhile: the library opens, the progress bar is above the navigation.
 leave_settings();tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')   # Settings has no bottom bar
 tap('Home',exact=True);open_settings();tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)

@@ -68,7 +68,7 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
 
     private fun info(message: String): ForegroundInfo {
         val c = applicationContext
-        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_sync).setContentTitle("Sincronizzazione con Hardcover")
+        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Sincronizzazione con Hardcover")
             .setContentText(message).setOnlyAlertOnce(true).setOngoing(true).setSilent(true).setContentIntent(openApp(c))
             .setProgress(total, done, total == 0)
             .addAction(0, "Interrompi", WorkManager.getInstance(c).createCancelPendingIntent(id)).build()
@@ -77,7 +77,7 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
 
     private fun finished(title: String, text: String) {
         val c = applicationContext
-        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_sync).setContentTitle(title).setContentText(text.substringBefore('\n'))
+        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(title).setContentText(text.substringBefore('\n'))
             .setStyle(NotificationCompat.BigTextStyle().bigText(text)).setAutoCancel(true).setContentIntent(openApp(c)).build()
         runCatching { c.getSystemService(NotificationManager::class.java).notify(DONE, n) }
     }

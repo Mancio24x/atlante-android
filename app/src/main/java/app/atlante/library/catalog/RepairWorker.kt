@@ -401,7 +401,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private fun info(): ForegroundInfo {
         val c = applicationContext
         val text = progressText(job)
-        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_sync).setContentTitle(title(job.type))
+        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(title(job.type))
             .setContentText(text).setSubText(job.phase).setOnlyAlertOnce(true).setOngoing(true).setSilent(true).setContentIntent(open(c))
             .setProgress(job.total, job.done, job.total == 0)
             .addAction(0, "Interrompi", WorkManager.getInstance(c).createCancelPendingIntent(id)).build()
@@ -410,7 +410,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     private fun finished(c: Context) {
         val title = when (job.state) { "done" -> title(job.type) + ": fatto"; "failed" -> title(job.type) + ": errore"; else -> title(job.type) }
-        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_sync).setContentTitle(title)
+        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(title)
             .setContentText(job.message.ifEmpty { job.phase }).setAutoCancel(true).setContentIntent(open(c)).build()
         runCatching { c.getSystemService(NotificationManager::class.java).notify(DONE, n) }
     }
