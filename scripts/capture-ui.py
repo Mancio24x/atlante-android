@@ -9,13 +9,14 @@ def dump():
     # uiautomator can return success while reporting a null root and leaving an old file.
     # Never reuse that stale tree to tap coordinates in a different dialog.
     last=None
-    for _ in range(6):
+    # A slow CI emulator may not be idle for a few seconds (a background job just finished): wait longer.
+    for _ in range(15):
         try:
             output=adb('shell','uiautomator','dump','/sdcard/atlante-ui.xml',stderr=subprocess.STDOUT)
             if b'dumped' not in output.lower(): raise RuntimeError(output.decode(errors='replace'))
             return ET.fromstring(adb('exec-out','cat','/sdcard/atlante-ui.xml'))
         except (subprocess.CalledProcessError,ET.ParseError,RuntimeError) as e:
-            last=e;time.sleep(.4)
+            last=e;time.sleep(1)
     raise RuntimeError('No fresh Android UI tree: '+str(last))
 def dismiss_system_dialog(tree):
     # Slow CI emulators sometimes show "<app> isn't responding" for the launcher over our app.

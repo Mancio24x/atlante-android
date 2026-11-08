@@ -1045,7 +1045,7 @@ public final class MainActivity extends AppCompatActivity {
         Picker decade = new Picker(panel, "Anno di pubblicazione", decadeOptions, filterDecade);
         Picker format = new Picker(panel, "Formato ed edizioni", Arrays.asList("Tutti i formati", "EPUB", "TXT", "CBZ", "AZW3", "CATALOGO", LibraryQuery.MANY_EDITIONS), filterFormat);
         Picker order = new Picker(panel, "Ordina per", Arrays.asList("Titolo", "Autore", "Saga"), sortOrder);
-        dialogBuilder().setTitle("Altri filtri e ordine").setView(panel)
+        dialogBuilder().setTitle("Altri filtri e ordine").setView(scrolled(panel))   // scrolls: "Ordina per" is never squeezed
             .setNegativeButton("Annulla", null)
             .setNeutralButton("Azzera", (d, w) -> { clearFilters(); applyLibraryFilters(); })
             .setPositiveButton("Applica", (d, w) -> {
@@ -1098,10 +1098,6 @@ public final class MainActivity extends AppCompatActivity {
     }
     /** Covers per row on a phone: 3, 4 (default) or 5, chosen above the grid. */
     private int density() { int n = getPreferences(MODE_PRIVATE).getInt("gridColumns", 4); return n < 3 || n > 5 ? 4 : n; }
-    private int coverHeight() {
-        int width = getResources().getConfiguration().screenWidthDp, columns = columns();
-        return listView ? 150 : Math.min(310, Math.max(170, (width - 40 - columns * 12) / columns * 14 / 10));
-    }
 
     /** Book grid: a RecyclerView keeps only the visible cards in memory, however large the library. */
     private void showGrid(List<Book> list) {
@@ -1182,40 +1178,25 @@ public final class MainActivity extends AppCompatActivity {
 
     private View bookCard(Book b) {
         if (!listView) return coverCard(b);
-        int coverHeight = coverHeight();
-        FrameLayout cell = new FrameLayout(this);
-        LinearLayout card = column(); card.setPadding(dp(10), dp(10), dp(10), dp(14));
-        MaterialCardView frame = card(card);
-        FrameLayout.LayoutParams cardSize = new FrameLayout.LayoutParams(-1, -2);
-        cardSize.setMargins(dp(5), 0, dp(5), dp(12)); cell.addView(frame, cardSize);
-        if (shelfView) { View shelf = new View(this); shelf.setBackground(background(COPPER, GOLD));
-            FrameLayout.LayoutParams plank = new FrameLayout.LayoutParams(-1, dp(5), Gravity.BOTTOM); plank.setMargins(dp(3),0,dp(3),dp(5)); cell.addView(shelf,plank); }
-        FrameLayout art = new FrameLayout(this); art.setBackground(background(PAPER, Color.TRANSPARENT)); art.setClipToOutline(true);
-        art.setPadding(dp(7), dp(7), dp(7), dp(7));
-        card.addView(art, new LinearLayout.LayoutParams(-1, dp(coverHeight)));
-        TextView fallback = text(b.author + "\n\n" + b.title, 18, SAGE, true);
-        fallback.setBackground(background(PAPER, Color.TRANSPARENT)); fallback.setPadding(dp(12), dp(18), dp(12), dp(18));
-        art.addView(fallback, new FrameLayout.LayoutParams(-1, -1));
-        ImageView image = new ImageView(this); image.setContentDescription("Copertina di " + b.title);
-        image.setScaleType(ImageView.ScaleType.FIT_CENTER); art.addView(image, new FrameLayout.LayoutParams(-1, -1));
-        covers.thumbnail(b.id, store.cover(b), dp(coverHeight), image, fallback);
-        TextView format = text(b.format.equals("CATALOGO") ? (b.medium.isEmpty() ? "SCHEDA" : b.medium.toUpperCase(Locale.ROOT)) : b.format, 10, INK, false); format.setTypeface(Typeface.DEFAULT_BOLD);
-        format.setPadding(dp(5), dp(3), dp(5), dp(3)); format.setBackground(background(WHITE, Color.TRANSPARENT));
-        art.addView(format, new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START));
-        gap(card, 10); TextView bookTitle = text(b.title, 18, INK, true); bookTitle.setMaxLines(2); bookTitle.setEllipsize(TextUtils.TruncateAt.END); card.addView(bookTitle); gap(card, 4);
-        TextView author = text(b.author, 12, MUTED, false); author.setMaxLines(2); card.addView(author);
-        if (!b.series.isEmpty()) { gap(card, 5); card.addView(text("↳ " + b.series + order(b), 12, SAGE, false)); }
-        if (!b.status.equals("Da leggere")) { gap(card, 5); card.addView(text(b.status, 11, COPPER, false)); }
-        gap(card, 6); card.addView(text(progressLabel(b), 11, SAGE, false));
-        if (b.totalPages > 0 || b.percent > 0) { gap(card, 4); card.addView(progressBar(b), new LinearLayout.LayoutParams(-1, -2)); }
-        frame.setOnClickListener(v -> details(b)); art.setOnClickListener(v -> details(b));
+        return listRow(b);
+    }
+    /** List view (as in the library proposals): one compact row per book, cover, title, author, state and format. */
+    private View listRow(Book b) {
+        LinearLayout line = row(); line.setGravity(Gravity.CENTER_VERTICAL); line.setPadding(dp(8), dp(8), dp(8), dp(8));
+        line.addView(coverView(b, dp(48), dp(72)), new LinearLayout.LayoutParams(dp(48), dp(72)));
+        LinearLayout info = column(); info.setPadding(dp(14), 0, dp(8), 0); line.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView t = text(b.title, 16, INK, true); t.setMaxLines(1); t.setEllipsize(TextUtils.TruncateAt.END); info.addView(t);
+        TextView a = text(b.author, 13, MUTED, false); a.setMaxLines(1); a.setEllipsize(TextUtils.TruncateAt.END); info.addView(a);
+        boolean going = b.status.equals(Book.READING) || b.status.equals(Book.PAUSED);
+        String state = going ? b.status + " · " + progress(b) + "%" : b.status.equals(Book.READ) ? "Letto" : !b.series.isEmpty() ? b.series + order(b) : "Da leggere";
+        TextView st = text(state, 12, b.status.equals(Book.PAUSED) ? COPPER : going || b.status.equals(Book.READ) ? SAGE : MUTED, false); st.setMaxLines(1); st.setEllipsize(TextUtils.TruncateAt.END); st.setPadding(0, dp(3), 0, 0); info.addView(st);
+        String fmt = b.format.equals("CATALOGO") ? (b.medium.isEmpty() ? "" : b.medium.toUpperCase(Locale.ROOT)) : b.format;
+        if (!fmt.isEmpty()) { TextView f = text(fmt, 11, MUTED, false); f.setPadding(dp(6), dp(2), dp(6), dp(2)); GradientDrawable g = background(Color.TRANSPARENT, LINE); g.setCornerRadius(dp(6)); f.setBackground(g); line.addView(f); }
+        View rule = new View(this); rule.setBackgroundColor(LINE);
+        LinearLayout cell = column(); cell.addView(line, new LinearLayout.LayoutParams(-1, -2)); cell.addView(rule, new LinearLayout.LayoutParams(-1, dp(1)));
+        cell.setContentDescription(b.title + ", " + b.author + ", " + state); cell.setOnClickListener(v -> details(b)); cell.setOnLongClickListener(v -> { bookActions(b); return true; });
         return cell;
     }
-
-    /**
-     * Grid cell (design 3a): the cover is the card. Saga number top left, a tick when read, a thin progress bar
-     * (accent while reading, copper when paused); the title under it at 3 and 4 columns, the author at 3.
-     */
     /** The views of a grid cell, kept so a recycled cell is refreshed instead of rebuilt while scrolling. */
     private static final class CoverCell { LinearLayout cell; FrameLayout art; ImageView image; TextView fallback, number, tick, title, author; LinearProgressIndicator bar; int columns, width, height; }
     private View coverCard(Book b) {

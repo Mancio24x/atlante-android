@@ -45,6 +45,9 @@ class HomeShot {
         val grid = MainActivity::class.java.getDeclaredField("grid").apply { isAccessible = true }.get(a) as androidx.recyclerview.widget.RecyclerView
         grid.scrollBy(0, 2000); grid.scrollBy(0, -2000)                                     // recycled cells are refreshed, not rebuilt
         shot(a, out, "grid")
+        MainActivity::class.java.getDeclaredField("listView").apply { isAccessible = true }.setBoolean(a, true)
+        MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "list")
+        MainActivity::class.java.getDeclaredField("listView").apply { isAccessible = true }.setBoolean(a, false)
         MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, "Impostazioni"); shot(a, out, "impostazioni")
         val section = MainActivity::class.java.getDeclaredField("settingsSection").apply { isAccessible = true }
         for (page in listOf("lettura", "lingua")) { section.set(a, page); MainActivity::class.java.getDeclaredMethod("showCompanion").apply { isAccessible = true }.invoke(a); shot(a, out, "impostazioni-$page") }
