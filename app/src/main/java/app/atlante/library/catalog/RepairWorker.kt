@@ -81,6 +81,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { save(force = true) }
             throw e
         } catch (e: Exception) {
+            app.atlante.library.diagnostics.CrashLog.error(c, "Riparazione: " + title(type), e)
             job = job.copy(state = "failed", phase = "Errore", finishedAt = System.currentTimeMillis(), message = e.message ?: e.javaClass.simpleName, errors = job.errors + 1)
             save(force = true); finished(c); dropImportFile()
             Result.failure()

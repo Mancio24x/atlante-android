@@ -1,1 +1,1 @@
-<paths xmlns:android="http://schemas.android.com/apk/res/android"><files-path name="books" path="books/" /></paths>
+<paths xmlns:android="http://schemas.android.com/apk/res/android"><files-path name="books" path="books/" /><files-path name="diagnostics" path="diagnostics/" /></paths>

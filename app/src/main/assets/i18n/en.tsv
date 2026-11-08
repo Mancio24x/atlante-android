@@ -1090,3 +1090,13 @@ ricerca libri	book search
 {} di {} completati quest’anno	{} of {} finished this year
 {} di {} lette oggi	{} of {} read today
 {} di {} letti oggi	{} of {} read today
+Diagnostica	Diagnostics
+Nessun errore registrato.	No errors recorded.
+{} rapporti di crash · {} registro degli errori	{} crash reports · {} error log
+Se l’app si chiude o mostra un errore, il dettaglio resta sul telefono (anche in {}). Non viene inviato niente: lo condividi tu, se vuoi.	If the app closes or shows an error, the details stay on the phone (also in {}). Nothing is sent: you share it, if you want.
+Condividi i rapporti	Share the reports
+Svuota	Clear
+Nessun rapporto di errore	No error reports
+L’app si era chiusa per un errore	The app closed because of an error
+Il rapporto è salvato sul telefono, in {} e in Impostazioni › Privacy e progetto. Puoi condividerlo per farlo correggere.	The report is saved on the phone, in {} and in Settings › Privacy and project. You can share it to get it fixed.
+Condividi	Share

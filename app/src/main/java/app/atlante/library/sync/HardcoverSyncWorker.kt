@@ -53,6 +53,7 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
             Result.success(workDataOf(SUMMARY to summary, NOTES to report.notes.take(60).joinToString("\n").take(8000), STOPPED to settings.cancelled))
         } catch (e: Exception) {
             val message = e.message ?: e.javaClass.simpleName
+            app.atlante.library.diagnostics.CrashLog.error(applicationContext, "Sincronizzazione con Hardcover", e)
             finished("Sincronizzazione non riuscita", message)
             Result.failure(workDataOf(ERROR to message))
         }

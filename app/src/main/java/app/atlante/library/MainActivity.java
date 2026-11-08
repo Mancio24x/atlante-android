@@ -133,6 +133,8 @@ public final class MainActivity extends AppCompatActivity {
         applyTheme(prefs.getString("theme", DynamicColors.isDynamicColorAvailable() ? "dynamic" : "atlante"));
         super.onCreate(state);
         app.atlante.library.ui.L.init(this); app.atlante.library.ui.L.watch(getWindow().getDecorView());
+        app.atlante.library.diagnostics.CrashLog.install(this);   // also when the app was started without AtlanteApp (tests)
+        if (state == null) reportCrashesSinceLastTime();
         getOnBackPressedDispatcher().addCallback(this, back);
         if (state != null) {
             tab = state.getString("tab", tab); if (tab.equals("Desideri")) tab = "Tutti i libri"; query = state.getString("query", "");
@@ -320,6 +322,7 @@ public final class MainActivity extends AppCompatActivity {
             case "ripara": panel.addView(app.atlante.library.ui.compose.RepairLibraryView.create(this, palette, repairHost), new LinearLayout.LayoutParams(-1, -2)); break;
             case "hardcover": hardcoverSection(panel); break;
             default: panel.addView(settingsCompose("info"), new LinearLayout.LayoutParams(-1, -2));
+                diagnosticsSection(panel);
                 break;
         }
     }
@@ -725,8 +728,50 @@ public final class MainActivity extends AppCompatActivity {
     app.atlante.library.catalog.CatalogDao catalogDao() {
         try { return app.atlante.library.catalog.CatalogDatabase.get(this).catalog(); } catch (Exception e) { return null; }
     }
+    /**
+     * New crash reports since the last start: copied to Download/Atlante/Diagnostica and, if the app closed for an
+     * error, said once, with a way to share the report.
+     */
+    private void reportCrashesSinceLastTime() {
+        android.content.Context context = getApplicationContext();
+        new Thread(() -> {
+            int crashes = app.atlante.library.diagnostics.CrashLog.exportNew(context);
+            if (crashes > 0) runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return;
+                dialogBuilder().setTitle("L’app si era chiusa per un errore")
+                    .setMessage("Il rapporto è salvato sul telefono, in " + app.atlante.library.diagnostics.CrashLog.publicFolder() + " e in Impostazioni › Privacy e progetto. Puoi condividerlo per farlo correggere.")
+                    .setNegativeButton("Chiudi", null).setPositiveButton("Condividi", (d, w) -> shareDiagnostics()).show(); });
+        }).start();
+    }
+
+    /** Privacy e progetto › Diagnostica: how many reports, where they are, share or clear them. */
+    private void diagnosticsSection(LinearLayout panel) {
+        sectionHeader(panel, "Diagnostica", "", null);
+        java.util.List<File> all = app.atlante.library.diagnostics.CrashLog.reports(this);
+        int crashes = app.atlante.library.diagnostics.CrashLog.crashes(this).size();
+        panel.addView(text(all.isEmpty() ? "Nessun errore registrato." : crashes + " rapporti di crash · " + (all.size() - crashes) + " registro degli errori", 15, INK, false));
+        panel.addView(text("Se l’app si chiude o mostra un errore, il dettaglio resta sul telefono (anche in " + app.atlante.library.diagnostics.CrashLog.publicFolder() + "). Non viene inviato niente: lo condividi tu, se vuoi.", 13, MUTED, false));
+        gap(panel, 8);
+        LinearLayout buttons = row(); panel.addView(buttons);
+        buttons.addView(button("Condividi i rapporti", R.style.Atlante_Button_Outlined, this::shareDiagnostics));
+        if (!all.isEmpty()) { View space = new View(this); buttons.addView(space, new LinearLayout.LayoutParams(dp(8), 1));
+            buttons.addView(button("Svuota", R.style.Atlante_Button_Text, () -> { app.atlante.library.diagnostics.CrashLog.clear(this); showCompanion(); })); }
+        gap(panel, 20);
+    }
+
+    /** Every report (crashes and errors) shared as text files: nothing leaves the phone unless you send it. */
+    void shareDiagnostics() {
+        java.util.List<File> files = app.atlante.library.diagnostics.CrashLog.reports(this);
+        if (files.isEmpty()) { app.atlante.library.ui.L.toast(this, "Nessun rapporto di errore", Toast.LENGTH_SHORT).show(); return; }
+        ArrayList<Uri> uris = new ArrayList<>();
+        for (File f : files) uris.add(androidx.core.content.FileProvider.getUriForFile(this, getPackageName() + ".files", f));
+        Intent send = new Intent(Intent.ACTION_SEND_MULTIPLE).setType("text/plain").putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            .putExtra(Intent.EXTRA_SUBJECT, "Atlante Library · rapporti di errore").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try { startActivity(Intent.createChooser(send, app.atlante.library.ui.L.t("Condividi i rapporti"))); }
+        catch (android.content.ActivityNotFoundException e) { error(e); }
+    }
+
     /** A job that ends after the page is gone (rotation, leaving the app) reports nothing: a dialog on a closed activity crashes. */
-    void error(Exception e) { if (isFinishing() || isDestroyed()) return; dialogBuilder().setTitle("Operazione non completata").setMessage(message(e)).setPositiveButton("Chiudi", null).show(); }
+    void error(Exception e) { app.atlante.library.diagnostics.CrashLog.error(this, "Messaggio di errore in " + destination, e); if (isFinishing() || isDestroyed()) return; dialogBuilder().setTitle("Operazione non completata").setMessage(message(e)).setPositiveButton("Chiudi", null).show(); }
     static String message(Exception e) { return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(); }
     void save() { try { store.save(); } catch (Exception e) { error(e); } }
 
@@ -1504,6 +1549,7 @@ public final class MainActivity extends AppCompatActivity {
 
     /** Book window: a Material bottom sheet with reading state, plot, chapters and the book's details. */
     private void details(Book b) {
+        app.atlante.library.diagnostics.CrashLog.step("scheda del libro");
         if (detailId == null) {
             if (grid != null && grid.getLayoutManager() != null) libraryPositions.put(destination,grid.getLayoutManager().onSaveInstanceState());
             if (companionScroll != null) pagePositions.put(destination,companionScroll.getScrollY());
@@ -2652,6 +2698,7 @@ public final class MainActivity extends AppCompatActivity {
     /** Every repair: queued in the background; the app stays usable; the bar and the notification show the progress. */
     void startRepair(String type) { startRepair(type, false); }
     void startRepair(String type, boolean everything) {
+        app.atlante.library.diagnostics.CrashLog.step("avviata: " + type);
         if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},8);
         app.atlante.library.catalog.RepairWorker.start(this, type, everything); watchRepairs();
@@ -3233,6 +3280,7 @@ public final class MainActivity extends AppCompatActivity {
         view.animate().alpha(1).translationY(0).setDuration(200).start();
     }
     private void navigate(String next) {
+        app.atlante.library.diagnostics.CrashLog.step("pagina: " + next);
         if (grid != null && grid.getLayoutManager() != null && detailId == null) libraryPositions.put(destination, grid.getLayoutManager().onSaveInstanceState());
         if (companionScroll != null && detailId == null) pagePositions.put(destination, companionScroll.getScrollY());
         companionScroll = null; grid = null; body = null; detailId = null;
