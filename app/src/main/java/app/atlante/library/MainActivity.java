@@ -930,10 +930,11 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout list = listCard(p);
         listRow(list, R.drawable.ic_tune, "Filtra per genere", filterGenre.isEmpty() ? "Tutti i generi" : filterGenre, () -> { sheet.dismiss(); chooseGenre(); });
         listRow(list, R.drawable.ic_book, "Filtra per autore", filterAuthor.isEmpty() ? "Tutti gli autori" : filterAuthor, () -> { sheet.dismiss(); chooseAuthor(); });
-        listRow(list, R.drawable.ic_list, "Altri filtri e ordine", (hasMoreFilters() ? "Saga, universo, lingua, anni o formato attivi · " : "Saga, universo, lingua, anni, formato · ") + "per " + sortOrder.toLowerCase(Locale.ROOT), () -> { sheet.dismiss(); libraryFilters(); });
+        listRow(list, R.drawable.ic_list, "Altri filtri e ordine", (moreFilterCount() > 0 ? moreFilterCount() + (moreFilterCount() == 1 ? " filtro attivo" : " filtri attivi") : "Saga, universo, lingua, anni, formato") + " · ordine: " + sortOrder.toLowerCase(Locale.ROOT), () -> { sheet.dismiss(); libraryFilters(); });
         ScrollView scroll = new ScrollView(this); scroll.addView(p); scroll.setBackgroundColor(WHITE);
         sheet.setContentView(scroll); sheet.show();
     }
+    private int moreFilterCount() { int n = 0; for (String f : new String[]{filterSaga, filterUniverse, filterLanguage, filterDecade, filterFormat}) if (!f.isEmpty()) n++; return n; }
     private void removeFilter(String name) {
         switch (name) { case "Genere": filterGenre = ""; break; case "Autore": filterAuthor = ""; break; case "Saga": filterSaga = ""; break; case "Universo": filterUniverse = ""; break;
             case "Lingua": filterLanguage = ""; break; case "Anni": filterDecade = ""; break; default: filterFormat = ""; }
@@ -1049,24 +1050,53 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /** Genere: the normalized main genres of the library, with the number of books. */
+    /**
+     * Genere: a sheet with every main genre of the library and, under each, its sub-genres as written in the
+     * sheets ("Epic Fantasy"), as chips. No numbers: a filter is a choice, not a statistic.
+     */
     private void chooseGenre() {
-        Map<String, Integer> count = new HashMap<>(); int other = 0;
-        for (Book b : store.snapshot()) { java.util.List<String> gs = app.atlante.library.saga.Genres.of(b); for (String g : gs) count.merge(g, 1, Integer::sum); if (gs.isEmpty() && !b.genre.isEmpty()) other++; }
-        ArrayList<String> values = new ArrayList<>(); ArrayList<String> labels = new ArrayList<>();
-        values.add(""); labels.add("Tutti i generi");
-        Map<String, TreeMap<String, Integer>> subs = new HashMap<>();
-        for (Book b : store.snapshot()) { String g = app.atlante.library.saga.Genres.mainOf(b);
-            if (g != null && !b.genre.trim().equalsIgnoreCase(g) && !b.genre.matches(".*[,;/|].*") && b.genre.trim().length() <= 40) subs.computeIfAbsent(g, k -> new TreeMap<>(String.CASE_INSENSITIVE_ORDER)).merge(b.genre.trim(), 1, Integer::sum); }
-        for (String g : app.atlante.library.saga.Genres.INSTANCE.getMain()) if (count.containsKey(g)) {
-            values.add(g); labels.add(g + " · " + count.get(g));
-            // Sub-genres as written in the sheets ("Epic Fantasy"): a filter of their own, under their genre.
-            TreeMap<String, Integer> under = subs.get(g);
-            if (under != null) for (Map.Entry<String, Integer> e : under.entrySet()) { values.add(e.getKey()); labels.add("    › " + e.getKey() + " · " + e.getValue()); }
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet = new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        if (sheet.getWindow() != null) app.atlante.library.ui.L.watch(sheet.getWindow().getDecorView());
+        ScrollView scroll = new ScrollView(this); scroll.addView(genrePanel(sheet::dismiss)); scroll.setBackgroundColor(WHITE);
+        sheet.setContentView(scroll); sheet.getBehavior().setState(com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED); sheet.show();
+    }
+
+    LinearLayout genrePanel(Runnable close) {
+        java.util.Set<String> present = new java.util.HashSet<>(); boolean other = false;
+        Map<String, java.util.TreeSet<String>> subs = new HashMap<>();
+        for (Book b : store.snapshot()) {
+            java.util.List<String> gs = app.atlante.library.saga.Genres.of(b); present.addAll(gs); if (gs.isEmpty() && !b.genre.isEmpty()) other = true;
+            String g = app.atlante.library.saga.Genres.mainOf(b);
+            if (g != null && !b.genre.trim().equalsIgnoreCase(g) && !b.genre.matches(".*[,;/|].*") && b.genre.trim().length() <= 40)
+                subs.computeIfAbsent(g, k -> new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER)).add(b.genre.trim());
         }
-        if (other > 0) { values.add(LibraryQuery.OTHER_GENRE); labels.add(LibraryQuery.OTHER_GENRE + " · " + other); }
-        dialogBuilder().setTitle("Genere").setSingleChoiceItems(labels.toArray(new String[0]), Math.max(0, values.indexOf(filterGenre)), (d, which) -> {
-            filterGenre = values.get(which); d.dismiss(); applyLibraryFilters();
-        }).setNegativeButton("Chiudi", null).show();
+        LinearLayout p = column(); p.setPadding(dp(20), dp(12), dp(20), dp(28));
+        p.addView(text("Genere", 22, INK, true));
+        TextView hint = text("Tocca un genere: la biblioteca mostra solo quei libri.", 14, MUTED, false); hint.setPadding(0, dp(4), 0, dp(14)); p.addView(hint);
+        java.util.function.BiFunction<String, Boolean, Chip> chip = (value, main) -> {
+            boolean on = value.equals(filterGenre);
+            Chip c = new Chip(this); c.setText(value.isEmpty() ? "Tutti i generi" : value); c.setCheckable(true); c.setChecked(on);
+            c.setCheckedIconVisible(true); c.setEnsureMinTouchTargetSize(true);
+            if (main) { c.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL)); c.setTextSize(15); }
+            c.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(on ? blend(WHITE, SAGE, .18f) : WHITE));
+            c.setChipStrokeColor(android.content.res.ColorStateList.valueOf(on ? SAGE : blend(LINE, SAGE, .2f))); c.setChipStrokeWidth(dp(1));
+            c.setTextColor(on ? SAGE : main ? INK : blend(INK, MUTED, .35f)); if (!main) c.setTextSize(14); c.setCheckedIconTint(android.content.res.ColorStateList.valueOf(SAGE));
+            c.setContentDescription((value.isEmpty() ? "Tutti i generi" : value) + (on ? ", selezionato" : ""));
+            c.setOnClickListener(v -> { filterGenre = value; close.run(); applyLibraryFilters(); });
+            return c;
+        };
+        com.google.android.material.chip.ChipGroup all = new com.google.android.material.chip.ChipGroup(this); all.addView(chip.apply("", true)); p.addView(all);
+        for (String g : app.atlante.library.saga.Genres.INSTANCE.getMain()) {
+            if (!present.contains(g)) continue;
+            rule(p); gap(p, 10);
+            com.google.android.material.chip.ChipGroup group = new com.google.android.material.chip.ChipGroup(this); group.setChipSpacingHorizontal(dp(8));
+            group.addView(chip.apply(g, true));
+            java.util.TreeSet<String> under = subs.get(g);
+            if (under != null) for (String sub : under) group.addView(chip.apply(sub, false));
+            p.addView(group); gap(p, 6);
+        }
+        if (other) { rule(p); gap(p, 10); com.google.android.material.chip.ChipGroup g = new com.google.android.material.chip.ChipGroup(this); g.addView(chip.apply(LibraryQuery.OTHER_GENRE, true)); p.addView(g); }
+        return p;
     }
 
     /** Autore: one entry per person ("A & B" is two people), with a search field for long lists. */

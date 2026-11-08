@@ -44,7 +44,8 @@ class HomeShot {
         shot(a, out, "shelf")
         MainActivity::class.java.getDeclaredField("shelfView").apply { isAccessible = true }.setBoolean(a, false)
         for (i in 1..14) store.addCatalog(Book().apply { id = ('a' + i).toString().repeat(64); title = "Libro $i"; author = "Autore $i"; format = "CATALOGO"; totalPages = 300; currentPage = i * 20
-            status = listOf(Book.TO_READ, Book.READING, Book.PAUSED, Book.READ)[i % 4]; if (i % 3 == 0) { series = "Saga"; number = i / 3.0 } })
+            status = listOf(Book.TO_READ, Book.READING, Book.PAUSED, Book.READ)[i % 4]; if (i % 3 == 0) { series = "Saga"; number = i / 3.0 }
+            genre = listOf("Fantasy", "Epic Fantasy", "Giallo", "Thriller psicologico", "Fantascienza", "Romanzo storico", "Cozy mystery")[i % 7] })
         MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a)
         a.window.decorView.measure(android.view.View.MeasureSpec.makeMeasureSpec(a.window.decorView.width, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(a.window.decorView.height, android.view.View.MeasureSpec.EXACTLY))
         a.window.decorView.layout(0, 0, a.window.decorView.width, a.window.decorView.height)
@@ -73,6 +74,13 @@ class HomeShot {
         MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "universi")
         MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, "Home")
         MainActivity::class.java.getDeclaredMethod("openDrawer").apply { isAccessible = true }.invoke(a); shot(a, out, "drawer")
+        // The genre sheet (a dialog: drawn on its own).
+        val panel = MainActivity::class.java.getDeclaredMethod("genrePanel", Runnable::class.java).apply { isAccessible = true }.invoke(a, Runnable { }) as android.view.View
+        val w = a.window.decorView.width
+        panel.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
+        panel.layout(0, 0, w, panel.measuredHeight)
+        val bm = Bitmap.createBitmap(w, panel.measuredHeight, Bitmap.Config.ARGB_8888); val cv = Canvas(bm); cv.drawColor(android.graphics.Color.WHITE); panel.draw(cv)
+        FileOutputStream("$out/" + (if (english) "en-" else "") + "generi.png").use { bm.compress(Bitmap.CompressFormat.PNG, 100, it) }
         c.pause().stop().destroy()
         L.misses?.let { java.io.File("$out/misses.txt").writeText(it.joinToString("\n") { m -> m.replace("\n", "\\n") }) }
         L.misses = null

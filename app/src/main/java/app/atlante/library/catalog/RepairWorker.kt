@@ -67,7 +67,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 GENRES -> genres(c, store)
             }
             job = job.copy(state = "done", phase = "Completato", finishedAt = System.currentTimeMillis())
-            save(force = true); finished(c)
+            save(force = true); finished(c); dao.dropOlderResults(type, id)
             Result.success()
         } catch (e: CancellationException) {
             // You stopped it: "cancelled"; Android stopped it: it will start again from the checkpoint.
@@ -83,7 +83,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         } catch (e: Exception) {
             app.atlante.library.diagnostics.CrashLog.error(c, "Riparazione: " + title(type), e)
             job = job.copy(state = "failed", phase = "Errore", finishedAt = System.currentTimeMillis(), message = e.message ?: e.javaClass.simpleName, errors = job.errors + 1)
-            save(force = true); finished(c); dropImportFile()
+            save(force = true); finished(c); dropImportFile(); dao.dropOlderResults(type, id)
             Result.failure()
         } catch (e: OutOfMemoryError) {
             // A file too big for this phone: reported as such, the library is untouched (nothing was saved yet).
@@ -412,6 +412,8 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     }
 
     private fun finished(c: Context) {
+        // The progress notice goes away at the end: only the result stays (one, replaced by the next).
+        runCatching { c.getSystemService(NotificationManager::class.java).cancel(NOTICE) }
         val title = when (job.state) { "done" -> title(job.type) + ": fatto"; "failed" -> title(job.type) + ": errore"; else -> title(job.type) }
         val n = NotificationCompat.Builder(c.also { app.atlante.library.ui.L.init(it) }, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(app.atlante.library.ui.L.t(title))
             .setContentText(app.atlante.library.ui.L.t(job.message.ifEmpty { job.phase })).setAutoCancel(true).setContentIntent(open(c)).build()

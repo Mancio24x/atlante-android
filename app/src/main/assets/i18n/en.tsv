@@ -1105,3 +1105,11 @@ Se l’app si chiude o va in errore, posso inviare il rapporto al progetto, ogni
 No, grazie	No, thanks
 Invia i rapporti	Send reports
 Invia i rapporti al progetto (senza dati personali)	Send reports to the project (no personal data)
+Tocca un genere: la biblioteca mostra solo quei libri.	Tap a genre: the library shows only those books.
+{} filtri attivi	{} filters on
+{} filtro attivo	{} filter on
+Saga, universo, lingua, anni, formato	Series, universe, language, years, format
+ordine: {}	order: {}
+ordine: titolo	order: title
+ordine: autore	order: author
+ordine: saga	order: series

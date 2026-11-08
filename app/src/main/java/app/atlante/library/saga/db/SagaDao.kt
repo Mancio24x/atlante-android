@@ -65,6 +65,8 @@ interface SagaDao {
 
     // ---- background repairs ----
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putJob(j: RepairJob)
+    /** One result per repair: the newer run replaces the older ones (their proposals are found again by it). */
+    @Query("DELETE FROM repair_jobs WHERE type = :type AND id != :keep AND state IN ('done', 'failed', 'cancelled')") suspend fun dropOlderResults(type: String, keep: String)
     @Query("SELECT * FROM repair_jobs WHERE id = :id") suspend fun job(id: String): RepairJob?
     @Query("SELECT * FROM repair_jobs ORDER BY startedAt DESC LIMIT 30") fun jobs(): kotlinx.coroutines.flow.Flow<List<RepairJob>>
     @Query("SELECT * FROM repair_jobs WHERE state IN ('queued', 'running') ORDER BY startedAt") fun activeJobs(): kotlinx.coroutines.flow.Flow<List<RepairJob>>
