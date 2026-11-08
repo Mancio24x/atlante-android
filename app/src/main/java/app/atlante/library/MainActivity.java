@@ -264,7 +264,8 @@ public final class MainActivity extends AppCompatActivity {
     private static final String[][] SETTINGS = {
         {"PERSONALE","aspetto","Aspetto","tema colori scuro chiaro"},{"PERSONALE","obiettivi","Obiettivi di lettura","rotta libri pagine minuti"},
         {"PERSONALE","lettura","Lettura","lettore testo dimensione scuro"},{"PERSONALE","lingua","Lingua","lingua app interfaccia inglese english italiano ricerca libri"},
-        {"BIBLIOTECA","libreria","Libreria e catalogo","importa ebook epub copertine saghe doppioni generi cache qualità operazioni"},{"BIBLIOTECA","hardcover","Hardcover","chiave saghe universi"},
+        {"BIBLIOTECA","libreria","Libreria e catalogo","importa ebook epub copertine cache"},
+        {"BIBLIOTECA","ripara","Ripara libreria","ripara duplicati doppioni saghe mappe metadati copertine generi hardcover qualità operazioni background"},{"BIBLIOTECA","hardcover","Hardcover","chiave saghe universi"},
         {"INFO","info","Privacy e progetto","privacy github aggiornamenti versione"}};
     private String settingsTitle(String key) { if (key.equals("tema")) return "Il mio tema"; for (String[] r : SETTINGS) if (r[1].equals(key)) return r[2]; return "Impostazioni"; }
     private String settingsValue(String key) {
@@ -275,15 +276,16 @@ public final class MainActivity extends AppCompatActivity {
                 if (g.getYearOn()) v.add(g.getYearBooks() + " libri l’anno"); if (g.getMonthOn()) v.add(g.getMonthBooks() + " al mese"); if (g.getDailyPagesOn()) v.add(g.getDailyPages() + " pagine al giorno"); if (g.getDailyMinutesOn()) v.add(g.getDailyMinutes() + " minuti al giorno");
                 return v.isEmpty() ? "Nessun obiettivo" : TextUtils.join(" · ", v); }
             case "lettura": return (readerDark ? "Lettore scuro" : "Lettore chiaro") + " · testo " + Math.round(fontSize);
-            case "lingua": return (app.atlante.library.ui.L.getEnglish() ? "English" : "Italiano") + " · " + OnlineCatalog.languageName(prefs.getString("bookLanguage", app.atlante.library.ui.L.getEnglish() ? "eng" : "ita")) + (prefs.getBoolean("onlyLanguage", false) ? " · solo questa" : "");
-            case "libreria": return "Importa eBook, copertine, saghe, cache";
+            case "lingua": return (app.atlante.library.ui.L.getEnglish() ? "English" : "Italiano") + " · ricerca libri: " + OnlineCatalog.languageName(prefs.getString("bookLanguage", app.atlante.library.ui.L.getEnglish() ? "eng" : "ita")) + (prefs.getBoolean("onlyLanguage", false) ? " · solo questa" : "");
+            case "libreria": return "Importa eBook, copertine, cache";
+            case "ripara": return "Duplicati, saghe, mappe, copertine, generi";
             case "hardcover": return app.atlante.library.sync.HardcoverAuth.connected(this) ? "Collegato · saghe, numeri e universi" : "Non collegato";
             default: return "Cosa resta sul telefono · aggiornamenti";
         }
     }
     private int settingsIcon(String key) {
         switch (key) { case "aspetto": return R.drawable.ic_palette; case "obiettivi": return R.drawable.ic_flag; case "lettura": return R.drawable.ic_book; case "lingua": return R.drawable.ic_translate;
-            case "libreria": return R.drawable.ic_library_check; case "hardcover": return R.drawable.ic_link; default: return R.drawable.ic_info; }
+            case "libreria": return R.drawable.ic_library_check; case "ripara": return R.drawable.ic_build; case "hardcover": return R.drawable.ic_link; default: return R.drawable.ic_info; }
     }
     private void settingsPage(LinearLayout panel) {
         if (settingsSection.isEmpty()) { panel.addView(settingsCompose(""), new LinearLayout.LayoutParams(-1, -2)); return; }
@@ -308,20 +310,13 @@ public final class MainActivity extends AppCompatActivity {
         MaterialButton importBooks = (MaterialButton) button("Importa eBook", true, this::chooseBooks); importBooks.setIconResource(R.drawable.ic_add); importBooks.setEnabled(!busy);
         panel.addView(importBooks, new LinearLayout.LayoutParams(-1,-2));
         panel.addView(text("EPUB, TXT, CBZ e AZW3 senza DRM, anche più file insieme. Prima di aggiungerli vedi titolo, autore e copertina e puoi correggerli; se il libro è già nella libreria puoi collegare il file alla sua scheda.",12,MUTED,false)); gap(panel,12);
-        panel.addView(button("Cerca e migliora le copertine",false,() -> { improveCovers(store.snapshot(), true, true); }));
-        panel.addView(text("Scarica le copertine mancanti e sostituisce quelle piccole o sfocate con una più nitida della stessa edizione o dello stesso titolo e autore. Le copertine scelte da te non vengono toccate.",12,MUTED,false)); gap(panel,8);
         coverPreference(panel); gap(panel,12);
-        panel.addView(button("Qualità del catalogo",false,this::catalogQuality));
-        panel.addView(button("Operazioni in background",R.style.Atlante_Button_Text,this::showOperations));
-        panel.addView(text("Libri senza copertina, autore, ISBN, genere o pagine, possibili doppioni, saghe senza numero o da verificare: in un posto solo, con le azioni per sistemarli.",12,MUTED,false)); gap(panel,12);
-        LinearLayout sagas = column();
-        sagas.addView(app.atlante.library.ui.compose.SagaRepairView.create(this, palette, (type, everything) -> startRepair(type, everything), this::showOperations)); gap(sagas,8);
-        sagas.addView(text("Proposte rapide dai titoli e dai metadati già presenti, senza connessione:",14,MUTED,false));
-        sagas.addView(button("Riconosci saghe e ordine di lettura",false,this::recognizeSeries));
-        panel.addView(expander("Ripara saghe e mappe", sagas, false));
+        panel.addView(button("Ripara libreria ›",false,() -> { settingsSection = "ripara"; showCompanion(); }));
+        panel.addView(text("Duplicati, saghe, mappe, metadati, copertine e generi: ora sono tutti in Impostazioni › Ripara libreria.",12,MUTED,false)); gap(panel,12);
         panel.addView(expander("Cache e dati temporanei", app.atlante.library.ui.compose.CacheSettingsView.create(this, palette), false)); gap(panel,20);
 
                 break; }
+            case "ripara": panel.addView(app.atlante.library.ui.compose.RepairLibraryView.create(this, palette, repairHost), new LinearLayout.LayoutParams(-1, -2)); break;
             case "hardcover": hardcoverSection(panel); break;
             default: panel.addView(settingsCompose("info"), new LinearLayout.LayoutParams(-1, -2));
                 break;
@@ -332,7 +327,7 @@ public final class MainActivity extends AppCompatActivity {
     private View settingsCompose(String page) {
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         ArrayList<app.atlante.library.ui.compose.SettingsRow> rows = new ArrayList<>();
-        for (String[] r : SETTINGS) rows.add(new app.atlante.library.ui.compose.SettingsRow(r[0], r[1], r[2], settingsValue(r[1]), settingsIcon(r[1]), r[3], r[1].equals("libreria") ? prefs.getInt("qualityProblems", 0) : 0));
+        for (String[] r : SETTINGS) rows.add(new app.atlante.library.ui.compose.SettingsRow(r[0], r[1], r[2], settingsValue(r[1]), settingsIcon(r[1]), r[3], r[1].equals("ripara") ? prefs.getInt("qualityProblems", 0) : 0));
         ArrayList<String> languages = new ArrayList<>(); int chosen = 0; String code = prefs.getString("bookLanguage", app.atlante.library.ui.L.getEnglish() ? "eng" : "ita");
         for (int i = 0; i < OnlineCatalog.LANGUAGES.length; i++) { languages.add(OnlineCatalog.LANGUAGES[i][2]); if (OnlineCatalog.LANGUAGES[i][0].equals(code)) chosen = i; }
         app.atlante.library.ui.compose.SettingsState state = new app.atlante.library.ui.compose.SettingsState(rows, readerDark, fontSize, languages, chosen, prefs.getBoolean("onlyLanguage", false),
@@ -2660,6 +2655,17 @@ public final class MainActivity extends AppCompatActivity {
 
     private void renderAfterRepair() { if (isFinishing() || isDestroyed()) return; if (reading == null && detailId == null) { if (destination.equals("Biblioteca") || destination.equals("Cerca")) showLibrary(); else showCompanion(); } }
 
+    private final app.atlante.library.ui.compose.RepairLibraryHost repairHost = new app.atlante.library.ui.compose.RepairLibraryHost() {
+        @Override public void start(String type, boolean everything) {
+            if (type.equals(app.atlante.library.catalog.RepairWorker.COVERS)) improveCovers(store.snapshot(), true, true); else startRepair(type, everything);
+        }
+        @Override public void cancel(String id) { app.atlante.library.catalog.RepairWorker.cancel(MainActivity.this, id); }
+        @Override public void operations() { showOperations(); }
+        @Override public void quality() { catalogQuality(); }
+        @Override public void recognize() { recognizeSeries(); }
+        @Override public String undoLastMerge() { return operationsHost.undoLastMerge(); }
+        @Override public boolean hardcover() { return app.atlante.library.sync.HardcoverAuth.connected(MainActivity.this); }
+    };
     private final app.atlante.library.ui.compose.OperationsHost operationsHost = new app.atlante.library.ui.compose.OperationsHost() {
         @Override public void start(String type) { startRepair(type); }
         @Override public void cancel(String id) { app.atlante.library.catalog.RepairWorker.cancel(MainActivity.this, id); }
@@ -3267,7 +3273,7 @@ public final class MainActivity extends AppCompatActivity {
         if(destination.equals("Statistiche")) {
             android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
             app.atlante.library.model.ReadingGoals g=new app.atlante.library.model.ReadingGoals(prefs);
-            composePage(app.atlante.library.ui.compose.StatisticsView.create(this,palette,store.snapshot(),g.getYearOn()?g.getYearBooks():0,g.getMonthOn()?g.getMonthBooks():0,motion(),this::goals,g));
+            composePage(app.atlante.library.ui.compose.StatisticsView.create(this,palette,store.snapshot(),g.getYearOn()?g.getYearBooks():0,g.getMonthOn()?g.getMonthBooks():0,motion(),this::goals,g,()->startRepair(app.atlante.library.catalog.RepairWorker.GENRES)));
             return;
         }
         if(destination.equals("Scopri")) {

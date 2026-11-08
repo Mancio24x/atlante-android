@@ -98,9 +98,17 @@ class BibliographicRepairTest {
         assertTrue(pairs().isEmpty())
     }
 
-    /** Uncertain (same title and author, no identifier): proposed, not merged; "Non unire" is remembered. */
-    @Test fun probablePairIsOnlyProposed() {
+    /** The same title word for word and the same author, no identifier: the same book added twice, merged. */
+    @Test fun identicalTitleAndAuthorIsMerged() {
         store.addCatalog(book('a', "Il deserto dei Tartari", "Dino Buzzati")); store.addCatalog(book('b', "Il deserto dei tartari", "Dino Buzzati"))
+        val p = pairs().single()
+        assertEquals(Confidence.VERIFIED, p.confidence); assertTrue(p.automatic)
+        repair(); assertEquals(1, store.snapshot().size)
+    }
+
+    /** Uncertain (a title with more words, same author, no identifier): proposed, not merged; "Non unire" is remembered. */
+    @Test fun probablePairIsOnlyProposed() {
+        store.addCatalog(book('a', "Il deserto dei Tartari e altri racconti", "Dino Buzzati")); store.addCatalog(book('b', "Il deserto dei Tartari e altri racconti : romanzo", "Dino Buzzati"))
         val p = pairs().single()
         assertEquals(Confidence.PROBABLE, p.confidence); assertFalse(p.automatic)
         repair(); assertEquals(2, store.snapshot().size)

@@ -1050,3 +1050,39 @@ ISBN / identificatore	ISBN / identifier
 meno	less
 circa {}	about {}
 Inserisci almeno due caratteri	Enter at least two characters
+Alcuni libri non hanno un genere: indicizzali in background.	Some books have no genre: index them in the background.
+Ricontrolla i generi della biblioteca in background.	Recheck the library's genres in the background.
+Indicizza i generi	Index genres
+Ripara libreria	Repair library
+Ripara libreria ›	Repair library ›
+Duplicati, saghe, mappe, copertine, generi	Duplicates, series, maps, covers, genres
+Importa eBook, copertine, cache	Import eBooks, covers, cache
+Duplicati, saghe, mappe, metadati, copertine e generi: ora sono tutti in Impostazioni › Ripara libreria.	Duplicates, series, maps, metadata, covers and genres: they are all in Settings › Repair library now.
+Duplicati di Hardcover	Hardcover duplicates
+Ripara mappe	Repair maps
+Copertine	Covers
+Unisce le schede dello stesso libro: stesso ISBN o file, stessa opera nel catalogo, o stesso titolo e stesso autore. Note, sessioni e voto restano; i casi dubbi restano da decidere.	Merges the pages of the same book: same ISBN or file, same work in the catalogue, or same title and same author. Notes, sessions and rating stay; doubtful cases are left for you to decide.
+Le copie create da Sync che Hardcover lega ai tuoi libri (per esempio l’edizione inglese di un libro italiano).	The copies created by Sync that Hardcover ties to your books (for example the English edition of an Italian book).
+Ricontrolla saga, numero e universo: catalogo offline, poi Hardcover, Wikidata e Open Library. Le tue scelte non vengono toccate.	Rechecks series, number and universe: offline catalogue, then Hardcover, Wikidata and Open Library. Your choices are not touched.
+Ricostruisce l’ordine delle mappe delle saghe secondo le fonti, senza inventare numeri.	Rebuilds the order of series maps from the sources, without inventing numbers.
+Riempie solo i campi vuoti (autore, editore, anno, pagine, ISBN): quello che hai scritto resta.	Fills only empty fields (author, publisher, year, pages, ISBN): what you wrote stays.
+Scarica le copertine mancanti e sostituisce quelle piccole o sfocate. Le copertine scelte da te non vengono toccate.	Downloads missing covers and replaces small or blurry ones. Covers you chose are not touched.
+Ogni riparazione lavora in background: puoi uscire da questa pagina o dall’app, l’avanzamento resta nella notifica.	Every repair works in the background: you can leave this page or the app, the progress stays in the notification.
+In coda dopo «{}»	Queued after «{}»
+{} modifiche applicate	{} changes applied
+{} duplicati	{} duplicates
+Non riuscita: {}	Failed: {}
+Avvia	Start
+Decidi ({})	Decide ({})
+Senza connessione	Offline
+Tutte le operazioni e i risultati	All operations and results
+stesso titolo e stesso autore	same title and same author
+Completa metadati (catalogo offline, poi online)	Complete metadata (offline catalogue, then online)
+Tutto a posto ✓	All good ✓
+Senza genere riconosciuto	No recognised genre
+Senza ISBN	No ISBN
+Ripara duplicati Hardcover	Repair Hardcover duplicates
+Ricerca delle copertine	Cover search
+Applicazione delle modifiche	Applying changes
+Nessuna operazione finora.	No operations so far.
+ricerca libri	book search

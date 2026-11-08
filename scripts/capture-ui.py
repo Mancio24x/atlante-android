@@ -280,8 +280,8 @@ print('Saga carousels completed.')
 # Cache settings (Compose): space used, limits and manual cleanup; personal data is not touched.
 back();open_settings();tap('Libreria e catalogo',True);tap('Cache e dati temporanei',True);tap('Svuota tutta la cache',True);time.sleep(1.5);shot('53-cache-settings')
 assert any(n.get('text','')=='Cache svuotata' for n in dump().iter('node')), 'Cache cleanup did not confirm'
-# Qualità del catalogo: every check with its count (its button is above the cache section: scroll back up first).
-for _ in range(4): adb('shell','input','swipe','540','600','540','1400','250');time.sleep(.3)
+# Ripara libreria (Impostazioni): every repair on one page with its own state; Qualità del catalogo at the bottom.
+leave_settings();tap('Home',exact=True);open_settings();tap('Ripara libreria',True)
 tap('Qualità del catalogo',True)
 for _ in range(20):
     if any('libri controllati' in n.get('text','') for n in dump().iter('node')): break
@@ -292,20 +292,23 @@ tap('Chiudi',exact=True)
 assert any(b['title']=='Red Rising' for b in catalog()), 'Cache cleanup touched the library'
 print('Cache settings completed.')
 
-# Ripara saghe: runs in the background on the whole sample library; the app stays usable; the result is in
-# Operazioni in background. The library itself is unchanged except empty saga fields.
+# Ripara saghe: runs in the background on the whole sample library; the app stays usable; its card shows the
+# state. The library itself is unchanged except empty saga fields.
 before=len(catalog())
-leave_settings();tap('Home',exact=True);open_settings()   # Settings has no bottom bar: back to the page under them, then Home
-tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)   # opens the section
-time.sleep(.6);adb('shell','input','swipe','540','1250','540','750','300');time.sleep(.6)
-# Tap the button only well inside the screen: near the bottom edge a tap is Android's home gesture.
-for _ in range(4):
+leave_settings();tap('Home',exact=True);open_settings();tap('Ripara libreria',True)
+# The "Avvia" of the Ripara saghe card (Hardcover is not connected here: duplicates, then sagas), well inside the screen.
+for _ in range(6):
     tree=dump();screen=list(map(int,re.findall(r'\d+',tree.find('node').get('bounds','0,0,1080,1920'))))
-    buttons=[n for n in tree.iter('node') if n.get('text','')=='Ripara saghe']
-    b=list(map(int,re.findall(r'\d+',buttons[-1].get('bounds',''))))
-    if (b[1]+b[3])//2 < screen[3]*0.8: break
+    titles=[n for n in tree.iter('node') if n.get('text','')=='Ripara saghe']
+    starts=[n for n in tree.iter('node') if n.get('text','')=='Avvia']
+    if titles:
+        ty=list(map(int,re.findall(r'\d+',titles[0].get('bounds',''))))[1]
+        below=[s_ for s_ in starts if list(map(int,re.findall(r'\d+',s_.get('bounds',''))))[1]>ty]
+        if below:
+            b_=list(map(int,re.findall(r'\d+',below[0].get('bounds',''))))
+            if (b_[1]+b_[3])//2 < screen[3]*0.8: break
     adb('shell','input','swipe','540','1250','540','850','300');time.sleep(.6)
-adb('shell','input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2))
+adb('shell','input','tap',str((b_[0]+b_[2])//2),str((b_[1]+b_[3])//2))
 time.sleep(1.5)
 if any(n.get('text','') in ('Allow','Consenti') for n in dump().iter('node')): tap('Allow') if any(n.get('text','')=='Allow' for n in dump().iter('node')) else tap('Consenti')
 time.sleep(2);shot('54-repair-sagas-started')
@@ -315,15 +318,13 @@ time.sleep(2);shot('54-repair-sagas-started')
 assert b'FATAL EXCEPTION' not in adb('logcat','-b','crash','-d'), 'The app crashed after Ripara saghe (see 54-crash-buffer.txt)'
 # The app is usable meanwhile: the library opens, the progress bar is above the navigation.
 leave_settings();tap('Biblioteca',exact=True);time.sleep(1);shot('54b-library-during-repair')   # Settings has no bottom bar
-tap('Home',exact=True);open_settings();tap('Libreria e catalogo',True);tap('Ripara saghe e mappe',True,exact=True)
-tap('Operazioni in background',True)
+tap('Home',exact=True);open_settings();tap('Ripara libreria',True)
 for _ in range(120):
-    if any(n.get('text','')=='Completata' or n.get('text','').startswith('Completata ·') for n in dump().iter('node')): break
+    if any(n.get('text','').startswith('Completata') for n in dump().iter('node')): break
     time.sleep(2)
-shot('54c-operations')
+shot('54c-repair-library')
 assert any(n.get('text','').startswith('Completata') for n in dump().iter('node')), 'Ripara saghe did not finish in the background'
 assert len(catalog())==before, 'Ripara saghe changed the number of books'
-tap('Chiudi',exact=True)
 print('Repair completed.')
 
 # Bookcase: spines on shelves; a tap on a spine opens the book.

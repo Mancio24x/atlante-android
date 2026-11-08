@@ -60,6 +60,10 @@ object BibliographicEngine {
         if (ia?.hardcoverBook != null && ia.hardcoverBook == ib?.hardcoverBook) reasons += "stesso libro su Hardcover"
         if (ia?.catalogWork != null && ia.catalogWork == ib?.catalogWork) reasons += "stessa opera nel catalogo offline (Wikidata Q${ia.catalogWork})"
         if (ia?.graphWork != null && ia.graphWork == ib?.graphWork) reasons += "stessa opera riconosciuta dal motore delle saghe"
+        // The same title word for word (case, accents and punctuation aside) and the same author: the same book
+        // added twice (a search, a sync). Saga volumes with other numbers were already left out above.
+        if (score >= BookMatcher.SAME_TITLE_AND_AUTHOR && authors == true && SearchIndex.normalize(a.title) == SearchIndex.normalize(b.title)
+            && (a.number <= 0 || b.number <= 0 || a.number == b.number)) reasons += "stesso titolo e stesso autore"
         if (reasons.isNotEmpty()) return Confidence.VERIFIED to reasons
         if (score >= BookMatcher.SAME_TITLE_AND_AUTHOR && authors == true) return Confidence.PROBABLE to listOf("stesso titolo e stesso autore, senza identificativi in comune")
         return null

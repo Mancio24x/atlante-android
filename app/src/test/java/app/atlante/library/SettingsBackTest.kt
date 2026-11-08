@@ -17,7 +17,7 @@ class SettingsBackTest {
 
     @Test fun backLeavesEverySettingsPage() {
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup(); val a = controller.get()
-        for (page in listOf("aspetto", "obiettivi", "lettura", "lingua", "libreria", "info")) {
+        for (page in listOf("aspetto", "obiettivi", "lettura", "lingua", "libreria", "ripara", "info")) {
             call(a, "settings"); section.set(a, page); call(a, "showCompanion")
             a.onBackPressedDispatcher.onBackPressed()
             assertEquals(page, "", section.get(a)); assertEquals("Impostazioni", destination.get(a))

@@ -45,4 +45,21 @@ class RepairWorkerTest {
         val rosa = all.single { it.title == "Il nome della rosa" }
         assertEquals(1, ReadingJournal.array(rosa, "sessions").length()); assertEquals(Book.READ, rosa.status)
     }
+
+    /** The usual double: the same book added twice (search, sync), same title and author, no ISBN. It is merged. */
+    @Test fun sameTitleAndAuthorWithoutIsbnIsMerged() = runBlocking {
+        File(context.filesDir, "library.json").delete(); File(context.filesDir, "books").deleteRecursively()
+        val store = LibraryStore.shared(context)
+        for (b in store.snapshot()) store.remove(b)
+        fun book(id: Char, title: String, author: String) = Book().apply { this.id = id.toString().repeat(64); this.title = title; this.author = author; format = "CATALOGO" }
+        val a = book('d', "Il trono di spade", "George R. R. Martin").apply { status = Book.READING; currentPage = 120; totalPages = 800 }
+        val b = book('e', "Il Trono di Spade", "George R.R. Martin")
+        val other = book('f', "Il trono di spade", "Altro Autore")                       // same title, another author: kept
+        store.addCatalog(a); store.addCatalog(b); store.addCatalog(other)
+        val worker = TestListenableWorkerBuilder<RepairWorker>(context).setInputData(workDataOf(RepairWorker.TYPE to RepairWorker.LIBRARY)).build()
+        assertTrue(worker.doWork() is ListenableWorker.Result.Success)
+        val all = store.snapshot()
+        assertEquals(2, all.size)
+        assertEquals(120, all.single { it.author.contains("Martin") }.currentPage)
+    }
 }

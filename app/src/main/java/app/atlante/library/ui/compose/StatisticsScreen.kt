@@ -65,6 +65,8 @@ data class DaySession(val title: String, val pages: Int, val minutes: Long)
 /** Everything the Statistics screen shows, computed once from the catalog. */
 class StatsData(books: List<Book>, val yearGoal: Int, val monthGoal: Int, today: LocalDate = LocalDate.now()) {
     val pages: Long; val minutes: Long
+    /** "Indicizza i generi" under the genre chart (null in tests: no button). */
+    var onIndexGenres: Runnable? = null
     val streak = ReadingJournal.streak(books, today)
     val yearDone = ReadingJournal.completed(books, today, false)
     val monthDone = ReadingJournal.completed(books, today, true)
@@ -100,9 +102,9 @@ object StatisticsView {
     /** Called from MainActivity: the Compose screen inside the existing View-based navigation. */
     @JvmStatic
     fun create(activity: ComponentActivity, palette: ThemePalette, books: List<Book>, yearGoal: Int, monthGoal: Int, motion: Boolean, onGoals: Runnable,
-               goals: app.atlante.library.model.ReadingGoals? = null): View =
+               goals: app.atlante.library.model.ReadingGoals? = null, onIndexGenres: Runnable? = null): View =
         ComposeView(activity).apply {
-            val data = StatsData(books, yearGoal, monthGoal).also { d -> goals?.takeIf { it.monthOn }?.let { g -> d.monthHistory = g.history(books, 6) } }
+            val data = StatsData(books, yearGoal, monthGoal).also { d -> goals?.takeIf { it.monthOn }?.let { g -> d.monthHistory = g.history(books, 6) }; d.onIndexGenres = onIndexGenres }
             setContent { AtlanteTheme(palette) { StatisticsScreen(data, palette, motion) { onGoals.run() } } }
         }
 }
@@ -364,7 +366,11 @@ private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minu
                 }
             }
         }
-        if (genres.any { it.first == NO_GENRE }) Text("Per i libri senza genere: Impostazioni › Libreria e catalogo › Indicizza i generi.",
-            Modifier.padding(top = 10.dp), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        // Right under the chart: index the genres in the background (books without one, or with an unreliable label).
+        data.onIndexGenres?.let { run ->
+            Text(if (genres.any { it.first == NO_GENRE }) "Alcuni libri non hanno un genere: indicizzali in background." else "Ricontrolla i generi della biblioteca in background.",
+                Modifier.padding(top = 14.dp), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            OutlinedButton(onClick = { run.run() }, Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("Indicizza i generi") }
+        }
     }
 }
