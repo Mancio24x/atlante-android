@@ -3625,7 +3625,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout p=editorPage(timed?"Concludi la sessione":"Dove sei arrivato?",b);
         p.addView(text(b.title,24,INK,true)); p.addView(text(progressLabel(b),14,MUTED,false)); gap(p,16);
         // Horizontal wheels (Compose): Pagine, Percentuale, Pagine lette; synced when the total is known.
-        app.atlante.library.ui.compose.ProgressWheelState wheels=new app.atlante.library.ui.compose.ProgressWheelState(b.currentPage,b.totalPages,progress(b),b.currentPage,prefs.getInt("progressMode",0),(int)Math.min(1440,seconds/60),timed);
+        app.atlante.library.ui.compose.ProgressWheelState wheels=new app.atlante.library.ui.compose.ProgressWheelState(b.currentPage,b.totalPages,progress(b),b.currentPage,prefs.getInt("progressMode",0),(int)Math.min(1440,(timed?seconds:ReadingJournal.manualSeconds(b,java.time.LocalDate.now()))/60),timed);
         p.addView(app.atlante.library.ui.compose.ProgressWheelsView.create(this,palette,wheels,prefs),new LinearLayout.LayoutParams(-1,-2)); gap(p,16);
 
         // Chapter reached: a wheel with the book's chapter titles (shared with Calibre).
@@ -3659,7 +3659,14 @@ public final class MainActivity extends AppCompatActivity {
                 long duration=timed&&wheels.getMinutes()==seconds/60?seconds:wheels.getMinutes()*60L;
                 if(chapterWheel!=null) { if(chapterWheel.getValue()==0) c.journal.remove("chapter"); else ReadingJournal.put(c,"chapter",b.chapters.get(chapterWheel.getValue()-1).title); }
                 if(timed) ReadingJournal.sessionOnce(c,timerFrom,c.currentPage,duration,java.time.LocalDate.now(),b.id+":"+timerWall);
-                else if(duration>0||c.currentPage!=live.currentPage) ReadingJournal.session(c,live.currentPage,c.currentPage,duration,java.time.LocalDate.now());
+                else {
+                    // Without the timer the minutes are today's total for this book: only the difference is recorded,
+                    // so correcting 30 to 20 takes 10 off instead of adding 20.
+                    java.time.LocalDate today=java.time.LocalDate.now(); long before=ReadingJournal.manualSeconds(live,today);
+                    long delta=wheels.getMinutes()==before/60?0:wheels.getMinutes()*60L-before;
+                    if(delta<0) ReadingJournal.takeSeconds(c,today,-delta);
+                    if(delta>0||c.currentPage!=live.currentPage) ReadingJournal.session(c,live.currentPage,c.currentPage,Math.max(0,delta),today);
+                }
                 store.replace(c); if(timed) clearTimer(); renderContent(); details(c);
             } catch(Exception e){ error(e); }
         }),new LinearLayout.LayoutParams(-1,-2));

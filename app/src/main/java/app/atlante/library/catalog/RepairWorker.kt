@@ -50,10 +50,15 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         // Stopped by Android again and again (a phone that no longer lets it run in the foreground): it does not
         // start over for ever. After 3 times it stops and says so; you can start it again later.
         val stops = c.getSharedPreferences("repair-stops", Context.MODE_PRIVATE)
-        if (stops.getInt(id, 0) >= 3) {
+        // Every start is counted before any work: a run that kills the app (memory, a crash) or is killed with it
+        // would otherwise be started again by WorkManager at every launch, for ever.
+        val runs = stops.getInt("runs-$id", 0) + 1
+        stops.edit().putInt("runs-$id", runs).commit()
+        if (runs > 3) app.atlante.library.diagnostics.CrashLog.error(c, "Riparazione fermata dopo 3 avvii non conclusi: ${title(type)} · API ${Build.VERSION.SDK_INT}", null)
+        if (stops.getInt(id, 0) >= 3 || runs > 3) {
             job = (dao.job(id) ?: RepairJob(id, type, "failed", "", System.currentTimeMillis())).copy(state = "failed", phase = "Errore", finishedAt = System.currentTimeMillis(),
-                message = "Interrotta da Android 3 volte: non riparte da sola. Avviala di nuovo con il telefono in carica o più tardi.")
-            dao.putJob(job); stops.edit().remove(id).apply(); finished(c)
+                message = "Interrotta 3 volte senza finire: non riparte più da sola. Puoi avviarla di nuovo da Ripara libreria.")
+            dao.putJob(job); stops.edit().remove(id).remove("runs-$id").apply(); finished(c)
             return Result.failure()
         }
         job = dao.job(id)?.let { it.copy(state = "running", message = if (it.checkpoint > 0) "Ripresa da ${it.checkpoint} libri già analizzati" else "") }
@@ -76,7 +81,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 GENRES -> genres(c, store)
             }
             job = job.copy(state = "done", phase = "Completato", finishedAt = System.currentTimeMillis())
-            save(force = true); finished(c); dao.dropOlderResults(type, id); stops.edit().remove(id).apply()
+            save(force = true); finished(c); dao.dropOlderResults(type, id); stops.edit().remove(id).remove("runs-$id").apply()
             Result.success()
         } catch (e: CancellationException) {
             // You stopped it: "cancelled"; Android stopped it: it will start again from the checkpoint.

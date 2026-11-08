@@ -97,7 +97,7 @@ fun ProgressWheels(state: ProgressWheelState, prefs: SharedPreferences) {
         Spacer(Modifier.height(12.dp))
         Text(if (state.timed) "Tempo della sessione" else "Minuti di lettura (facoltativo)", Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-        BigValue("${state.minutes} min", if (state.timed) "dal timer, puoi correggerlo" else "quanto hai letto") { typing = "minutes" }
+        BigValue("${state.minutes} min", if (state.timed) "dal timer, puoi correggerlo" else "oggi, in tutto: correggilo se serve") { typing = "minutes" }
         HorizontalWheel(state.minutes, 0..1440, haptics, "Minuti di lettura", { "$it" }) { state.minutes = it.coerceIn(0, 1440) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Vibrazione", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

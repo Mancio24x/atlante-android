@@ -5,6 +5,8 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-08
+- **Pagine e minuti corretti, non sommati**: abbassare la pagina toglieva niente (la sessione valeva 0) e le pagine aggiunte per sbaglio restavano, poi si sommavano alle nuove; ora una pagina che torna indietro toglie le pagine in più dalle ultime sessioni di quella lettura. Senza timer i minuti dell’editor sono il totale di oggi per quel libro e si registra solo la differenza (30 corretto in 20 toglie 10). `ProgressCorrectionTest`.
+- **Ripara duplicati non riparte più da sola**: ogni avvio è contato prima di lavorare, così anche una riparazione uccisa insieme all’app (memoria, crash) non viene rilanciata a ogni apertura; dopo 3 avvii non conclusi si ferma, lo dice e lo registra nei rapporti.
 - **Pagina del libro più snella**: Preferito è un cuore accanto alla copertina (si tocca e basta, niente voce nel menu); tolti lista e voce dei capitoli, «Storia della lettura», «Scrivi una recensione» e «Dettagli della scheda»; restano voto, note e saga. Il menu ⋮ è un foglio con icone (Modifica scheda, Completa i dati online, Collezioni, Rilettura, KOReader).
 - **La tua rotta**: un libro rimesso «Da leggere» non conta più come letto. `RouteCountTest`.
 - **Ripara duplicati si ferma**: «Annulla» interrompe anche la ricerca; il calcolo dei gruppi è lineare; dopo 3 interruzioni di Android non riparte da sola all’infinito, e ogni interruzione (fase, tempo, motivo) finisce nei rapporti. Operazioni mostra solo lavori in corso e decisioni; gli esiti finiti spariscono all’avvio. `RepairStopTest`.

@@ -23,10 +23,40 @@ public final class ReadingJournal {
     public static void session(Book b, int from, int to, long seconds, LocalDate day) {
         try {
             JSONArray a = array(b, "sessions");
+            if (to < from) {
+                // A correction (the page goes back): the pages counted too many come off this reading's latest
+                // sessions, newest first, never below zero. Only the time read, if any, is a new session.
+                int extra = from - to, attempt = attempt(b);
+                for (int i = a.length() - 1; i >= 0 && extra > 0; i--) {
+                    JSONObject s = a.optJSONObject(i); if (s == null || s.optInt("attempt", attempt) != attempt) continue;
+                    int p = s.optInt("pages"); if (p <= 0) continue;
+                    int cut = Math.min(p, extra); s.put("pages", p - cut).put("to", s.optInt("to") - cut); extra -= cut;
+                }
+                put(b, "sessions", a);
+                if (seconds <= 0) return;
+                from = to;
+            }
             a.put(new JSONObject().put("date",day.toString()).put("at",System.currentTimeMillis())
                 .put("from",from).put("to",to).put("pages",Math.max(0,to-from))
                 .put("seconds",Math.max(0,seconds)).put("attempt",attempt(b)));
             put(b,"sessions",a);
+        } catch (JSONException e) { throw new IllegalArgumentException(e); }
+    }
+    /** Seconds recorded by hand on [day] for this book (the timer's sessions are not corrected by hand). */
+    public static long manualSeconds(Book b, LocalDate day) {
+        long n = 0; JSONArray a = array(b, "sessions");
+        for (int i = 0; i < a.length(); i++) { JSONObject s = a.optJSONObject(i); if (s != null && day.toString().equals(s.optString("date")) && !s.has("timerId")) n += s.optLong("seconds"); }
+        return n;
+    }
+    /** Takes [seconds] off the hand-recorded sessions of [day], newest first: "it was 20 minutes, not 30". */
+    public static void takeSeconds(Book b, LocalDate day, long seconds) {
+        try {
+            JSONArray a = array(b, "sessions");
+            for (int i = a.length() - 1; i >= 0 && seconds > 0; i--) {
+                JSONObject s = a.optJSONObject(i); if (s == null || !day.toString().equals(s.optString("date")) || s.has("timerId")) continue;
+                long have = s.optLong("seconds"); long cut = Math.min(have, seconds); s.put("seconds", have - cut); seconds -= cut;
+            }
+            put(b, "sessions", a);
         } catch (JSONException e) { throw new IllegalArgumentException(e); }
     }
     /** The stable timer ID also prevents replay if the process stops between saving the book and clearing the timer. */

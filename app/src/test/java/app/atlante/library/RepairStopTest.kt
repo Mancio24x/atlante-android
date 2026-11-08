@@ -41,6 +41,16 @@ class RepairStopTest {
         assertEquals("failed", job.state); assertTrue(job.message, job.message.contains("3 volte"))
     }
 
+    /** Killed with the app (memory, a crash): every start counts, so it does not come back at every launch. */
+    @Test fun afterThreeUnfinishedStartsItDoesNotComeBack() = runBlocking {
+        val id = UUID.randomUUID()
+        context.getSharedPreferences("repair-stops", Context.MODE_PRIVATE).edit().putInt("runs-$id", 3).commit()
+        val worker = TestListenableWorkerBuilder<RepairWorker>(context).setId(id).setInputData(workDataOf(RepairWorker.TYPE to RepairWorker.LIBRARY)).build()
+        assertTrue(worker.doWork() is ListenableWorker.Result.Failure)
+        assertEquals("failed", AtlanteDatabase.get(context).saga().job(id.toString())!!.state)
+        assertFalse(context.getSharedPreferences("repair-stops", Context.MODE_PRIVATE).contains("runs-$id"))
+    }
+
     @Test fun finishedResultsWithoutDecisionsAreCleared() = runBlocking {
         val dao = AtlanteDatabase.get(context).saga()
         val now = System.currentTimeMillis()
