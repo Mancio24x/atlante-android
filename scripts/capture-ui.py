@@ -334,9 +334,9 @@ assert spines, 'Spine of Red Rising not found on the bookcase'
 tap('Aspetto');time.sleep(.5);shot('60a-bookcase-look-menu')
 tap('Noce scuro',exact=True);time.sleep(.6);shot('60b-bookcase-walnut')
 tap('Colori del tema',exact=True);time.sleep(.6)
-screen=list(map(int,re.findall(r'\d+',dump().find('node').get('bounds','0,0,1080,1920'))))
-adb('shell','input','tap',str(screen[2]//2),str(screen[3]*92//100));time.sleep(.6)
-assert not any(n.get('text','')=='Minimal' for n in dump().iter('node')), 'A tap outside did not close the bookcase options'
+# Close the options with Back (a tap low on the screen would land on the bottom bar).
+adb('shell','input','keyevent','4');time.sleep(.6)
+assert not any(n.get('text','')=='Legno naturale' for n in dump().iter('node')), 'Back did not close the bookcase options'
 shot('60c-bookcase-theme-colors')
 tap('Red Rising, di Pierce Brown');time.sleep(1.5);shot('61-bookcase-open')
 assert any(n.get('text','').startswith('Avvia il timer') for n in dump().iter('node')), 'Tapping a spine did not open the book'
