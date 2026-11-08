@@ -100,8 +100,13 @@ fun ThemeEditor(paper0: Color, surface0: Color, accent0: Color, onApply: ThemeEd
     var editing by remember { mutableIntStateOf(2) }
     val labels = listOf("Sfondo", "Schede", "Accento")
     // The whole visible screen: top half for the colours, bottom half for the preview.
-    val height = (LocalConfiguration.current.screenHeightDp - 200).coerceAtLeast(560).dp
+    // The visible screen under the page's heading, whatever the phone: never taller (the button must be reachable).
+    val height = (LocalConfiguration.current.screenHeightDp - 190).coerceIn(380, 1100).dp
     Column(Modifier.fillMaxWidth().height(height), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Apply first: always in sight, also on a small phone.
+        Button(onClick = { onApply.apply(colors[0].toArgb(), colors[1].toArgb(), colors[2].toArgb()) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Applica il mio tema")
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 labels.forEachIndexed { i, label ->
@@ -119,9 +124,6 @@ fun ThemeEditor(paper0: Color, surface0: Color, accent0: Color, onApply: ThemeEd
             ColorPicker(colors[editing], labels[editing], Modifier.weight(1f)) { colors[editing] = it }
         }
         Preview(colors[0], colors[1], colors[2], Modifier.weight(1f))
-        Button(onClick = { onApply.apply(colors[0].toArgb(), colors[1].toArgb(), colors[2].toArgb()) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Applica il mio tema")
-        }
     }
 }
 
