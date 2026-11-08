@@ -41,6 +41,7 @@ interface SyncHost {
     fun runCalibre(); fun calibreSettings(); fun calibreHelp()
     fun runKoreader(); fun linkKoreader(); fun koreaderSettings()
     fun importClippings(); fun importCatalog(); fun exportBackup(); fun fetchCovers(); fun sourceKeys()
+    fun openCrossPoint()
 }
 
 object SyncView {
@@ -101,7 +102,8 @@ object SyncView {
             }
             Header("Importa ed esporta")
             ListCard {
-                Row(R.drawable.ic_edit, "Evidenziazioni Kindle", "Da My Clippings.txt al taccuino del libro", false, host::importClippings)
+                Row(R.drawable.ic_ereader, "CrossPoint", "I libri del lettore e-ink, sulla rete di casa", false, host::openCrossPoint)
+                Row(R.drawable.ic_edit, "Evidenziazioni Kindle", "Da My Clippings.txt al taccuino del libro", true, host::importClippings)
                 Row(R.drawable.ic_download, "Importa catalogo o backup", "Atlante, Goodreads, StoryGraph, Calibre ZIP", true, host::importCatalog)
                 Row(R.drawable.ic_upload, "Esporta backup", "${s.books} libri, note e avanzamenti in un file ZIP", true, host::exportBackup)
                 Row(R.drawable.ic_image, "Copertine mancanti", if (s.missingCovers == 0) "Ogni libro ha la sua copertina" else "${s.missingCovers} " + if (s.missingCovers == 1) "libro senza copertina" else "libri senza copertina", true, host::fetchCovers)

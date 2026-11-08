@@ -36,3 +36,11 @@ Solo ciò che è implementato. Per ognuna: dove sta e quale test la copre. La gu
 Limiti noti (non ancora implementati o dipendenti da terzi): OAuth Hardcover attivo solo con un `client_id`
 registrato; ordini «cronologico» e «consigliato» delle saghe non disponibili nelle fonti; il catalogo copre meno
 i libri di genere recenti (Wikidata).
+
+## CrossPoint (lettore e-ink)
+
+Pagina «CrossPoint» (menu laterale, o Sync › Importa ed esporta). Il lettore deve avere aperta la schermata di
+trasferimento file sulla stessa rete Wi-Fi. API del firmware: `GET /api/status`, `GET /api/files?path=`,
+`GET /download?path=`, `POST /upload?path=` (multipart), `POST /mkdir`, `/rename`, `/move`, `/delete`; scoperta con
+«hello» in UDP sulla porta 8134 (risposta `crosspoint (on <nome>);81`). Codice: `crosspoint/CrossPointClient.kt`,
+`ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`.

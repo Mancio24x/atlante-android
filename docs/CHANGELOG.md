@@ -6,6 +6,11 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-08
 
+- **CrossPoint**: nuova pagina (menu laterale, e una riga in Sync) per il lettore e-ink CrossPoint sulla rete di
+  casa: ricerca automatica (UDP «hello» sulla porta 8134) o indirizzo IP, stato del lettore, cartelle e file,
+  «Invia libri» dalla biblioteca, «Scarica in Atlante» (con la solita importazione), nuova cartella, rinomina,
+  sposta, elimina con conferma. Il client (`crosspoint/CrossPointClient.kt`) parla HTTP solo con indirizzi privati
+  della rete di casa, così l'app non apre il traffico in chiaro verso internet (`CrossPointClientTest`).
 - **Crash corretto**: «Ripara saghe» (e le altre riparazioni o la sincronizzazione Hardcover in background) chiudeva
   l'app con «Bad notification for startForeground»: l'icona della notifica prendeva il colore dal tema, che il
   sistema non può leggere. Nuova icona `ic_notification` senza attributi di tema (`NotificationIconTest`).

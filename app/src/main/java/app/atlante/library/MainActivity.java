@@ -221,6 +221,7 @@ public final class MainActivity extends AppCompatActivity {
         gap(menu, 8); rule(menu); gap(menu, 8);
         menu.addView(drawerItem("Collezioni", false, () -> { closeDrawer(); collections(); }));
         menu.addView(drawerItem("Cerca libri online", false, () -> { closeDrawer(); onlineSearch(); }));
+        menu.addView(drawerItem("CrossPoint", destination.equals("CrossPoint"), () -> { closeDrawer(); navigate("CrossPoint"); }));
         // Backups stay reachable (they are the only copy of notes and progress outside the phone), outside the settings.
         Button catalog = drawerItem("Backup", false, () -> { closeDrawer(); backupMenu(); }); catalog.setEnabled(!busy); menu.addView(catalog);
         menu.addView(drawerItem("Impostazioni", false, () -> { closeDrawer(); settings(); }));
@@ -2391,6 +2392,27 @@ public final class MainActivity extends AppCompatActivity {
 
     // ---- Sync: Hardcover, Calibre, Kindle highlights ----------------------------------------------
 
+    /** CrossPoint: the e-ink reader's files over the home Wi-Fi (ui/compose/CrossPointScreen.kt). */
+    private View crossPointView() {
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        return app.atlante.library.ui.compose.CrossPointView.create(this, palette, new app.atlante.library.ui.compose.CrossPointHost() {
+            @Override public String savedHost() { String h = prefs.getString("crosspointHost", ""); return h.isEmpty() ? null : h; }
+            @Override public void saveHost(String host) { prefs.edit().putString("crosspointHost", host == null ? "" : host).apply(); }
+            @Override public java.util.List<kotlin.Pair<String, File>> libraryFiles() {
+                ArrayList<kotlin.Pair<String, File>> out = new ArrayList<>();
+                for (Book b : store.snapshot()) { if (b.format.equals("CATALOGO")) continue; File f = store.original(b); if (f.isFile()) out.add(new kotlin.Pair<>(b.title, f)); }
+                out.sort((x, y) -> x.getFirst().compareToIgnoreCase(y.getFirst())); return out;
+            }
+            @Override public boolean inLibrary(String fileName) {
+                String stem = app.atlante.library.model.SearchIndex.normalize(fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName);
+                if (stem.length() < 3) return false;
+                for (Book b : store.snapshot()) { String t = app.atlante.library.model.SearchIndex.normalize(b.title); if (!t.isEmpty() && (stem.equals(t) || stem.startsWith(t + " ") || stem.contains(" " + t))) return true; }
+                return false;
+            }
+            @Override public void importFiles(java.util.List<? extends File> files) { ArrayList<Uri> uris = new ArrayList<>(); for (File f : files) uris.add(Uri.fromFile(f)); importUris(uris, false); }
+            @Override public File cacheDir() { return getCacheDir(); }
+        });
+    }
     /** Sync (design 5a), drawn in Compose (ui/compose/SyncScreen.kt); the actions are the same methods as before. */
     private View syncView() {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
@@ -2416,6 +2438,7 @@ public final class MainActivity extends AppCompatActivity {
             @Override public void exportBackup() { MainActivity.this.exportBackup(); }
             @Override public void fetchCovers() { fetchMissingCovers(store.snapshot(),true); }
             @Override public void sourceKeys() { MainActivity.this.sourceKeys(); }
+            @Override public void openCrossPoint() { navigate("CrossPoint"); }
         });
     }
     /** Hardcover runs in the background; Calibre (or else KOReader) then runs in the foreground with its progress. */
@@ -2937,27 +2960,7 @@ public final class MainActivity extends AppCompatActivity {
                 try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
                 catch (SecurityException ignored) { /* A temporary grant still allows this import. */ }
             }
-            busy = true; showLibrary();
-            worker.execute(() -> {
-                int duplicate = 0, reattached = 0; ArrayList<String> errors = new ArrayList<>();
-                LinkedHashMap<String, Book> candidates = new LinkedHashMap<>();
-                for (Uri uri : uris) {
-                    try { Book candidate = store.importBook(uri); if (candidate != null && candidate.reattached) { candidate.reattached = false; reattached++; } else if (candidate == null || candidates.containsKey(candidate.id)) duplicate++; else candidates.put(candidate.id, candidate); }
-                    catch (Exception e) { errors.add(message(e)); }
-                    finally {
-                        try { getContentResolver().releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-                        catch (SecurityException ignored) { }
-                    }
-                }
-                final String report = candidates.size() + " schede da confermare" + (duplicate > 0 ? " · " + duplicate + " già presenti" : "")
-                    + (reattached > 0 ? " · " + reattached + " file ricollegati a schede esistenti" : "");
-                runOnUiThread(() -> {
-                    busy = false; if (isFinishing() || isDestroyed()) return;
-                    showLibrary();
-                    dialogBuilder().setTitle("Importazione completata").setMessage(report + (errors.isEmpty() ? "" : "\n\n" + String.join("\n", errors)))
-                        .setPositiveButton("Vedi le schede", (d, w) -> previewImports(new ArrayList<>(candidates.values()), 0)).setCancelable(false).show();
-                });
-            });
+            importUris(uris, true);
         } else if (request == EXPORT && data.getData() != null && exportId != null) {
             Book b = store.find(exportId); Uri dest = data.getData(); exportId = null;
             if (b == null) return;
@@ -2970,6 +2973,31 @@ public final class MainActivity extends AppCompatActivity {
                 } catch (Exception e) { runOnUiThread(() -> error(e)); }
             });
         }
+    }
+
+    /** Imports files (picked, or downloaded from CrossPoint) with preview, duplicates and existing records. */
+    private void importUris(ArrayList<Uri> uris, boolean persisted) {
+        busy = true; showLibrary();
+        worker.execute(() -> {
+            int duplicate = 0, reattached = 0; ArrayList<String> errors = new ArrayList<>();
+            LinkedHashMap<String, Book> candidates = new LinkedHashMap<>();
+            for (Uri uri : uris) {
+                try { Book candidate = store.importBook(uri); if (candidate != null && candidate.reattached) { candidate.reattached = false; reattached++; } else if (candidate == null || candidates.containsKey(candidate.id)) duplicate++; else candidates.put(candidate.id, candidate); }
+                catch (Exception e) { errors.add(message(e)); }
+                finally {
+                    if (persisted) try { getContentResolver().releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+                    catch (SecurityException ignored) { }
+                }
+            }
+            final String report = candidates.size() + " schede da confermare" + (duplicate > 0 ? " · " + duplicate + " già presenti" : "")
+                + (reattached > 0 ? " · " + reattached + " file ricollegati a schede esistenti" : "");
+            runOnUiThread(() -> {
+                busy = false; if (isFinishing() || isDestroyed()) return;
+                showLibrary();
+                dialogBuilder().setTitle("Importazione completata").setMessage(report + (errors.isEmpty() ? "" : "\n\n" + String.join("\n", errors)))
+                    .setPositiveButton("Vedi le schede", (d, w) -> previewImports(new ArrayList<>(candidates.values()), 0)).setCancelable(false).show();
+            });
+        });
     }
 
     private void openReader(Book b) {
@@ -3168,6 +3196,8 @@ public final class MainActivity extends AppCompatActivity {
         android.content.res.ColorStateList tint=new android.content.res.ColorStateList(states,new int[]{INK,MUTED});
         nav.setItemIconTintList(tint); nav.setItemTextColor(tint);
         for(int i=0;i<names.length;i++) { nav.getMenu().add(0,i+1,i,names[i]).setIcon(icons[i]); if(names[i].equals(destination)) nav.setSelectedItemId(i+1); }
+        // A page that is none of the five (CrossPoint): no item looks selected.
+        if(!Arrays.asList(names).contains(destination)) nav.getMenu().setGroupCheckable(0,false,true);
         nav.setOnItemSelectedListener(item -> { String next=names[item.getItemId()-1]; if(!destination.equals(next)) navigate(next); return true; });
         // Biblioteca again from Saghe, Mappa, Universi or a search: back to the whole library.
         nav.setOnItemReselectedListener(item -> { if(names[item.getItemId()-1].equals("Biblioteca") && destination.equals("Biblioteca") && (!statusPage() || !query.isEmpty())) { tab="Tutti i libri"; openSaga=""; query=""; showLibrary(); } });
@@ -3201,7 +3231,7 @@ public final class MainActivity extends AppCompatActivity {
         reading=null; pages=null; body=null; grid=null; detailId=null; companionScroll=null; base(PAPER);
         LinearLayout top=row(); top.setPadding(dp(12),dp(6),dp(12),dp(8)); root.addView(top);
         top.addView(iconButton(R.drawable.ic_menu,"Apri menu laterale",this::openDrawer));
-        top.addView(destination.equals("Scopri")?pageHeading("SCOPRI","La prossima storia."):destination.equals("Sync")?pageHeading("SYNC","Invia e ricevi."):pageHeading("","Statistiche"),new LinearLayout.LayoutParams(0,-2,1));
+        top.addView(destination.equals("Scopri")?pageHeading("SCOPRI","La prossima storia."):destination.equals("Sync")?pageHeading("SYNC","Invia e ricevi."):destination.equals("CrossPoint")?pageHeading("CROSSPOINT","Il tuo lettore e-ink"):pageHeading("","Statistiche"),new LinearLayout.LayoutParams(0,-2,1));
         top.addView(iconButton(R.drawable.ic_settings,"Impostazioni",this::settings));
         root.addView(content,new LinearLayout.LayoutParams(-1,0,1));
         addBottomNav(); updateBack();
@@ -3220,6 +3250,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("IMPOSTAZIONI",settingsSection.isEmpty()?"Impostazioni":settingsTitle(settingsSection)); settingsPage(p); updateBack(); return; }
         if(destination.equals("Sync")) { composePage(syncView()); return; }
+        if(destination.equals("CrossPoint")) { composePage(crossPointView()); return; }
         String day=java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM",Locale.ITALIAN)).toUpperCase(Locale.ITALIAN);
         LinearLayout panel=companionPage(day,"Buona lettura.");
         home(panel); sessionBar();
