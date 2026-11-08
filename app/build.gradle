@@ -23,6 +23,10 @@ android {
         targetSdk 35
         versionCode Integer.parseInt(System.getenv('VERSION_CODE') ?: version.getProperty('versionCode'))
         versionName System.getenv('VERSION_NAME') ?: version.getProperty('versionName')
+        // Crash reports as GitHub Issues of a private repository: the token comes from the build's secret
+        // (REPORTS_TOKEN), never from the source; without it the app only keeps reports on the phone.
+        buildConfigField 'String', 'REPORTS_REPO', '"' + (System.getenv('REPORTS_REPO') ?: 'Mancio24x/atlante-reports') + '"'
+        buildConfigField 'String', 'REPORTS_TOKEN', '"' + (System.getenv('REPORTS_TOKEN') ?: '').replaceAll('[^A-Za-z0-9_]', '') + '"'
     }
     signingConfigs {
         release {
@@ -51,7 +55,7 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    buildFeatures { compose true }
+    buildFeatures { compose true; buildConfig true }
     kotlinOptions { jvmTarget = '1.8' }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

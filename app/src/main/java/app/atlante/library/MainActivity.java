@@ -134,7 +134,7 @@ public final class MainActivity extends AppCompatActivity {
         super.onCreate(state);
         app.atlante.library.ui.L.init(this); app.atlante.library.ui.L.watch(getWindow().getDecorView());
         app.atlante.library.diagnostics.CrashLog.install(this);   // also when the app was started without AtlanteApp (tests)
-        if (state == null) reportCrashesSinceLastTime();
+        if (state == null) { reportCrashesSinceLastTime(); askReportConsent(); }
         getOnBackPressedDispatcher().addCallback(this, back);
         if (state != null) {
             tab = state.getString("tab", tab); if (tab.equals("Desideri")) tab = "Tutti i libri"; query = state.getString("query", "");
@@ -736,11 +736,22 @@ public final class MainActivity extends AppCompatActivity {
         android.content.Context context = getApplicationContext();
         new Thread(() -> {
             int crashes = app.atlante.library.diagnostics.CrashLog.exportNew(context);
+            if (crashes > 0) try { app.atlante.library.diagnostics.ReportUploader.now(context); } catch (RuntimeException ignored) { }
             if (crashes > 0) runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return;
                 dialogBuilder().setTitle("L’app si era chiusa per un errore")
                     .setMessage("Il rapporto è salvato sul telefono, in " + app.atlante.library.diagnostics.CrashLog.publicFolder() + " e in Impostazioni › Privacy e progetto. Puoi condividerlo per farlo correggere.")
                     .setNegativeButton("Chiudi", null).setPositiveButton("Condividi", (d, w) -> shareDiagnostics()).show(); });
         }).start();
+    }
+
+    /** Once: may the app send its crash and error reports to the project (without personal data)? */
+    private void askReportConsent() {
+        if (!app.atlante.library.diagnostics.ReportUploader.configured() || app.atlante.library.diagnostics.ReportUploader.consent(this) != null) return;
+        dialogBuilder().setTitle("Aiuta a migliorare Atlante")
+            .setMessage("Se l’app si chiude o va in errore, posso inviare il rapporto al progetto, ogni tanto e solo con internet. Prima di inviarlo tolgo titoli, nomi, email e chiavi; il telefono è un codice casuale. Puoi cambiare idea in Impostazioni › Privacy e progetto.")
+            .setCancelable(false)
+            .setNegativeButton("No, grazie", (d, w) -> app.atlante.library.diagnostics.ReportUploader.setConsent(this, false))
+            .setPositiveButton("Invia i rapporti", (d, w) -> app.atlante.library.diagnostics.ReportUploader.setConsent(this, true)).show();
     }
 
     /** Privacy e progetto › Diagnostica: how many reports, where they are, share or clear them. */
@@ -751,6 +762,13 @@ public final class MainActivity extends AppCompatActivity {
         panel.addView(text(all.isEmpty() ? "Nessun errore registrato." : crashes + " rapporti di crash · " + (all.size() - crashes) + " registro degli errori", 15, INK, false));
         panel.addView(text("Se l’app si chiude o mostra un errore, il dettaglio resta sul telefono (anche in " + app.atlante.library.diagnostics.CrashLog.publicFolder() + "). Non viene inviato niente: lo condividi tu, se vuoi.", 13, MUTED, false));
         gap(panel, 8);
+        if (app.atlante.library.diagnostics.ReportUploader.configured()) {
+            boolean on = Boolean.TRUE.equals(app.atlante.library.diagnostics.ReportUploader.consent(this));
+            com.google.android.material.materialswitch.MaterialSwitch send = new com.google.android.material.materialswitch.MaterialSwitch(this);
+            send.setText("Invia i rapporti al progetto (senza dati personali)"); send.setChecked(on); send.setMinHeight(dp(56)); send.setTextColor(INK);
+            send.setOnCheckedChangeListener((v, checked) -> app.atlante.library.diagnostics.ReportUploader.setConsent(this, checked));
+            panel.addView(send, new LinearLayout.LayoutParams(-1, -2));
+        }
         LinearLayout buttons = row(); panel.addView(buttons);
         buttons.addView(button("Condividi i rapporti", R.style.Atlante_Button_Outlined, this::shareDiagnostics));
         if (!all.isEmpty()) { View space = new View(this); buttons.addView(space, new LinearLayout.LayoutParams(dp(8), 1));

@@ -8,5 +8,7 @@ class AtlanteApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        // Reports to the project's private repository, only with your consent (asked once by the app).
+        runCatching { app.atlante.library.diagnostics.ReportUploader.schedule(this) }
     }
 }
