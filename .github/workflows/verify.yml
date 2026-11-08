@@ -20,12 +20,17 @@ jobs:
         with:
           packages: platform-tools
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      # Gradle 8.9 downloaded directly, with retries: the setup action asks a version service that can answer 504.
-      - name: Gradle 8.9
+      # Gradle 8.9 from gradle.org, a few tries; when gradle.org does not answer (504 for GitHub's runners), the Gradle
+      # already installed in the runner image is used instead (8.x, works for this build). No third-party mirrors.
+      - name: Gradle
         run: |
           for url in https://downloads.gradle.org/distributions/gradle-8.9-bin.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip; do
-            for i in 1 2 3 4; do curl -fsSL --retry 3 -o "$RUNNER_TEMP/gradle.zip" "$url" && break 2; sleep 15; done
+            curl -fsSL --retry 2 --max-time 120 -o "$RUNNER_TEMP/gradle.zip" "$url" && break
           done
-          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/gradle-8.9/bin" >> "$GITHUB_PATH"
+          if [ -s "$RUNNER_TEMP/gradle.zip" ]; then
+            unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP" && echo "$RUNNER_TEMP/gradle-8.9/bin" >> "$GITHUB_PATH"
+          else
+            echo "gradle.org not reachable: using the runner's Gradle"; command -v gradle
+          fi
+      - run: gradle --version
       - run: bash build.sh debug
