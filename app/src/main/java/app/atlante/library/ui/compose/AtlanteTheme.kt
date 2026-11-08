@@ -15,7 +15,7 @@ import app.atlante.library.ui.ThemePalette
  * Material You colors already resolved by MainActivity), so both kinds of screen look identical.
  */
 fun ThemePalette.colorScheme(): ColorScheme {
-    val paper = Color(paper); val surface = Color(surface); val ink = Color(ink); val muted = Color(muted)
+    val paper = Color(paper); val surface = Color(surface); val ink = Color(ink); val muted = androidx.compose.ui.graphics.lerp(Color(muted), ink, 0.3f)   // secondary text a little darker: notes stay readable
     val accent = Color(accent); val onAccent = Color(onAccent); val line = Color(line); val warm = Color(warm)
     return if (dark) darkColorScheme(
         primary = accent, onPrimary = onAccent, primaryContainer = line, onPrimaryContainer = ink,

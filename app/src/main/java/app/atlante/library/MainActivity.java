@@ -192,7 +192,7 @@ public final class MainActivity extends AppCompatActivity {
         // Editing pages (timer, progress, review, notes) only relayout: rebuilding them would lose what you were
         // doing and send the timer back to the book page.
         if (editingPage) return;
-        if (reading != null && pages != null) showReader(); else if (detailId != null && store.find(detailId) != null) details(store.find(detailId)); else showLibrary();
+        if (reading != null && pages != null) showReader(); else if (detailId != null && liveBook(detailId) != null) details(liveBook(detailId)); else showLibrary();
     }
 
     private void openDrawer() {
@@ -291,7 +291,8 @@ public final class MainActivity extends AppCompatActivity {
         if (settingsSection.isEmpty()) { panel.addView(settingsCompose(""), new LinearLayout.LayoutParams(-1, -2)); return; }
         boolean inTheme = settingsSection.equals("tema");
         TextView back = text(inTheme ? "‹ Aspetto" : "‹ Tutte le impostazioni", 14, SAGE, false); back.setMinHeight(dp(44)); back.setGravity(Gravity.CENTER_VERTICAL); back.setPadding(dp(4), 0, dp(4), 0);
-        back.setContentDescription(inTheme ? "Torna ad Aspetto" : "Torna a tutte le impostazioni"); back.setOnClickListener(v -> goBack()); panel.addView(back); gap(panel, 8);
+        back.setContentDescription(inTheme ? "Torna ad Aspetto" : "Torna a tutte le impostazioni"); back.setOnClickListener(v -> goBack()); pill(back);
+        panel.addView(back, new LinearLayout.LayoutParams(-2, -2)); gap(panel, 12);
         switch (settingsSection) {
             case "aspetto": customThemeCircle(panel); gap(panel,16);
         sectionHeader(panel, "Temi pronti", "", null); panel.addView(hint("Tocca un tema: si applica subito a tutta l’app."));
@@ -309,10 +310,10 @@ public final class MainActivity extends AppCompatActivity {
             case "libreria": {
         MaterialButton importBooks = (MaterialButton) button("Importa eBook", true, this::chooseBooks); importBooks.setIconResource(R.drawable.ic_add); importBooks.setEnabled(!busy);
         panel.addView(importBooks, new LinearLayout.LayoutParams(-1,-2));
-        panel.addView(text("EPUB, TXT, CBZ e AZW3 senza DRM, anche più file insieme. Prima di aggiungerli vedi titolo, autore e copertina e puoi correggerli; se il libro è già nella libreria puoi collegare il file alla sua scheda.",12,MUTED,false)); gap(panel,12);
+        panel.addView(text("EPUB, TXT, CBZ e AZW3 senza DRM, anche più file insieme. Prima di aggiungerli vedi titolo, autore e copertina e puoi correggerli; se il libro è già nella libreria puoi collegare il file alla sua scheda.",13,MUTED,false)); gap(panel,12);
         coverPreference(panel); gap(panel,12);
         panel.addView(button("Ripara libreria ›",false,() -> { settingsSection = "ripara"; showCompanion(); }));
-        panel.addView(text("Duplicati, saghe, mappe, metadati, copertine e generi: ora sono tutti in Impostazioni › Ripara libreria.",12,MUTED,false)); gap(panel,12);
+        panel.addView(text("Duplicati, saghe, mappe, metadati, copertine e generi: ora sono tutti in Impostazioni › Ripara libreria.",13,MUTED,false)); gap(panel,12);
         panel.addView(expander("Cache e dati temporanei", app.atlante.library.ui.compose.CacheSettingsView.create(this, palette), false)); gap(panel,20);
 
                 break; }
@@ -400,7 +401,7 @@ public final class MainActivity extends AppCompatActivity {
                     "Indicizza i generi", () -> { dialog.dismiss(); startRepair(app.atlante.library.catalog.RepairWorker.GENRES); });
                 qualityRow(panel, dialog, "Senza numero di pagine", "", noPages, null, null);
                 panel.addView(button("Completa metadati (catalogo offline, poi online)", false, () -> { dialog.dismiss(); startRepair(app.atlante.library.catalog.RepairWorker.METADATA); }));
-                panel.addView(text("Riempie solo i campi vuoti: quello che hai scritto, la tua edizione e la copertina scelta restano. Per un solo libro: apri il libro › «Completa i dati online».", 12, MUTED, false));
+                panel.addView(text("Riempie solo i campi vuoti: quello che hai scritto, la tua edizione e la copertina scelta restano. Per un solo libro: apri il libro › «Completa i dati online».", 13, MUTED, false));
                 panel.addView(button("Operazioni in background", R.style.Atlante_Button_Text, () -> { dialog.dismiss(); showOperations(); }));
             });
         });
@@ -409,7 +410,7 @@ public final class MainActivity extends AppCompatActivity {
     private void qualityRow(LinearLayout panel, AlertDialog dialog, String title, String hint, List<Book> books, String action, Runnable run) {
         LinearLayout box = surface(panel, "");
         box.addView(text(title + (books == null ? "" : " · " + books.size()), 16, books != null && books.isEmpty() ? MUTED : INK, true));
-        if (!hint.isEmpty()) box.addView(text(hint, 12, MUTED, false));
+        if (!hint.isEmpty()) box.addView(text(hint, 13, MUTED, false));
         if (books != null && books.isEmpty()) { box.addView(text("Tutto a posto ✓", 13, MUTED, false)); return; }
         LinearLayout buttons = row(); box.addView(buttons);
         if (books != null) buttons.addView(button("Mostra", R.style.Atlante_Button_Text, () -> {
@@ -435,7 +436,7 @@ public final class MainActivity extends AppCompatActivity {
                 app.atlante.library.online.CoverSearch.setPrefer(o[0]); });
         }
         p.addView(group);
-        p.addView(text("Vale per le copertine trovate dall’app e per il primo filtro di «Cambia copertina» nella scheda del libro. Con Hardcover collegato trovi anche le copertine inglesi e originali dei tuoi libri italiani. Una copertina scelta da te resta ovunque, anche nei widget.",12,MUTED,false));
+        p.addView(text("Vale per le copertine trovate dall’app e per il primo filtro di «Cambia copertina» nella scheda del libro. Con Hardcover collegato trovi anche le copertine inglesi e originali dei tuoi libri italiani. Una copertina scelta da te resta ovunque, anche nei widget.",13,MUTED,false));
     }
 
     private void hardcoverSection(LinearLayout p) {
@@ -444,7 +445,7 @@ public final class MainActivity extends AppCompatActivity {
         boolean oauth=app.atlante.library.sync.HardcoverAuth.usesOauth(this);
         String user=prefs.getString("hardcoverUser","");
         p.addView(text(on?"Chiave inserita"+(user.isEmpty()?"":" · collegato come @"+user):"Nessuna chiave inserita",15,on?INK:MUTED,false));
-        p.addView(text("Con la tua chiave personale di Hardcover Atlante riconosce saga, numero del volume, sotto-serie e universo (per esempio il Cosmere) di tutti i libri, anche con il titolo italiano, più in fretta e con più precisione. Senza chiave usa Wikidata e Open Library. Ognuno usa la propria chiave: è gratuita e resta solo su questo telefono.",12,MUTED,false)); gap(p,8);
+        p.addView(text("Con la tua chiave personale di Hardcover Atlante riconosce saga, numero del volume, sotto-serie e universo (per esempio il Cosmere) di tutti i libri, anche con il titolo italiano, più in fretta e con più precisione. Senza chiave usa Wikidata e Open Library. Ognuno usa la propria chiave: è gratuita e resta solo su questo telefono.",13,MUTED,false)); gap(p,8);
         MaterialSwitch use=new MaterialSwitch(this); use.setText("Usa Hardcover per riconoscere le saghe"); use.setTextSize(15); use.setMinHeight(dp(48));
         use.setChecked(prefs.getBoolean("hardcoverSagas",true)); use.setEnabled(on); p.addView(use);
         use.setOnCheckedChangeListener((v,checked)->{
@@ -600,7 +601,7 @@ public final class MainActivity extends AppCompatActivity {
         android.util.TypedValue value = new android.util.TypedValue(); theme.resolveAttribute(id, value, true); return value.data;
     }
     private void applyPalette(ThemePalette p) {
-        palette = p; PAPER = p.paper; WHITE = p.surface; INK = p.ink; MUTED = p.muted;
+        palette = p; PAPER = p.paper; WHITE = p.surface; INK = p.ink; MUTED = blend(p.muted, p.ink, .3f);   // secondary text a little darker: notes stay readable
         SAGE = p.accent; ON_ACCENT = p.onAccent; COPPER = p.warm; GOLD = p.onAccent; LINE = p.line;
     }
     private AlertDialog loading(String title, String message) {
@@ -668,9 +669,19 @@ public final class MainActivity extends AppCompatActivity {
     MaterialButton button(String label, int overlay, Runnable action) {
         MaterialButton b = new MaterialButton(overlay == 0 ? this : new ContextThemeWrapper(this, overlay));
         if(overlay==0){b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(SAGE));b.setTextColor(ON_ACCENT);}
-        else {b.setTextColor(SAGE);if(overlay==R.style.Atlante_Button_Tonal)b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE));}
+        else {b.setTextColor(SAGE);if(overlay==R.style.Atlante_Button_Tonal)b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(LINE));
+            // A text button is still a button: a light outline says it can be pressed.
+            if(overlay==R.style.Atlante_Button_Text){b.setStrokeWidth(dp(1));b.setStrokeColor(android.content.res.ColorStateList.valueOf(blend(LINE,SAGE,.3f)));}}
         b.setText(label); b.setMinHeight(dp(48)); b.setOnClickListener(v -> action.run());
         return b;
+    }
+    /** A tappable text (a link such as «‹ Tutte le impostazioni»): a pill with a light outline, so it reads as a button. */
+    TextView pill(TextView t) {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setCornerRadius(dp(22)); d.setStroke(dp(1), blend(LINE, SAGE, .3f)); d.setColor(android.graphics.Color.TRANSPARENT);
+        t.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(blend(PAPER, SAGE, .18f)), d, null));
+        t.setPadding(dp(16), 0, dp(16), 0); t.setMinHeight(dp(44)); t.setGravity(Gravity.CENTER_VERTICAL);
+        return t;
     }
     MaterialButton iconButton(int icon, String description, Runnable action) {
         MaterialButton b = button("", R.style.Atlante_Button_Icon, action);
@@ -766,7 +777,7 @@ public final class MainActivity extends AppCompatActivity {
             FrameLayout.LayoutParams corner = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
             corner.setMargins(dp(16), dp(16), dp(16), dp(16)); stage.addView(add, corner);
         }
-        notice = text("", 12, MUTED, false);
+        notice = text("", 13, MUTED, false);
         renderContent(); addBottomNav(); updateBack();
     }
 
@@ -1170,7 +1181,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout header = row(); header.setPadding(dp(6), 0, dp(2), dp(10));
         int total = store.snapshot().size();
         header.addView(text(busy ? "Importazione in corso…" : (shownCount == total ? total + (total == 1 ? " libro" : " libri")
-            : shownCount + " di " + total + " libri") + " · per " + sortOrder.toLowerCase(Locale.ROOT), 12, MUTED, false), new LinearLayout.LayoutParams(0, -2, 1));
+            : shownCount + " di " + total + " libri") + " · per " + sortOrder.toLowerCase(Locale.ROOT), 13, MUTED, false), new LinearLayout.LayoutParams(0, -2, 1));
         if (!listView) {
             // Density: 3 · 4 · 5 covers per row, in a small segmented control.
             LinearLayout seg = row(); seg.setPadding(dp(2), dp(2), dp(2), dp(2)); GradientDrawable g = background(Color.TRANSPARENT, LINE); g.setCornerRadius(dp(16)); seg.setBackground(g);
@@ -1336,7 +1347,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout legend = row(); legend.setPadding(dp(4), 0, dp(4), dp(12)); content.addView(legend);
         String[] names = {"Letto", "In lettura", "In biblioteca", "Mancante"}; int[] colors = {SAGE, COPPER, blend(SAGE, WHITE, .45f), Color.TRANSPARENT};
         for (int i = 0; i < 4; i++) { View dot = new View(this); GradientDrawable g = background(colors[i], Color.TRANSPARENT); g.setCornerRadius(dp(5)); if (i == 3) g.setStroke(dp(1.5f), MUTED, dp(3), dp(2)); dot.setBackground(g);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(10), dp(10)); lp.setMargins(i == 0 ? 0 : dp(12), 0, dp(5), 0); legend.addView(dot, lp); legend.addView(text(names[i], 12, MUTED, false)); }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(10), dp(10)); lp.setMargins(i == 0 ? 0 : dp(12), 0, dp(5), 0); legend.addView(dot, lp); legend.addView(text(names[i], 13, MUTED, false)); }
         LinearLayout box = column(); box.setPadding(dp(14), dp(8), dp(14), dp(8)); MaterialCardView c = card(box); c.setRadius(dp(20)); content.addView(c, new LinearLayout.LayoutParams(-1, -2));
         for (int i = 0; i < slots.size(); i++) { Book b = slots.get(i); int n = i + 1;
             LinearLayout line = row(); line.setGravity(Gravity.TOP); line.setPadding(0, dp(8), 0, dp(8)); box.addView(line, new LinearLayout.LayoutParams(-1, -2));
@@ -1354,11 +1365,11 @@ public final class MainActivity extends AppCompatActivity {
                 if (b.status.equals(Book.READING) || b.status.equals(Book.PAUSED)) { LinearProgressIndicator p = progressBar(b); p.setIndicatorColor(COPPER); p.setTrackThickness(dp(4)); LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(dp(160), -2); pl.setMargins(0, dp(8), 0, 0); info.addView(p, pl); }
                 line.setOnClickListener(v -> details(b));
             } else {
-                info.addView(text("Volume " + n, 15, MUTED, false)); info.addView(text("Non in biblioteca", 12, MUTED, false));
+                info.addView(text("Volume " + n, 15, MUTED, false)); info.addView(text("Non in biblioteca", 13, MUTED, false));
                 MaterialButton find = button("Cerca", R.style.Atlante_Button_Text, () -> { lastOnlineQuery = name + " " + n; prefillOnline = true; onlineSearch(); }); find.setContentDescription("Cerca il volume " + n + " di " + name); line.addView(find);
             }
         }
-        TextView note = text("Nessun numero inventato: i volumi mancanti vengono dai numeri dei tuoi libri. Ordine e saga si correggono dalla scheda.", 12, MUTED, false); note.setPadding(dp(6), dp(12), dp(6), 0); content.addView(note);
+        TextView note = text("Nessun numero inventato: i volumi mancanti vengono dai numeri dei tuoi libri. Ordine e saga si correggono dalla scheda.", 13, MUTED, false); note.setPadding(dp(6), dp(12), dp(6), 0); content.addView(note);
         content.addView(button("Riconosci saghe e ordine", R.style.Atlante_Button_Text, this::recognizeSeries));
     }
 
@@ -1443,7 +1454,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         content.addView(new ReadingMap(this, mapAuthor, selected, app.atlante.library.saga.SagaIndex.known(), this::details), new LinearLayout.LayoutParams(-1, -2));
         TextView hint = text("Autore → saga → libri nell’ordine di lettura. Tocca un libro per aprire la scheda."
-            + (selected.size() == 250 ? " Sono mostrate le prime 250 opere." : ""), 12, MUTED, false);
+            + (selected.size() == 250 ? " Sono mostrate le prime 250 opere." : ""), 13, MUTED, false);
         hint.setPadding(dp(20), dp(4), dp(20), 0); content.addView(hint);
         content.addView(button("Riconosci saghe e ordine",R.style.Atlante_Button_Text,this::recognizeSeries));
     }
@@ -1618,7 +1629,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout box = column();
         MaterialButton header = button(title, R.style.Atlante_Button_Text, () -> { });
         header.setGravity(Gravity.START | Gravity.CENTER_VERTICAL); header.setTextColor(INK); header.setTextSize(16);
-        header.setPadding(0, 0, 0, 0); header.setIconGravity(MaterialButton.ICON_GRAVITY_END);
+        header.setPadding(dp(18), 0, dp(14), 0); header.setIconGravity(MaterialButton.ICON_GRAVITY_END);   // inside its outline
         header.setIconTint(android.content.res.ColorStateList.valueOf(MUTED));
         Runnable update = () -> {
             boolean shown = body.getVisibility() == View.VISIBLE;
@@ -2033,8 +2044,8 @@ public final class MainActivity extends AppCompatActivity {
         else {
             TextView body = text(b.description.trim(), 15, INK, false); body.setMaxLines(8); body.setEllipsize(TextUtils.TruncateAt.END); plot.addView(body);
             if (b.description.length() > 420) { TextView more = text("Mostra tutto", 14, SAGE, false); more.setMinHeight(dp(44)); more.setGravity(Gravity.CENTER_VERTICAL);
-                more.setOnClickListener(v -> { boolean open = body.getMaxLines() == 8; body.setMaxLines(open ? Integer.MAX_VALUE : 8); more.setText(open ? "Mostra meno" : "Mostra tutto"); }); plot.addView(more); }
-            String source = b.meta.optString("descriptionSource", ""); if (!source.isEmpty()) { TextView src = text("Fonte: " + source, 12, MUTED, false); src.setPadding(0, dp(8), 0, 0); plot.addView(src); }
+                more.setOnClickListener(v -> { boolean open = body.getMaxLines() == 8; body.setMaxLines(open ? Integer.MAX_VALUE : 8); more.setText(open ? "Mostra meno" : "Mostra tutto"); }); pill(more); gap(plot, 6); plot.addView(more, new LinearLayout.LayoutParams(-2, -2)); }
+            String source = b.meta.optString("descriptionSource", ""); if (!source.isEmpty()) { TextView src = text("Fonte: " + source, 13, MUTED, false); src.setPadding(0, dp(8), 0, 0); plot.addView(src); }
         }
         if (found && !loading) {
             ArrayList<String[]> rows = new ArrayList<>();
@@ -2044,7 +2055,7 @@ public final class MainActivity extends AppCompatActivity {
                 for (String[] r : rows) { if (box.getChildCount() > 0) rule(box); LinearLayout line = row(); line.setPadding(0, dp(10), 0, dp(10)); box.addView(line, new LinearLayout.LayoutParams(-1, -2));
                     line.addView(text(r[0], 13, MUTED, false), new LinearLayout.LayoutParams(dp(90), -2)); TextView v = text(r[1], 14, INK, false); line.addView(v, new LinearLayout.LayoutParams(0, -2, 1)); } }
         }
-        TextView note = text("Niente viene aggiunto da solo: il libro entra nella tua biblioteca solo con «Aggiungi».", 12, MUTED, false); note.setPadding(dp(4), dp(16), dp(4), 0); p.addView(note);
+        TextView note = text("Niente viene aggiunto da solo: il libro entra nella tua biblioteca solo con «Aggiungi».", 13, MUTED, false); note.setPadding(dp(4), dp(16), dp(4), 0); p.addView(note);
         addBottomNav(); updateBack();
         // No cover yet: the cover engine looks for one (same ISBN, or same title and author), for this sheet only.
         if (found && !loading && image == null) coverWorker.execute(() -> {
@@ -2477,7 +2488,7 @@ public final class MainActivity extends AppCompatActivity {
         if(icon!=0) line.addView(iconTile(icon,SAGE,dp(40),dp(22)));
         LinearLayout info=column(); info.setPadding(icon!=0?dp(14):0,0,dp(8),0); line.addView(info,new LinearLayout.LayoutParams(0,-2,1));
         TextView t=text(title,15,INK,false); t.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); info.addView(t);
-        if(!detail.isEmpty()) { TextView d=text(detail,12,MUTED,false); d.setMaxLines(2); d.setEllipsize(TextUtils.TruncateAt.END); info.addView(d); }
+        if(!detail.isEmpty()) { TextView d=text(detail,13,MUTED,false); d.setMaxLines(2); d.setEllipsize(TextUtils.TruncateAt.END); info.addView(d); }
         line.setTag(info);
         ImageView chevron=new ImageView(this); chevron.setImageResource(R.drawable.ic_chevron_right); chevron.setColorFilter(MUTED); line.addView(chevron,new LinearLayout.LayoutParams(dp(20),dp(20)));
         line.setContentDescription(title+(detail.isEmpty()?"":", "+detail)); line.setOnClickListener(v->action.run());
@@ -2653,7 +2664,17 @@ public final class MainActivity extends AppCompatActivity {
         screen.addView(holder[0], new FrameLayout.LayoutParams(1, 1));
     }
 
-    private void renderAfterRepair() { if (isFinishing() || isDestroyed()) return; if (reading == null && detailId == null) { if (destination.equals("Biblioteca") || destination.equals("Cerca")) showLibrary(); else showCompanion(); } }
+    /** The book as it is now: after a merge (Ripara duplicati, Sync) the record that took it in; null if it was removed. */
+    private Book liveBook(String id) {
+        if (id == null) return null; Book x = store.find(id); if (x != null) return x;
+        String to = app.atlante.library.storage.MergeHistory.redirect(this, id);
+        return to == null || to.equals(id) ? null : store.find(to);
+    }
+
+    private void renderAfterRepair() { if (isFinishing() || isDestroyed()) return;
+        // The open book was merged into another: show the one that took it in, not a page of a book that is gone.
+        if (reading == null && detailId != null && store.find(detailId) == null) { Book to = liveBook(detailId); if (to != null) details(to); else { detailId = null; navigate("Biblioteca"); } return; }
+        if (reading == null && detailId == null) { if (destination.equals("Biblioteca") || destination.equals("Cerca")) showLibrary(); else showCompanion(); } }
 
     private final app.atlante.library.ui.compose.RepairLibraryHost repairHost = new app.atlante.library.ui.compose.RepairLibraryHost() {
         @Override public void start(String type, boolean everything) {
@@ -3180,7 +3201,7 @@ public final class MainActivity extends AppCompatActivity {
         if (OPEN_STATS.equals(action)) { if (reading == null) navigate("Statistiche"); return; }
         if (OPEN_OPERATIONS.equals(action)) { if (reading == null) showOperations(); return; }
         if (OPEN_LIBRARY.equals(action)) { if (reading == null) navigate("Biblioteca"); return; }
-        Book b = store.find(i.getStringExtra(EXTRA_BOOK) == null ? "" : i.getStringExtra(EXTRA_BOOK));
+        Book b = liveBook(i.getStringExtra(EXTRA_BOOK));   // a widget made before a merge opens the record that took the book in
         if (b == null) { app.atlante.library.ui.L.toast(this, "Questo libro non è più nella libreria.", Toast.LENGTH_LONG).show(); navigate("Biblioteca"); return; }
         if (reading != null) { rememberPage(); reading = null; }
         details(b);
@@ -3193,7 +3214,7 @@ public final class MainActivity extends AppCompatActivity {
         if (store == null || reading != null || editingPage || stoppedAt == 0) return;
         if (widgetIntent != null) return;   // a widget asked for a page: onResume opens it
         // A widget changed the books while the app was in the background: draw them again.
-        if (stoppedVersion >= 0 && store.version() != stoppedVersion) { Book b = detailId == null ? null : store.find(detailId); if (b != null) details(b); else showLibrary(); }
+        if (stoppedVersion >= 0 && store.version() != stoppedVersion) { Book b = liveBook(detailId); if (b != null) details(b); else showLibrary(); }
         if (android.os.SystemClock.elapsedRealtime() - stoppedAt > 10 * 60 * 1000L && !destination.equals("Home")) {
             destination = "Home"; detailId = null; closeDrawer(); showLibrary();
         }
@@ -3319,7 +3340,7 @@ public final class MainActivity extends AppCompatActivity {
         for(Book b:all) if(b.status.equals(Book.READ) || ReadingJournal.rating(b)>=4) { if(!b.genre.isEmpty()) genres.add(b.genre); authors.add(b.author); }
         for(Book b:all) if(b.status.equals(Book.TO_READ) && (genres.contains(b.genre)||authors.contains(b.author)) && picks.size()<8) picks.add(b);
         sectionHeader(p,"Scelti dalla tua biblioteca","",null);
-        TextView why=text(picks.isEmpty()?"Completa e valuta qualche libro per trovare affinità nel tuo catalogo.":"Per generi, autori e voti delle tue letture.",12,MUTED,false); why.setPadding(dp(4),0,dp(4),dp(12)); p.addView(why);
+        TextView why=text(picks.isEmpty()?"Completa e valuta qualche libro per trovare affinità nel tuo catalogo.":"Per generi, autori e voti delle tue letture.",13,MUTED,false); why.setPadding(dp(4),0,dp(4),dp(12)); p.addView(why);
         if(!picks.isEmpty()) {
             HorizontalScrollView strip=carousel(p); LinearLayout row=row(); row.setGravity(Gravity.TOP); strip.addView(row);
             for(int i=0;i<picks.size();i++) { Book b=picks.get(i); LinearLayout item=column(); LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(96),-2); if(i>0) lp.setMargins(dp(12),0,0,0); row.addView(item,lp);
@@ -3333,7 +3354,7 @@ public final class MainActivity extends AppCompatActivity {
     void sectionHeader(LinearLayout p,String title,String note,Runnable action) {
         LinearLayout line=row(); line.setGravity(Gravity.BOTTOM); line.setPadding(dp(4),dp(26),dp(4),dp(12)); p.addView(line,new LinearLayout.LayoutParams(-1,-2));
         line.addView(text(title,22,INK,true),new LinearLayout.LayoutParams(0,-2,1));
-        if(!note.isEmpty()) { TextView n=text(note,13,SAGE,false); n.setTypeface(Typeface.DEFAULT_BOLD); line.addView(n); if(action!=null) { n.setOnClickListener(v->action.run()); n.setMinHeight(dp(48)); n.setGravity(Gravity.CENTER_VERTICAL); } }
+        if(!note.isEmpty()) { TextView n=text(note,13,SAGE,false); n.setTypeface(Typeface.DEFAULT_BOLD); if(action!=null) pill(n); line.addView(n); if(action!=null) { n.setOnClickListener(v->action.run()); n.setMinHeight(dp(48)); n.setGravity(Gravity.CENTER_VERTICAL); } }
     }
     /** A horizontal strip that bleeds to the screen edges of a 16dp-padded panel. */
     private HorizontalScrollView carousel(LinearLayout p) {
@@ -3382,7 +3403,7 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void smallMetric(LinearLayout row,String value,String label,int color) {
         LinearLayout item=column(); row.addView(item,new LinearLayout.LayoutParams(0,-2,1));
-        item.addView(text(value,22,color,true)); item.addView(text(label,12,MUTED,false));
+        item.addView(text(value,22,color,true)); item.addView(text(label,13,MUTED,false));
     }
     /** One book on the nightstand: cover, percentage, a Leggi button that starts or shows the timer, +10 pages. */
     private View nightstandCard(Book b) {
@@ -3394,7 +3415,7 @@ public final class MainActivity extends AppCompatActivity {
         TextView author=text(b.author,13,MUTED,false); author.setMaxLines(1); author.setEllipsize(TextUtils.TruncateAt.END); info.addView(author);
         info.addView(new View(this),new LinearLayout.LayoutParams(1,0,1));
         info.addView(text(progress(b)+"%",26,SAGE,true));
-        info.addView(text(b.totalPages>0?"pag. "+b.currentPage+" di "+b.totalPages:progressLabel(b),12,MUTED,false));
+        info.addView(text(b.totalPages>0?"pag. "+b.currentPage+" di "+b.totalPages:progressLabel(b),13,MUTED,false));
         line.setOnClickListener(v->details(b));
         gap(box,14); box.addView(progressBar(b)); gap(box,14);
         LinearLayout actions=row(); box.addView(actions,new LinearLayout.LayoutParams(-1,-2));
@@ -3423,7 +3444,8 @@ public final class MainActivity extends AppCompatActivity {
     }
     /** While a timed session runs, a dark bar above the navigation brings back to it. */
     private void sessionBar() {
-        if(timerBook==null) return; Book active=store.find(timerBook); if(active==null) return;
+        if(timerBook==null) return; Book active=liveBook(timerBook); if(active==null) return;
+        if(!active.id.equals(timerBook)){timerBook=active.id;persistTimer();}
         LinearLayout bar=row(); bar.setPadding(dp(16),dp(8),dp(8),dp(8)); bar.setBackground(background(INK,Color.TRANSPARENT));
         ((GradientDrawable)bar.getBackground()).setCornerRadius(dp(16));
         View dot=new View(this); dot.setBackground(background(COPPER,Color.TRANSPARENT)); ((GradientDrawable)dot.getBackground()).setCornerRadius(dp(4)); bar.addView(dot,new LinearLayout.LayoutParams(dp(8),dp(8)));
@@ -3521,12 +3543,12 @@ public final class MainActivity extends AppCompatActivity {
         stars.setProgressTintList(android.content.res.ColorStateList.valueOf(COPPER)); p.addView(stars,new LinearLayout.LayoutParams(-2,-2));
         stars.setOnRatingBarChangeListener((rating,value,fromUser)->{if(fromUser) {try {Book c=Book.from(b.json()); ReadingJournal.put(c,"rating",(double)value); c.rating=Math.round(value);store.replace(c); b.journal=c.journal;b.rating=c.rating; if(motion()){rating.setScaleX(.96f);rating.setScaleY(.96f);rating.animate().scaleX(1).scaleY(1).setDuration(160).start();}}catch(Exception e){error(e);}}});
         gap(p,12); org.json.JSONObject review=b.journal.optJSONObject("review");
-        if(review!=null) { p.addView(text(review.optString("title"),22,INK,true)); p.addView(text(review.optString("body"),15,INK,false)); p.addView(text(italianDate(review.optString("date")),12,MUTED,false)); }
+        if(review!=null) { p.addView(text(review.optString("title"),22,INK,true)); p.addView(text(review.optString("body"),15,INK,false)); p.addView(text(italianDate(review.optString("date")),13,MUTED,false)); }
         p.addView(button(review==null?"Scrivi una recensione":"Modifica recensione",false,()->reviewEditor(b)));
         headline(p,"Il tuo taccuino"); p.addView(button("Aggiungi nota o citazione",false,()->noteEditor(b,-1)));
         EditText search=field(p,"Cerca nelle note",""); LinearLayout list=column(); p.addView(list);
         Runnable refresh=()->{list.removeAllViews();String q=search.getText().toString().toLowerCase(Locale.ROOT); org.json.JSONArray a=ReadingJournal.array(b,"notes");
-            for(int i=a.length()-1;i>=0;i--){org.json.JSONObject n=a.optJSONObject(i);if(n==null||!n.toString().toLowerCase(Locale.ROOT).contains(q))continue;int index=i;LinearLayout item=surface(list,n.optString("type")+" · "+n.optString("date"));item.addView(text(n.optString("body"),15,INK,false));item.addView(text("Pagina "+n.optInt("page")+" · "+n.optString("tags"),12,MUTED,false));item.addView(button("Modifica nota",R.style.Atlante_Button_Text,()->noteEditor(b,index)));}
+            for(int i=a.length()-1;i>=0;i--){org.json.JSONObject n=a.optJSONObject(i);if(n==null||!n.toString().toLowerCase(Locale.ROOT).contains(q))continue;int index=i;LinearLayout item=surface(list,n.optString("type")+" · "+n.optString("date"));item.addView(text(n.optString("body"),15,INK,false));item.addView(text("Pagina "+n.optInt("page")+" · "+n.optString("tags"),13,MUTED,false));item.addView(button("Modifica nota",R.style.Atlante_Button_Text,()->noteEditor(b,index)));}
             if(a.length()==0)list.addView(text("Pensieri, citazioni, domande: ritrovali qui, anche offline.",14,MUTED,false));}; refresh.run();
         search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){refresh.run();}public void afterTextChanged(Editable e){}});
         headline(p,"Storia della lettura"); activity(p,b,100);
@@ -3610,12 +3632,15 @@ public final class MainActivity extends AppCompatActivity {
         p.addView(button(timed?"Salva la sessione":"Salva",true,()->{
             try {
                 if(timed&&timerBook==null)return;
-                Book c=Book.from(b.json()); c.totalPages=wheels.getTotal(); int m=wheels.getMode();
+                // The book as it is now: merged meanwhile (Ripara duplicati), the session goes to the record that took it in.
+                Book live=liveBook(b.id); if(live==null) throw new java.io.IOException("Questo libro non è più nella libreria.");
+                if(timed&&!live.id.equals(timerBook)){timerBook=live.id;persistTimer();}
+                Book c=Book.from(live.json()); c.totalPages=wheels.getTotal(); int m=wheels.getMode();
                 if(m==0){ c.totalPages=wheels.getTotal(); c.currentPage=wheels.getPage();
                     // Unknown total: the page is kept, the percentage stays as it was (no invented number of pages).
                     if(c.totalPages>0) c.percent=Math.round(100f*c.currentPage/c.totalPages); }
                 else if(m==1){ c.percent=wheels.getPercent(); if(c.totalPages>0) c.currentPage=Math.round(c.percent*c.totalPages/100f); }
-                else { c.currentPage=b.currentPage+wheels.getRead(); if(c.totalPages>0){ c.currentPage=Math.min(c.currentPage,c.totalPages); c.percent=Math.round(100f*c.currentPage/c.totalPages);} }
+                else { c.currentPage=live.currentPage+wheels.getRead(); if(c.totalPages>0){ c.currentPage=Math.min(c.currentPage,c.totalPages); c.percent=Math.round(100f*c.currentPage/c.totalPages);} }
                 boolean done=c.totalPages>0?c.currentPage==c.totalPages&&c.currentPage>0:c.percent==100;
                 boolean moved=c.currentPage>0||c.percent>0;
                 if(done) c.status=Book.READ; else if(moved&&!c.status.equals(Book.READ)) c.status=Book.READING;
@@ -3623,7 +3648,7 @@ public final class MainActivity extends AppCompatActivity {
                 long duration=timed&&wheels.getMinutes()==seconds/60?seconds:wheels.getMinutes()*60L;
                 if(chapterWheel!=null) { if(chapterWheel.getValue()==0) c.journal.remove("chapter"); else ReadingJournal.put(c,"chapter",b.chapters.get(chapterWheel.getValue()-1).title); }
                 if(timed) ReadingJournal.sessionOnce(c,timerFrom,c.currentPage,duration,java.time.LocalDate.now(),b.id+":"+timerWall);
-                else if(duration>0||c.currentPage!=b.currentPage) ReadingJournal.session(c,b.currentPage,c.currentPage,duration,java.time.LocalDate.now());
+                else if(duration>0||c.currentPage!=live.currentPage) ReadingJournal.session(c,live.currentPage,c.currentPage,duration,java.time.LocalDate.now());
                 store.replace(c); if(timed) clearTimer(); renderContent(); details(c);
             } catch(Exception e){ error(e); }
         }),new LinearLayout.LayoutParams(-1,-2));
@@ -3632,7 +3657,8 @@ public final class MainActivity extends AppCompatActivity {
     private long bootCount() { return android.provider.Settings.Global.getInt(getContentResolver(),android.provider.Settings.Global.BOOT_COUNT,-1); }
     private void restoreTimer() {
         android.content.SharedPreferences p=getPreferences(MODE_PRIVATE);timerBook=p.getString("timerBook",null);timerAccumulated=p.getLong("timerAccumulated",0);timerFrom=p.getInt("timerFrom",0);timerRunning=p.getBoolean("timerRunning",false);timerMark=p.getLong("timerMark",0);timerBoot=p.getLong("timerBoot",-2);timerWall=p.getLong("timerWall",0);
-        if(timerBook!=null&&store.find(timerBook)==null){clearTimer();return;}
+        // Merged by Ripara duplicati while the timer ran: the session goes on with the record that took the book in.
+        if(timerBook!=null&&store.find(timerBook)==null){Book to=liveBook(timerBook);if(to==null){clearTimer();return;}timerBook=to.id;persistTimer();}
         if(timerRunning&&(timerBoot!=bootCount()||timerMark>android.os.SystemClock.elapsedRealtime())) {timerRunning=false;persistTimer();}
     }
     private void persistTimer() {getPreferences(MODE_PRIVATE).edit().putString("timerBook",timerBook).putLong("timerAccumulated",timerAccumulated).putInt("timerFrom",timerFrom).putBoolean("timerRunning",timerRunning).putLong("timerMark",timerMark).putLong("timerBoot",timerBoot).putLong("timerWall",timerWall).apply();}
@@ -3664,7 +3690,7 @@ public final class MainActivity extends AppCompatActivity {
         MaterialButton end=button("Termina",R.style.Atlante_Button_Tonal,()->{if(timerRunning){timerAccumulated+=Math.max(0,android.os.SystemClock.elapsedRealtime()-timerMark);timerRunning=false;persistTimer();}progressEditor(b,timerSeconds(),true);});
         end.setIconResource(R.drawable.ic_stop); end.setTextSize(18); end.setMinHeight(dp(64)); end.setIconSize(dp(26));
         p.addView(end,new LinearLayout.LayoutParams(-1,-2));
-        p.addView(text("Termina ferma il tempo e ti chiede fin dove sei arrivato.",12,MUTED,false)); gap(p,16);
+        p.addView(text("Termina ferma il tempo e ti chiede fin dove sei arrivato.",13,MUTED,false)); gap(p,16);
         p.addView(button("Scarta sessione",R.style.Atlante_Button_Text,()->dialogBuilder().setTitle("Scartare la sessione?").setMessage("Questo tempo non verrà registrato.").setNegativeButton("Annulla",null).setPositiveButton("Scarta",(d,w)->{clearTimer();details(b);}).show()));
         uiHandler.removeCallbacks(timerTick);uiHandler.post(timerTick);
     }
