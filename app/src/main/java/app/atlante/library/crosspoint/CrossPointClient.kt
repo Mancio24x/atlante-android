@@ -27,7 +27,12 @@ import java.net.URLEncoder
  * blocked towards the internet), so this client talks HTTP/1.1 over a socket and only to private addresses
  * (192.168.x.x, 10.x.x.x, 172.16-31.x.x): nothing leaves the home network unencrypted.
  */
-class CrossPointClient @JvmOverloads constructor(val host: String, private val port: Int = 80, localOnly: Boolean = true) {
+class CrossPointClient @JvmOverloads constructor(val host: String, private val port: Int = 80, localOnly: Boolean = true, private val binder: Binder? = null) {
+    /**
+     * Puts a socket on a given network. The reader's own Wi-Fi ("CrossPoint-Reader") has no internet, so Android
+     * would send the traffic over mobile data: the app binds its sockets to the Wi-Fi network instead.
+     */
+    interface Binder { fun bind(socket: Socket); fun bind(socket: DatagramSocket) }
     init { if (localOnly) require(isLocal(host)) { "Solo indirizzi della rete di casa, per esempio 192.168.1.20" } }
 
     data class Status(val version: String, val ip: String, val mode: String, val rssi: Int, val uptime: Long)
@@ -83,6 +88,7 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
     private fun open(method: String, path: String, type: String?, length: Long, write: (OutputStream) -> Unit): Response {
         val socket = Socket()
         try {
+            binder?.bind(socket)
             socket.connect(InetSocketAddress(host, port), 4000); socket.soTimeout = 20000
             val out = socket.getOutputStream().buffered(32768)
             val headers = StringBuilder("$method $path HTTP/1.1\r\nHost: $host\r\nConnection: close\r\nUser-Agent: Atlante\r\n")
@@ -128,6 +134,9 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
 
     companion object {
         const val DISCOVERY_PORT = 8134
+        /** The reader's own Wi-Fi (open, no internet) and its address there (firmware: softAP defaults). */
+        const val READER_WIFI = "CrossPoint-Reader"
+        const val READER_ADDRESS = "192.168.4.1"
 
         private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
         private fun text(b: ByteArray) = String(b, Charsets.UTF_8)
@@ -144,9 +153,10 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
             Regex("^crosspoint \\(on (.+)\\);\\d+$").find(reply.trim())?.groupValues?.get(1)
 
         /** Readers on the Wi-Fi: a "hello" broadcast, every CrossPoint answers with its name; at most [millis]. */
-        @JvmStatic fun discover(millis: Int = 2500): List<Device> {
+        @JvmStatic @JvmOverloads fun discover(millis: Int = 2500, binder: Binder? = null): List<Device> {
             val found = LinkedHashMap<String, Device>()
             DatagramSocket().use { s ->
+                binder?.bind(s)
                 s.broadcast = true; s.soTimeout = 400
                 val hello = "hello".toByteArray()
                 runCatching { s.send(DatagramPacket(hello, hello.size, InetAddress.getByName("255.255.255.255"), DISCOVERY_PORT)) }

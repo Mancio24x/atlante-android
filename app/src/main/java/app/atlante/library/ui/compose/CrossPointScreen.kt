@@ -45,6 +45,11 @@ interface CrossPointHost {
     /** Imports downloaded files with the usual import (preview, duplicates, existing records). */
     fun importFiles(files: List<File>)
     fun cacheDir(): File
+    /** Binds CrossPoint sockets to the Wi-Fi (the reader's own Wi-Fi has no internet). */
+    fun binder(): CrossPointClient.Binder?
+    /** Joins the reader's Wi-Fi "CrossPoint-Reader"; [onResult] true when connected. */
+    fun joinReaderWifi(onResult: (Boolean) -> Unit)
+    fun leaveReaderWifi()
 }
 
 object CrossPointView {
@@ -84,13 +89,13 @@ fun CrossPointScreen(host: CrossPointHost) {
     var dialog by remember { mutableStateOf<String?>(null) }
     var target by remember { mutableStateOf<CrossPointClient.Entry?>(null) }
 
-    fun client() = CrossPointClient(address!!)
+    fun client() = CrossPointClient(address!!, binder = host.binder())
     fun say(text: String) { scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(text) } }
     fun load() { val a = address ?: return
         scope.launch {
             busy = "Collegamento…"; failed = null
             try {
-                val (s, list) = withContext(Dispatchers.IO) { val c = CrossPointClient(a); (if (status == null) c.status() else status) to c.list(path) }
+                val (s, list) = withContext(Dispatchers.IO) { val c = CrossPointClient(a, binder = host.binder()); (if (status == null) c.status() else status) to c.list(path) }
                 status = s; entries = list
             } catch (e: Exception) { failed = e.message ?: "CrossPoint non risponde"; entries = null }
             busy = null
@@ -107,9 +112,9 @@ fun CrossPointScreen(host: CrossPointHost) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 24.dp)) {
-            if (address == null) ConnectCard(onAddress = { a -> address = a; host.saveHost(a); path = "/" })
+            if (address == null) ConnectCard(host, onAddress = { a -> address = a; host.saveHost(a); path = "/"; status = null })
             else {
-                DeviceCard(address!!, status, failed, onRetry = { load() }, onForget = { host.saveHost(null); address = null; status = null; entries = null; failed = null })
+                DeviceCard(address!!, status, failed, onJoin = { host.joinReaderWifi { ok -> if (ok) load() } }, onRetry = { load() }, onForget = { host.leaveReaderWifi(); host.saveHost(null); address = null; status = null; entries = null; failed = null })
                 if (entries != null) {
                     // Where you are, as a path you can tap back through.
                     Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -213,10 +218,12 @@ fun CrossPointScreen(host: CrossPointHost) {
     }
 }
 
-@Composable private fun ConnectCard(onAddress: (String) -> Unit) {
+@Composable private fun ConnectCard(host: CrossPointHost, onAddress: (String) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     var searching by remember { mutableStateOf(false) }
+    var joining by remember { mutableStateOf(false) }
+    var joinFailed by remember { mutableStateOf(false) }
     var found by remember { mutableStateOf<List<CrossPointClient.Device>?>(null) }
     var typed by remember { mutableStateOf("") }
     OutlinedCard(Modifier.fillMaxWidth(), shape = Round20, colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
@@ -229,13 +236,24 @@ fun CrossPointScreen(host: CrossPointHost) {
                     Text("Gestisci i libri del lettore da qui.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
             }
-            Text("Sul lettore apri il trasferimento file e collegalo alla stessa rete Wi-Fi del telefono.", Modifier.padding(top = 14.dp),
-                style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            Text("Sul lettore apri il trasferimento file: crea la rete Wi-Fi «${CrossPointClient.READER_WIFI}». Il telefono ci si collega; la rete non ha internet, è normale.",
+                Modifier.padding(top = 14.dp), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             Button(onClick = {
+                joining = true; joinFailed = false
+                host.joinReaderWifi { ok -> joining = false; if (ok) onAddress(CrossPointClient.READER_ADDRESS) else joinFailed = true }
+            }, Modifier.fillMaxWidth().padding(top = 14.dp).height(48.dp), enabled = !joining) {
+                Icon(painterResource(R.drawable.ic_ereader), null, Modifier.size(20.dp))
+                Text(if (joining) "Mi collego a «${CrossPointClient.READER_WIFI}»…" else "Collegati al Wi-Fi del lettore", Modifier.padding(start = 8.dp)) }
+            if (joinFailed) Text("Non collegato. Scegli «${CrossPointClient.READER_WIFI}» nelle impostazioni Wi-Fi del telefono, poi torna qui.",
+                Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = colors.tertiary)
+            TextButton(onClick = { onAddress(CrossPointClient.READER_ADDRESS) }, Modifier.fillMaxWidth()) { Text("Il telefono è già sul Wi-Fi del lettore") }
+            HorizontalDivider(Modifier.padding(vertical = 12.dp), color = colors.outlineVariant)
+            Text("Lettore collegato al Wi-Fi di casa", style = MaterialTheme.typography.labelLarge)
+            OutlinedButton(onClick = {
                 searching = true; found = null
-                scope.launch { found = withContext(Dispatchers.IO) { runCatching { CrossPointClient.discover() }.getOrDefault(emptyList()) }; searching = false
+                scope.launch { found = withContext(Dispatchers.IO) { runCatching { CrossPointClient.discover(binder = host.binder()) }.getOrDefault(emptyList()) }; searching = false
                     found?.singleOrNull()?.let { onAddress(it.host) } }
-            }, Modifier.fillMaxWidth().padding(top = 14.dp).height(48.dp), enabled = !searching) {
+            }, Modifier.fillMaxWidth().padding(top = 8.dp).height(48.dp), enabled = !searching) {
                 Icon(painterResource(R.drawable.ic_search), null, Modifier.size(20.dp)); Text(if (searching) "Cerco sulla rete…" else "Cerca CrossPoint", Modifier.padding(start = 8.dp)) }
             found?.let { list ->
                 if (list.isEmpty()) Text("Nessun lettore trovato. Controlla che il trasferimento file sia aperto, oppure scrivi l’indirizzo che mostra.",
@@ -256,7 +274,7 @@ fun CrossPointScreen(host: CrossPointHost) {
     }
 }
 
-@Composable private fun DeviceCard(address: String, status: CrossPointClient.Status?, failed: String?, onRetry: () -> Unit, onForget: () -> Unit) {
+@Composable private fun DeviceCard(address: String, status: CrossPointClient.Status?, failed: String?, onJoin: () -> Unit, onRetry: () -> Unit, onForget: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     OutlinedCard(Modifier.fillMaxWidth(), shape = Round20, colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
         Column(Modifier.padding(18.dp)) {
@@ -269,12 +287,13 @@ fun CrossPointScreen(host: CrossPointHost) {
                     Text(when {
                         failed != null -> failed
                         status == null -> address
-                        else -> "$address · versione ${status.version}" + if (status.mode == "STA") " · segnale " + signal(status.rssi) else " · rete del lettore"
+                        else -> "$address · versione ${status.version}" + if (status.mode == "STA") " · segnale " + signal(status.rssi) else " · Wi-Fi del lettore"
                     }, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
             }
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (failed != null) FilledTonalButton(onClick = onRetry) { Text("Riprova") }
+                if (failed != null && address == CrossPointClient.READER_ADDRESS) FilledTonalButton(onClick = onJoin) { Text("Collegati al Wi-Fi del lettore") }
+                if (failed != null) TextButton(onClick = onRetry) { Text("Riprova") }
                 TextButton(onClick = onForget) { Text("Cambia lettore") }
             }
         }

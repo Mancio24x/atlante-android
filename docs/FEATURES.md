@@ -39,8 +39,11 @@ i libri di genere recenti (Wikidata).
 
 ## CrossPoint (lettore e-ink)
 
-Pagina «CrossPoint» (menu laterale, o Sync › Importa ed esporta). Il lettore deve avere aperta la schermata di
-trasferimento file sulla stessa rete Wi-Fi. API del firmware: `GET /api/status`, `GET /api/files?path=`,
+Pagina «CrossPoint» (menu laterale, o Sync › Importa ed esporta). Il lettore apre la schermata di trasferimento file e crea la
+sua rete Wi-Fi aperta «CrossPoint-Reader» (senza internet), indirizzo 192.168.4.1: «Collegati al Wi-Fi del lettore»
+la chiede ad Android (10+, `WifiNetworkSpecifier`; prima apre le impostazioni Wi-Fi). Tutti i socket sono legati alla
+rete Wi-Fi (`CrossPointWifi`), altrimenti Android userebbe i dati mobili. Funziona anche con il lettore sul Wi-Fi di
+casa (ricerca o indirizzo IP). API del firmware: `GET /api/status`, `GET /api/files?path=`,
 `GET /download?path=`, `POST /upload?path=` (multipart), `POST /mkdir`, `/rename`, `/move`, `/delete`; scoperta con
 «hello» in UDP sulla porta 8134 (risposta `crosspoint (on <nome>);81`). Codice: `crosspoint/CrossPointClient.kt`,
 `ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`.

@@ -2411,6 +2411,11 @@ public final class MainActivity extends AppCompatActivity {
             }
             @Override public void importFiles(java.util.List<? extends File> files) { ArrayList<Uri> uris = new ArrayList<>(); for (File f : files) uris.add(Uri.fromFile(f)); importUris(uris, false); }
             @Override public File cacheDir() { return getCacheDir(); }
+            @Override public app.atlante.library.crosspoint.CrossPointClient.Binder binder() { return app.atlante.library.crosspoint.CrossPointWifi.binder(MainActivity.this); }
+            @Override public void joinReaderWifi(kotlin.jvm.functions.Function1<? super Boolean, kotlin.Unit> onResult) {
+                app.atlante.library.crosspoint.CrossPointWifi.join(MainActivity.this, ok -> { runOnUiThread(() -> onResult.invoke(ok)); return kotlin.Unit.INSTANCE; });
+            }
+            @Override public void leaveReaderWifi() { app.atlante.library.crosspoint.CrossPointWifi.leave(MainActivity.this); }
         });
     }
     /** Sync (design 5a), drawn in Compose (ui/compose/SyncScreen.kt); the actions are the same methods as before. */

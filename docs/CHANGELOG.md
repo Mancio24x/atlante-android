@@ -6,6 +6,8 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-08
 
+- **CrossPoint sul suo Wi-Fi**: «Collegati al Wi-Fi del lettore» si collega alla rete aperta «CrossPoint-Reader» (senza
+  internet, 192.168.4.1) e il traffico verso il lettore passa dal Wi-Fi anche con i dati mobili accesi.
 - **CrossPoint**: nuova pagina (menu laterale, e una riga in Sync) per il lettore e-ink CrossPoint sulla rete di
   casa: ricerca automatica (UDP «hello» sulla porta 8134) o indirizzo IP, stato del lettore, cartelle e file,
   «Invia libri» dalla biblioteca, «Scarica in Atlante» (con la solita importazione), nuova cartella, rinomina,
