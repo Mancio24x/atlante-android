@@ -293,7 +293,10 @@ tap('Filtri e ordine');tap('Altri filtri');shot('52b-filters')
 assert visible('Tutte le lingue') and visible('Tutti gli anni') and visible('Tutti gli universi'), 'Language / year / universe filters missing'
 tap('Annulla',exact=True)
 # [Barra ricerca] [Genere] [Autore]: the two quick filters open their lists.
-tap('Filtri e ordine');tap('Filtra per genere');time.sleep(.5);shot('52d-genre-filter');tap('Chiudi',exact=True)
+tap('Filtri e ordine');tap('Filtra per genere');time.sleep(.5);shot('52d-genre-filter')
+# The genre sheet: chips without book counts; back closes it.
+assert not any(re.search(r' · \d+$', n.get('text','')) for n in dump().iter('node')), 'Book counts still in the genre filter'
+back();time.sleep(.5)
 tap('Filtri e ordine');tap('Filtra per autore');time.sleep(.5);shot('52e-author-filter')
 assert visible('Tutti gli autori'), 'Author filter missing'
 tap('Chiudi',exact=True)
