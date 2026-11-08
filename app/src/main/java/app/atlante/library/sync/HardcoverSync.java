@@ -281,12 +281,35 @@ public final class HardcoverSync {
         if (copies.isEmpty()) return out;
         Map<String, Integer> byIsbn = bookIds(api, isbns, s, progress);
         Set<String> used = new HashSet<>();
+        // Only books that can be the same book are compared: the same author's surname, the same ISBN, the same
+        // Hardcover book through an ISBN, or no author at all. Comparing every copy with every book and every edition
+        // took hours on a real library (hundreds of copies, dozens of editions each) and held Sync and "Ripara duplicati".
+        Map<String, List<Book>> bySurname = new HashMap<>(), byIsbnBook = new HashMap<>();
+        Map<Integer, List<Book>> byHardcover = new HashMap<>(); List<Book> noAuthor = new ArrayList<>();
+        Map<Book, Integer> order = new java.util.IdentityHashMap<>();
+        for (int i = 0; i < all.size(); i++) {
+            Book b = all.get(i); order.put(b, i);
+            Set<String> names = BookMatcher.surnames(b.author);
+            if (names.isEmpty()) noAuthor.add(b); else for (String n : names) bySurname.computeIfAbsent(n, k -> new ArrayList<>()).add(b);
+            for (String i13 : BookMatcher.isbns(b.isbn)) byIsbnBook.computeIfAbsent(i13, k -> new ArrayList<>()).add(b);
+            Integer hc = bookIdOf(b, byIsbn); if (hc != null) byHardcover.computeIfAbsent(hc, k -> new ArrayList<>()).add(b);
+        }
         progress.update("Confronto delle schede…");
+        int done = 0;
         for (Book c : copies) {
+            if (s.cancelled) break;
+            if (++done % 25 == 0) progress.update("Confronto delle schede · " + done + " di " + copies.size());
             JSONObject ub = byId.get(SyncCore.link(c, SERVICE).optInt("id"));
             Book best = null; int top = 0; boolean sure = false;
-            List<Book> whole = wholeIdentities(ub);
-            for (Book o : all) {
+            List<Book> whole = wholeIdentities(ub), ids = identities(ub);
+            java.util.LinkedHashSet<Book> near = new java.util.LinkedHashSet<>(noAuthor);
+            for (Book id : ids) {
+                for (String n : BookMatcher.surnames(id.author)) { List<Book> l = bySurname.get(n); if (l != null) near.addAll(l); }
+                for (String i13 : BookMatcher.isbns(id.isbn)) { List<Book> l = byIsbnBook.get(i13); if (l != null) near.addAll(l); }
+            }
+            List<Book> sameHc = byHardcover.get(ub.optInt("book_id")); if (sameHc != null) near.addAll(sameHc);
+            List<Book> candidates = new ArrayList<>(near); candidates.sort((x, y) -> Integer.compare(order.get(x), order.get(y)));   // as before: library order
+            for (Book o : candidates) {
                 if (o == c || used.contains(o.id) || used.contains(c.id)) continue;
                 if (different(c, o)) continue;                                  // you said they are two books
                 JSONObject ol = SyncCore.link(o, SERVICE);
@@ -295,7 +318,7 @@ public final class HardcoverSync {
                 int score = viaIsbn != null && viaIsbn == ub.optInt("book_id") ? 200 : 0;
                 int wholeScore = score;
                 for (Book id : whole) wholeScore = Math.max(wholeScore, BookMatcher.score(o, id));
-                for (Book id : identities(ub)) score = Math.max(score, BookMatcher.score(o, id));
+                for (Book id : ids) score = Math.max(score, BookMatcher.score(o, id));
                 if (score > top) { top = score; best = o; sure = wholeScore >= BookMatcher.SAME_TITLE_AND_AUTHOR; }
             }
             // The one kept is never a newer bare sheet than the copy.
@@ -423,10 +446,12 @@ public final class HardcoverSync {
     public static JSONObject match(Book local, List<JSONObject> remote, Set<Integer> taken) {
         JSONObject link = SyncCore.link(local, SERVICE);
         if (link != null && link.optInt("id") > 0) for (JSONObject ub : remote) if (ub.optInt("id") == link.optInt("id") && !taken.contains(ub.optInt("id"))) return ub;
+        RemoteIndex index = RemoteIndex.of(remote);
         JSONObject found = null; int top = 0;
-        for (JSONObject ub : remote) {
+        for (int i : index.candidates(local)) {
+            JSONObject ub = remote.get(i);
             if (taken.contains(ub.optInt("id"))) continue;
-            int score = 0; for (Book id : identities(ub)) score = Math.max(score, BookMatcher.score(local, id));
+            int score = 0; for (Book id : index.ids.get(i)) score = Math.max(score, BookMatcher.score(local, id));
             if (score > top) { top = score; found = ub; }
         }
         return top >= BookMatcher.SAME_TITLE_UNKNOWN_AUTHOR ? found : null;
@@ -435,8 +460,66 @@ public final class HardcoverSync {
     /** The local book that is this Hardcover record (any of its titles and ISBNs), or null. */
     static Book bestIdentity(List<Book> books, JSONObject ub) {
         Book found = null; int top = 0;
-        for (Book b : books) { int score = 0; for (Book id : identities(ub)) score = Math.max(score, BookMatcher.score(b, id)); if (score > top) { top = score; found = b; } }
+        List<Book> ids = identities(ub);
+        Set<String> names = new HashSet<>(), codes = new HashSet<>(); boolean unknown = false;
+        for (Book id : ids) { Set<String> n = names(id.author); if (n.isEmpty()) unknown = true; names.addAll(n); codes.addAll(BookMatcher.isbns(id.isbn)); }
+        for (Book b : books) {
+            // Only a book that can be this one: an author in common, an ISBN in common, or an author missing on one side.
+            Set<String> n = names(b.author);
+            if (!unknown && !n.isEmpty() && java.util.Collections.disjoint(n, names) && java.util.Collections.disjoint(BookMatcher.isbns(b.isbn), codes)) continue;
+            int score = 0; for (Book id : ids) score = Math.max(score, BookMatcher.score(b, id));
+            if (score > top) { top = score; found = b; }
+        }
         return top >= BookMatcher.SAME_TITLE_UNKNOWN_AUTHOR ? found : null;
+    }
+
+    private static final Map<String, Set<String>> NAMES = new java.util.concurrent.ConcurrentHashMap<>();
+    /** BookMatcher.surnames, kept per author name (the same names come back thousands of times in one sync). */
+    static Set<String> names(String author) {
+        if (author == null) return java.util.Collections.emptySet();
+        if (NAMES.size() > 20000) NAMES.clear();
+        return NAMES.computeIfAbsent(author, BookMatcher::surnames);
+    }
+
+    /**
+     * Hardcover's records by author surname and ISBN, built once per list: a book is compared only with the records
+     * that can be it, in the list's order. Comparing every book with every record and every edition took hours.
+     */
+    static final class RemoteIndex {
+        private static RemoteIndex last; private static List<JSONObject> lastList; private static int lastSize;
+        final List<List<Book>> ids = new ArrayList<>();
+        private final Map<String, List<Integer>> bySurname = new HashMap<>(), byIsbn = new HashMap<>();
+        private final List<Integer> noAuthor = new ArrayList<>(); private final int size;
+
+        static synchronized RemoteIndex of(List<JSONObject> remote) {
+            if (last == null || lastList != remote || lastSize != remote.size()) { last = new RemoteIndex(remote); lastList = remote; lastSize = remote.size(); }
+            return last;
+        }
+
+        private RemoteIndex(List<JSONObject> remote) {
+            size = remote.size();
+            for (int i = 0; i < remote.size(); i++) {
+                List<Book> list = identities(remote.get(i)); ids.add(list);
+                boolean unknown = list.isEmpty();
+                Set<String> seen = new HashSet<>();
+                for (Book id : list) {
+                    Set<String> n = names(id.author); if (n.isEmpty()) unknown = true;
+                    for (String x : n) if (seen.add("n" + x)) bySurname.computeIfAbsent(x, k -> new ArrayList<>()).add(i);
+                    for (String x : BookMatcher.isbns(id.isbn)) if (seen.add("i" + x)) byIsbn.computeIfAbsent(x, k -> new ArrayList<>()).add(i);
+                }
+                if (unknown) noAuthor.add(i);
+            }
+        }
+
+        /** Positions of the records that can be [b], in order. */
+        List<Integer> candidates(Book b) {
+            Set<String> n = names(b.author);
+            if (n.isEmpty()) { List<Integer> all = new ArrayList<>(); for (int i = 0; i < size; i++) all.add(i); return all; }
+            java.util.TreeSet<Integer> out = new java.util.TreeSet<>(noAuthor);
+            for (String x : n) { List<Integer> l = bySurname.get(x); if (l != null) out.addAll(l); }
+            for (String x : BookMatcher.isbns(b.isbn)) { List<Integer> l = byIsbn.get(x); if (l != null) out.addAll(l); }
+            return new ArrayList<>(out);
+        }
     }
 
     /**
