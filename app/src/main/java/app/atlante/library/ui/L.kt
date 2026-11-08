@@ -76,9 +76,16 @@ object L {
         exact = e; patterns = p.sortedByDescending { it.first.pattern.replace("(.+?)", "").length }; loaded = true
     }
 
+    /**
+     * A sentence with few fixed words ("{} libri", "{} di {}") takes only numbers in its blanks: otherwise it would
+     * rewrite a book's title ("Il trono di spade" is not "{} of {}").
+     */
     private fun compile(it: String): Regex {
         val parts = it.split("{}")
-        return Regex("^" + parts.joinToString("(.+?)") { Regex.escape(it) } + "$", RegexOption.DOT_MATCHES_ALL)
+        val fixed = parts.sumOf { p -> p.count { c -> c.isLetter() } }
+        val loose = fixed < 12 && it.startsWith("{}") && !parts.last().trimStart().let { t -> t.startsWith(",") || t.startsWith(".") || t.startsWith(":") }
+        val blank = if (loose) "([+\\-−]?[\\d][\\d.,:/%]*(?: ?(?:%|h|min|MB|KB|B))?)" else "(.+?)"
+        return Regex("^" + parts.joinToString(blank) { Regex.escape(it) } + "$", RegexOption.DOT_MATCHES_ALL)
     }
 
     /** The text as shown in the app's language. */
@@ -123,6 +130,8 @@ object L {
             val groups = m.groupValues.drop(1).map { translate(it, depth + 1) }
             return wrap(fill(en, groups))
         }
+        // A long text (a plot, a note) only when the dictionary knows it whole: never cut and half rewritten.
+        if (core.length > 90) return s
         // Cut at the separator that leaves the fewest pieces in Italian.
         var best: String? = null; var bestLeft = Int.MAX_VALUE
         for (sep in separators) {

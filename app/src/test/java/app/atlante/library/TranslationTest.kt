@@ -28,6 +28,12 @@ class TranslationTest {
         assertEquals("Reading · 43%", L.t("In lettura · 43%"))                           // pieces around " · "
         assertEquals("Il nome della rosa", L.t("Il nome della rosa"))                    // a book's title is never translated
         assertEquals("M", L.weekInitials()[0]); assertEquals("J", L.monthInitials()[0])
+        // A plot or a note: never half translated, even when one of its sentences is in the dictionary.
+        val plot = "Un monaco indaga su una serie di delitti in un'abbazia del Trecento. Saga. Biblioteca. Il mistero si infittisce quando un altro confratello viene trovato morto."
+        assertEquals(plot, L.t(plot))
+        assertEquals("Il trono di spade", L.t("Il trono di spade"))                      // "{} di {}" takes numbers only
+        assertEquals("Tutti i miei libri", L.t("Tutti i miei libri"))
+        assertEquals("3 of 10", L.t("3 di 10"))
     }
 
     @Test fun italianUntouched() {
