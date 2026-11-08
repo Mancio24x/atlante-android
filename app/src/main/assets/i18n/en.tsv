@@ -1,0 +1,1052 @@
+# Italian	English — see ui/L.kt. {} is a blank (a number or a title); {1} {2} reorder blanks.
+{} (testo): senza, lo stato non viene condiviso.	{} (text): without it, the status is not shared.
++10 pagine	+10 pages
+{}, aperta. Tocca per chiudere	{}, open. Tap to close
+{}, chiusa. Tocca per aprire	{}, closed. Tap to open
+{}, con commento	{}, with a comment
+{}, dal catalogo: tocca per aprirne la scheda	{}, from the catalogue: tap to open its page
+{}, già in Atlante	{}, already in Atlante
+{}, non attiva	{}, off
+{}. Nessun avanzamento applicato.	{}. No progress applied.
+1 giorno	1 day
+1. In Calibre: Preferenze › Aggiungi colonne personalizzate. Crea tre colonne: «stato» (testo), «pagina» (numeri interi) e «capitolo» (testo). I nomi di ricerca diventano #stato, #pagina e #capitolo.	1. In Calibre: Preferences › Add your own columns. Create three columns: «stato» (text), «pagina» (integers) and «capitolo» (text). Their lookup names become #stato, #pagina and #capitolo.
+2. Avvia il server: Collega/condividi › Avvia server di contenuti. L’indirizzo è quello del computer, per esempio http://192.168.1.10:8080.	2. Start the server: Connect/share › Start Content server. The address is the computer's, for example http://192.168.1.10:8080.
+3. Per scrivere stato e pagina serve un utente con permesso di modifica: Preferenze › Condivisione in rete › Richiedi nome utente e password, poi Utenti › Aggiungi utente, senza «sola lettura».	3. To write status and page you need a user allowed to make changes: Preferences › Sharing over the net › Require username and password, then Users › Add user, without «read only».
+ANTEPRIMA DEL LETTORE	READER PREVIEW
+Accento	Accent
+Aggiorna	Update
+Aggiorna avanzamento	Update progress
+Aggiorna le saghe ogni	Refresh series every
+Aggiungi	Add
+Aggiungi a Da leggere	Add to To read
+Aggiungi alla mia libreria	Add to my library
+Aggiungi altri capitoli	Add more chapters
+Aggiungi capitoli	Add chapters
+Aggiungi come edizione	Add as an edition
+Aggiungi libro	Add book
+Aggiungi libro manualmente	Add a book by hand
+Aggiungi nota o citazione	Add a note or quote
+Aggiungi prima un libro alla biblioteca	Add a book to the library first
+Aggiunta dei libri	Adding books
+Aggiunto alla tua biblioteca	Added to your library
+Al	To
+Altre lingue	Other languages
+Altri generi	Other genres
+Altri libri della saga	More books in the series
+Analisi locale	Local analysis
+Anni	Years
+Anno	Year
+Anno di pubblicazione	Year of publication
+Anno:	Year:
+Annulla	Cancel
+Annulla e torna al libro	Cancel and go back to the book
+Annulla l’ultima unione	Undo the last merge
+Annullata	Cancelled
+Annullato	Cancelled
+Anteprima del libro	Book preview
+Anteprima del tema	Theme preview
+Apertura libro	Opening book
+Applica	Apply
+Applica il mio tema	Apply my theme
+Applica le modifiche scelte	Apply the chosen changes
+Applica modalità	Apply mode
+Applica selezionate	Apply selected
+Apri	Open
+Apri con KOReader	Open with KOReader
+Apri il menu ☰ per cercare nuovi titoli online o importare EPUB, TXT e CBZ. Tutte le tue letture, anche su carta, trovano posto qui.	Open the ☰ menu to find new titles online or import EPUB, TXT and CBZ. All your reading, paper books too, has a place here.
+Apri la biblioteca	Open the library
+Apri la libreria ›	Open the library ›
+Apri la pagina delle chiavi ↗	Open the keys page ↗
+Apri le statistiche	Open statistics
+Apri menu laterale	Open side menu
+Apri sessione	Open session
+Apri su Open Library	Open on Open Library
+Argomenti	Subjects
+Aspetto	Appearance
+Attiva gli obiettivi di lettura nelle impostazioni dell’app.	Turn on reading goals in the app's settings.
+Attività recente	Recent activity
+Attuale	Current
+Audiolibro	Audiobook
+Automatica	Automatic
+Autore	Author
+Autore della mappa	Author of the map
+Autore mancante	Missing author
+Autore sconosciuto	Unknown author
+Autore → saga → libri nell’ordine di lettura. Tocca un libro per aprire la scheda.	Author → series → books in reading order. Tap a book to open its page.
+Autore → saghe → libri	Author → series → books
+Autori	Authors
+Avanzamento KOReader non valido	Invalid KOReader progress
+Avanzamento di Sync con Hardcover	Hardcover sync progress
+Avanzamento di duplicati, saghe e metadati	Progress of duplicates, series and metadata
+Avvia il timer di lettura	Start the reading timer
+Avvia il timer di lettura per	Start the reading timer for
+Avvia una riparazione: continua anche se chiudi questa pagina o l’app, con la notifica dell’avanzamento.	Start a repair: it goes on even if you close this page or the app, with a progress notification.
+Azioni del libro	Book actions
+Azzera	Reset
+Azzera filtri	Reset filters
+Biblioteca	Library
+Blu polvere	Powder blue
+Buongiorno	Good morning
+Buonasera	Good evening
+Buon pomeriggio	Good afternoon
+Buonanotte	Good night
+Cache svuotata	Cache cleared
+Calibre chiede nome utente e password: controlla le credenziali.	Calibre asks for a username and password: check the credentials.
+Calibre ha risposto con codice	Calibre answered with code
+Calibre non permette di scrivere: usa un utente con permesso di modifica (vedi la guida nella sezione Sync).	Calibre does not allow writing: use a user allowed to make changes (see the guide in the Sync section).
+Calibre sincronizzato	Calibre synced
+Cambia	Change
+Cambia copertina	Change cover
+Cambia lettore	Change reader
+Cambia o rimuovi la chiave	Change or remove the key
+Cambia l’ordine	Change the order
+Cancella	Delete
+Capitoli	Chapters
+Capitolo	Chapter
+Cartaceo	Paper
+Cartella	Folder
+Cartella superiore	Parent folder
+Cerca	Search
+Cerca CrossPoint	Find CrossPoint
+Cerca anche online	Search online too
+Cerca e migliora le copertine	Find and improve covers
+Cerca il tuo primo libro	Find your first book
+Cerca il volume	Find the volume
+Cerca in	Search in
+Cerca le copertine	Find covers
+Cerca le edizioni online	Find editions online
+Cerca libri online	Find books online
+Cerca metadati online	Find metadata online
+Cerca nella biblioteca	Search the library
+Cerca nelle impostazioni	Search settings
+Cerca nelle note	Search notes
+Cerca per titolo originale	Search by original title
+Cerca per titolo, autore o ISBN nel catalogo delle biblioteche italiane (SBN, per l’italiano) e su Open Library. Si aggiunge una scheda personale, anche se non possiedi il file. La ricerca invia al servizio solo il testo inserito.	Search by title, author or ISBN on Open Library (and, for Italian, the catalogue of Italian libraries, SBN). A personal book page is added, even if you don't own the file. The search sends only the text you type.
+Cerca solo libri nella lingua scelta	Search only books in the chosen language
+Cerca titolo, autore o ISBN	Search title, author or ISBN
+Cerca titolo, autore, saga, ISBN	Search title, author, series, ISBN
+Cerca un autore	Search for an author
+Cerco la saga su Hardcover…	Looking for the series on Hardcover…
+Cerco la saga su Wikidata e Open Library…	Looking for the series on Wikidata and Open Library…
+Cerco la trama…	Looking for the plot…
+Cerco l’edizione e la trama…	Looking for the edition and the plot…
+Cerco sulla rete…	Searching the network…
+Chiara	Light
+Chiaro	Light
+Chiave inserita	Key entered
+Chiave personale	Personal key
+Chiave personale di Hardcover	Hardcover personal key
+Chiavi	Keys
+Chiavi e password restano su questo telefono. Ai servizi vanno solo stato, pagina, capitolo e voto dei libri collegati.	Keys and passwords stay on this phone. Services receive only the status, page, chapter and rating of linked books.
+Chiudi	Close
+Chiudi menu laterale	Close side menu
+Citazione	Quote
+Classici	Classics
+Collana	Imprint series
+Collega	Connect
+Collega con Hardcover	Connect to Hardcover
+Collega il file	Link the file
+Collega un libro	Link a book
+Collega un libro a KOReader	Link a book to KOReader
+Collegati al Wi-Fi del lettore	Join the reader's Wi-Fi
+Collegato	Connected
+Collegato · saghe, numeri e universi	Connected · series, numbers and universes
+Collezioni	Collections
+Collezioni del libro	Book's collections
+Colori	Colours
+Colori dei dorsi	Spine colours
+Colori del telefono	Phone colours
+Colori del tema	Theme colours
+Colori di Android	Android colours
+Colori vari	Mixed colours
+Come prepararlo	How to set it up
+Comics	Comics
+Commento	Comment
+Compaiono in Home e in Statistiche. I progressi usano le sessioni registrate e le date in cui hai finito i libri.	They appear in Home and Statistics. Progress uses your recorded sessions and the dates you finished books.
+Completa e valuta qualche libro per trovare affinità nel tuo catalogo.	Finish and rate a few books to find matches in your catalogue.
+Completa metadati	Complete metadata
+Completa i dati online	Complete the data online
+Completata	Completed
+Completato	Completed
+Con i file dei libri (EPUB, TXT, CBZ)	With the books' files (EPUB, TXT, CBZ)
+Con la tua chiave personale di Hardcover Atlante riconosce saga, numero del volume, sotto-serie e universo (per esempio il Cosmere) di tutti i libri, anche con il titolo italiano, più in fretta e con più precisione. Senza chiave usa Wikidata e Open Library. Ognuno usa la propria chiave: è gratuita e resta solo su questo telefono.	With your personal Hardcover key Atlante recognises the series, volume number, sub-series and universe (the Cosmere, for example) of every book, even under a translated title, faster and more precisely. Without a key it uses Wikidata and Open Library. Everyone uses their own key: it is free and stays on this phone only.
+Con più edizioni	With several editions
+Concludi	Finish
+Concludi la sessione	Finish the session
+Concludi la sessione in corso prima di iniziarne un’altra.	Finish the current session before starting another.
+Concludi o scarta la sessione prima di iniziare una rilettura.	Finish or discard the session before starting a reread.
+Confronto con Hardcover ·	Comparing with Hardcover ·
+Confronto con la biblioteca	Comparing with the library
+Consigli dai lettori di Open Library. Niente viene aggiunto da solo.	Suggestions from Open Library readers. Nothing is added on its own.
+Controlla le mappe	Check the maps
+Controllo del catalogo…	Checking the catalogue…
+Copertina di	Cover of
+Copertina e trama da Open Library, se disponibili.	Cover and plot from Open Library, when available.
+Copertina originale o inglese	Original or English cover
+Copertina piccola o sfocata	Small or blurry cover
+Copertine dei suggerimenti	Suggestion covers
+Copertine dei suggerimenti, risposte dei cataloghi e saghe scaricate. Svuotarli non tocca libri, note, voti né avanzamento.	Suggestion covers, catalogue answers and downloaded series. Clearing them does not touch books, notes, ratings or progress.
+Copertine eliminate	Covers deleted
+Copertine mancanti	Missing covers
+Copertine preferite	Preferred covers
+Cosa resta sul telefono · aggiornamenti	What stays on the phone · updates
+Crea	Create
+Crea in Atlante i libri presenti solo in Calibre	Create in Atlante the books found only in Calibre
+Crea in Atlante i libri presenti solo su Hardcover	Create in Atlante the books found only on Hardcover
+Crea la chiave su Hardcover ↗	Create the key on Hardcover ↗
+Crea una saga	Create a series
+Creo la cartella…	Creating the folder…
+CrossPoint non risponde	CrossPoint is not answering
+Curatela	Editor
+DATI DELLA SCHEDA	BOOK DATA
+Da My Clippings.txt al taccuino del libro	From My Clippings.txt to the book's notebook
+Da iniziare	Not started
+Da leggere	To read
+Da scegliere:	To choose:
+Dagli anni di prima pubblicazione dell’opera, non delle edizioni italiane.	From the years the work was first published, not of its translations.
+Dal catalogo offline, da Hardcover o dalla classificazione delle biblioteche; mai inventato.	From the offline catalogue, Hardcover or library classification; never invented.
+Dall’alto verso il basso. Resta tuo: le sincronizzazioni e gli aggiornamenti delle fonti non lo cambiano.	Top to bottom. It stays yours: syncs and source updates don't change it.
+Dall’altra prende tutto ciò che manca: sessioni, note, voto, ISBN, file e copertina come edizione e copertina alternative.	From the other it takes everything missing: sessions, notes, rating, ISBN, file and cover as an alternative edition and cover.
+Database delle saghe	Series database
+Desideri	Wishlist
+Destinazione non disponibile	Destination not available
+Dettagli	Details
+Dettagli della scheda	Book page details
+Dimensione del testo	Text size
+Dimensione del testo del lettore	Reader text size
+Domanda	Question
+Dopo	After
+Doppioni di Hardcover da verificare	Hardcover duplicates to check
+EPUB, TXT, CBZ e AZW3 senza DRM, anche più file insieme. Prima di aggiungerli vedi titolo, autore e copertina e puoi correggerli; se il libro è già nella libreria puoi collegare il file alla sua scheda.	DRM-free EPUB, TXT, CBZ and AZW3, several files at once. Before adding them you see title, author and cover and can correct them; if the book is already in the library you can link the file to its page.
+Ebook	Ebook
+Editore	Publisher
+Edizione di riferimento:	Reference edition:
+Edizione italiana	Italian edition
+Edizione principale	Main edition
+Edizione trovata	Edition found
+Edizioni di quest’opera ·	Editions of this work ·
+Elenco	List
+Elenco potenzialmente incompleto: la fonte non numera tutti i volumi o mancano dei numeri.	The list may be incomplete: the source doesn't number every volume or some numbers are missing.
+Elimina	Delete
+Elimina nota	Delete note
+Elimina recensione	Delete review
+Eliminare il capitolo?	Delete the chapter?
+Eliminare il libro dal lettore?	Delete the book from the reader?
+Eliminare la cartella?	Delete the folder?
+Eliminare la recensione?	Delete the review?
+Eliminare questa nota?	Delete this note?
+Errore	Error
+Esporta backup	Export backup
+Evidenziazioni del Kindle	Kindle highlights
+Fantascienza	Science fiction
+File da importare non trovato	File to import not found
+File esportato	File exported
+File non disponibile	File not available
+Filosofia	Philosophy
+Filtra per	Filter by
+Filtra per autore	Filter by author
+Filtra per genere	Filter by genre
+Filtri e ordine	Filters and order
+Finito il	Finished on
+Fonti dei dati	Data sources
+Formato	Format
+Formato del libro	Book format
+Formato non valido	Invalid format
+Fumetti	Comics
+GIÀ NELLA TUA LIBRERIA	ALREADY IN YOUR LIBRARY
+Genere	Genre
+Genere non indicato	Genre not given
+Generi	Genres
+Gestisci i libri del lettore da qui.	Manage the reader's books from here.
+Giallo	Crime
+Giorni di lettura di questa settimana	Reading days this week
+Già in libreria · Apri	Already in the library · Open
+Grafite	Graphite
+Griglia	Grid
+Hai già una sessione	You already have a session
+Hardcover chiede di rallentare: riprova tra qualche minuto.	Hardcover asks to slow down: try again in a few minutes.
+Hardcover ha rifiutato la richiesta (403). Usa la chiave personale di hardcover.app/account/api, non quella di un'applicazione	Hardcover refused the request (403). Use the personal key from hardcover.app/account/api, not an application's
+Hardcover ha risposto con codice	Hardcover answered with code
+Hardcover non accetta questa chiave (non valida, scaduta o sostituita da una nuova). Copia la chiave personale da hardcover.app/account/api	Hardcover does not accept this key (invalid, expired or replaced by a new one). Copy the personal key from hardcover.app/account/api
+Hardcover non ha riconosciuto la chiave.	Hardcover did not recognise the key.
+Hardcover scollegato	Hardcover disconnected
+Hardcover sincronizzato	Hardcover synced
+Hardcover: titolo e autore simili	Hardcover: similar title and author
+Historical	Historical
+I dati salvati non sono stati modificati.	The saved data were not changed.
+I libri del lettore e-ink, sulla rete di casa	The e-ink reader's books, on the home network
+I più popolari	Most popular
+I più popolari del genere tra i lettori, un libro per autore.	The genre's most popular among readers, one book per author.
+I tuoi libri restano tuoi.	Your books stay yours.
+IL TUO VOTO	YOUR RATING
+ISBNdb è facoltativo, con la tua chiave.	ISBNdb is optional, with your own key.
+ISBNdb è un servizio a pagamento: usalo solo se hai già un abbonamento.	ISBNdb is a paid service: use it only if you already have a subscription.
+Identificatore non valido	Invalid identifier
+Il file da importare non è più disponibile: sceglilo di nuovo	The file to import is no longer available: choose it again
+Il file di questo libro non è sul telefono: reimportalo da ☰ › Importa ebook. Note e avanzamento restano collegati.	This book's file is not on the phone: import it again from ☰ › Import ebook. Notes and progress stay linked.
+Il file scelto non è leggibile	The chosen file can't be read
+Il file viene collegato alla scheda esistente: voti, note e avanzamento restano.	The file is linked to the existing page: ratings, notes and progress stay.
+Il file è troppo grande per la memoria di questo telefono: nessun libro è stato modificato	The file is too large for this phone's memory: no book was changed
+Il lettore elimina solo cartelle vuote.	The reader deletes only empty folders.
+Il libro che stai leggendo ora (cambia da solo)	The book you are reading now (changes by itself)
+Il libro era già nella tua biblioteca: resta lì	The book was already in your library: it stays there
+Il mio tema	My theme
+Il motore delle saghe non è sicuro: conferma o correggi in Ripara saghe.	The series engine is not sure: confirm or correct in Repair series.
+Il piacere di leggere, una pagina alla volta.	The joy of reading, one page at a time.
+Il telefono e il computer devono essere sulla stessa rete. Senza le colonne Atlante legge comunque la biblioteca.	The phone and the computer must be on the same network. Without the columns Atlante still reads the library.
+Il telefono è già sul Wi-Fi del lettore	The phone is already on the reader's Wi-Fi
+Il tempo continua anche se esci dall’app.	Time keeps running even if you leave the app.
+Il tempo è fermo. Riprendi quando vuoi.	Time is stopped. Resume whenever you like.
+Il tuo lettore e-ink	Your e-ink reader
+Il tuo libro	Your book
+Il tuo ordine	Your order
+Il tuo taccuino	Your notebook
+Il tuo voto, da zero a cinque stelle, mezze stelle disponibili	Your rating, from zero to five stars, half stars included
+Illustrazioni	Illustrations
+Immagine non leggibile	Image can't be read
+Importa	Import
+Importa eBook	Import eBooks
+Importa ebook	Import ebook
+Importa eBook, copertine, saghe, cache	Import eBooks, covers, series, cache
+Importazione completata	Import completed
+Importazione libreria	Library import
+Impostazioni	Settings
+IMPOSTAZIONI	SETTINGS
+Impostazioni del widget	Widget settings
+In Atlante non cambia nulla.	Nothing changes in Atlante.
+In KOReader attiva Sincronizzazione avanzamento e usa lo stesso account. Per collegare tramite nome file scegli in KOReader «Metodo di identificazione: nome file», poi invia l’avanzamento. Atlante riceve la percentuale; non invia posizioni EPUB o note.	In KOReader turn on Progress sync and use the same account. To link by file name choose «Document matching method: filename» in KOReader, then push the progress. Atlante receives the percentage; it does not send EPUB positions or notes.
+In attesa	Waiting
+In attesa della sincronizzazione con Hardcover	Waiting for the Hardcover sync
+In background: segui l’avanzamento nella barra in basso o nella notifica.	In the background: follow the progress in the bar below or in the notification.
+In biblioteca	In the library
+In biblioteca · da leggere	In the library · to read
+In corso	In progress
+In lettura	Reading
+In pausa	Paused
+In una saga, senza numero	In a series, without a number
+In uso · tocca per cambiare i colori	In use · tap to change the colours
+Incolla prima la chiave personale di Hardcover.	Paste your personal Hardcover key first.
+Indietro	Back
+Indirizzo del server Calibre non valido, per esempio http://192.168.1.10:8080	Invalid Calibre server address, for example http://192.168.1.10:8080
+Inizia	Start
+Inizia una rilettura	Start a reread
+Iniziare una nuova lettura?	Start a new reading?
+Iniziato il	Started on
+Inserisci il nome esatto del file in KOReader, inclusa l’estensione. In alternativa usa il partial_md5_checksum presente nel file metadata.epub.lua di KOReader.	Enter the exact file name in KOReader, extension included. Otherwise use the partial_md5_checksum found in KOReader's metadata.epub.lua file.
+Inserisci il titolo	Enter the title
+Inserisci un indirizzo HTTPS valido per il server KOReader	Enter a valid HTTPS address for the KOReader server
+Inserisci un nome file o un checksum valido	Enter a valid file name or checksum
+Inserisci un numero	Enter a number
+Inserisci un numero di pagine valido	Enter a valid number of pages
+Inserisci un numero positivo	Enter a positive number
+Inserisci un titolo	Enter a title
+Inserisci una pagina valida	Enter a valid page
+Installa KOReader e riprova. Se la versione installata non accetta i file tramite selettore Android, esporta il file originale e aprilo da KOReader. Le posizioni dei due lettori restano indipendenti.	Install KOReader and try again. If the installed version doesn't accept files through the Android picker, export the original file and open it from KOReader. The two readers' positions stay separate.
+Interrompi	Stop
+Interrompo dopo il libro in corso…	Stopping after the current book…
+Interrotta da Android: riprende da sola	Stopped by Android: it resumes by itself
+Interrotta da te: le modifiche già applicate restano	Stopped by you: changes already applied stay
+Invia	Send
+Invia a CrossPoint	Send to CrossPoint
+Invia anche i libri «Da leggere» non ancora su Hardcover	Also send «To read» books not yet on Hardcover
+Invia libri	Send books
+Italiane	Italian
+Italiano	Italian
+KOReader non disponibile	KOReader not available
+LA TUA LETTURA · TENTATIVO	YOUR READING · ATTEMPT
+La fine precede l’inizio	The end comes before the start
+La prossima pagina ti aspetta.	The next page is waiting.
+La prossima storia.	The next story.
+La scheda ha già un file: questo diventa un’altra edizione della stessa scheda, senza crearne una nuova.	The page already has a file: this becomes another edition of the same page, without creating a new one.
+La tua biblioteca	Your library
+La tua recensione	Your review
+La tua rotta	Your course
+Lascia senza saga	Leave without a series
+Lavanda	Lavender
+Le ricerche online (SBN, Open Library, Wikidata, Apple Books e Hardcover se hai inserito la chiave) inviano solo titolo, autore o ISBN. Libri e note personali restano sul dispositivo.	Online searches (SBN, Open Library, Wikidata, Apple Books and Hardcover if you entered the key) send only the title, author or ISBN. Books and personal notes stay on the device.
+Le tue collezioni	Your collections
+Le tue copertine	Your covers
+Le tue sessioni, note e letture completate appariranno qui.	Your sessions, notes and finished books will appear here.
+Leggi	Read
+Legno naturale	Natural wood
+Letti	Read
+Letto	Read
+Lettore	Reader
+Lettore chiaro	Light reader
+Lettore collegato al Wi-Fi di casa	Reader connected to the home Wi-Fi
+Lettore scuro	Dark reader
+Lettura	Reading
+Lettura del file	Reading the file
+Lettura della biblioteca Calibre ·	Reading the Calibre library ·
+Lettura della libreria Hardcover ·	Reading the Hardcover library ·
+Lettura iniziata	Reading started
+Libreria non disponibile	Library not available
+Libreria e catalogo	Library and catalogue
+Libri al mese	Books per month
+Libri all’anno	Books per year
+Libri senza copertina, autore, ISBN, genere o pagine, possibili doppioni, saghe senza numero o da verificare: in un posto solo, con le azioni per sistemarli.	Books without a cover, author, ISBN, genre or pages, possible duplicates, series without numbers or to check: all in one place, with the actions to fix them.
+Libri singoli	Standalone books
+Libro completato	Book finished
+Libro da mostrare	Book to show
+Limite aggiornato	Limit updated
+Lingua	Language
+Lingua dei libri	Book language
+Lingua preferita	Preferred language
+Lingua preferita per cercare libri online. Si salva da sola.	Preferred language for finding books online. It saves by itself.
+L’opera è stata riconosciuta, ma nessuna fonte indica una saga. Non per questo è un libro autoconclusivo.	The work was recognised, but no source gives a series. That doesn't make it a standalone.
+L’ordine che hai scelto tu: nessun aggiornamento lo cambia.	The order you chose: no update changes it.
+Manca la chiave personale di Hardcover.	The personal Hardcover key is missing.
+Mancante	Missing
+Mantieni la trama attuale	Keep the current plot
+Mappa	Map
+Mappa di	Map of
+Mappe coerenti con le fonti	Maps consistent with the sources
+Material You · segue lo sfondo e il tema del telefono	Material You · follows the phone's wallpaper and theme
+Meno di 300 pixel; le copertine scelte da te non sono contate.	Under 300 pixels; covers you chose are not counted.
+Mese	Month
+Metadati online	Online metadata
+Metallo	Metal
+Migliora le copertine	Improve covers
+Minuti al giorno	Minutes per day
+Minuti di lettura	Reading minutes
+Minuti di lettura (facoltativo)	Reading minutes (optional)
+Modalità	Mode
+Modifica	Edit
+Modifica nota	Edit note
+Modifica recensione	Edit review
+Modifica scheda	Edit page
+Mondi narrativi	Fictional worlds
+Mostra	Show
+Mostra meno	Show less
+Mostra solo i libri in lettura	Show only books being read
+Mostra solo libri in questa lingua	Show only books in this language
+Mostra tutte quando scelgo	Show all when I choose
+Mostra tutti i libri	Show all books
+Mostra tutto	Show all
+Nasconde le edizioni in altre lingue	Hides editions in other languages
+Nascondi	Hide
+Nessun avanzamento trovato. Controlla i collegamenti e invia prima da KOReader.	No progress found. Check the links and push from KOReader first.
+Nessun capitolo. Puoi aggiungerli per votarli e commentarli.	No chapters. You can add them to rate and comment on them.
+Nessun consiglio disponibile: serve la connessione a Internet.	No suggestions available: an Internet connection is needed.
+Nessun consiglio ora: serve la connessione a Internet.	No suggestions now: an Internet connection is needed.
+Nessun dato aggiuntivo trovato	No additional data found
+Nessun dato nuovo: la scheda è già completa rispetto alle fonti consultate.	Nothing new: the page is already complete compared with the sources checked.
+Nessun lettore trovato. Controlla che il trasferimento file sia aperto, oppure scrivi l’indirizzo che mostra.	No reader found. Check that file transfer is open, or type the address it shows.
+Nessun libro con il suo file in Atlante: importa prima un EPUB (Impostazioni › Libreria e catalogo › Importa eBook).	No book with its file in Atlante: import an EPUB first (Settings › Library and catalogue › Import eBooks).
+Nessun libro in lettura	No book being read
+Nessun libro in lettura: puoi sceglierne uno qualsiasi.	No book being read: you can choose any.
+Nessun libro letto ancora.	No books read yet.
+Nessun libro trovato.	No books found.
+Nessun numero inventato: i volumi mancanti vengono dai numeri dei tuoi libri. Ordine e saga si correggono dalla scheda.	No invented numbers: missing volumes come from your books' numbers. Order and series are corrected from the book page.
+Nessun numero inventato: scegli tu dove vanno con «Cambia l’ordine».	No invented numbers: you choose where they go with «Change the order».
+Nessun obiettivo	No goal
+Nessun risultato in	No results in
+Nessun risultato. Prova titolo e autore o un ISBN.	No results. Try title and author or an ISBN.
+Nessun servizio collegato	No service connected
+Nessun universo per ora. Si riconoscono aprendo i libri delle tue saghe.	No universes yet. They are recognised when you open the books of your series.
+Nessun voto	No rating
+Nessuna	None
+Nessuna app disponibile per aprire il collegamento.	No app available to open the link.
+Nessuna copertina trovata per questo titolo e autore. Controlla ISBN, titolo e autore nella scheda, oppure scegli un’immagine dalla galleria.	No cover found for this title and author. Check ISBN, title and author on the page, or choose an image from the gallery.
+Nessuna evidenziazione trovata: scegli il file My Clippings.txt del Kindle.	No highlights found: choose the Kindle's My Clippings.txt file.
+Nessuna fonte ha riconosciuto l’opera con sicurezza: non è stata associata nessuna saga.	No source recognised the work with certainty: no series was assigned.
+Nessuna fonte numera i volumi di questa saga: scegli tu l’ordine con «Il tuo ordine».	No source numbers this series' volumes: choose the order yourself with «Your order».
+Nessuna lettura	No reading
+Nessuna lettura ancora	No reading yet
+Nessuna lettura registrata quest’anno	No reading recorded this year
+Nessuna nuova saga riconosciuta. Puoi indicare saga e numero nella scheda del libro.	No new series recognised. You can set series and number on the book page.
+Nessuna pagina nel CBZ	No pages in the CBZ
+Nessuna saga ancora. Indica saga e numero nella scheda di un libro, o usa «Riconosci saghe e ordine».	No series yet. Set series and number on a book page, or use «Recognise series and order».
+Nessuna saga salvata. Puoi crearne una.	No saved series. You can create one.
+Nessuna unione da annullare.	No merge to undo.
+Niente da decidere ✓	Nothing to decide ✓
+Niente viene aggiunto da solo: il libro entra nella tua biblioteca solo con «Aggiungi».	Nothing is added on its own: the book joins your library only with «Add».
+No, tengo il mio	No, keep mine
+Noce scuro	Dark walnut
+Nome	Name
+Nome della collezione	Collection name
+Nome della saga	Series name
+Nome file	File name
+Nome utente	Username
+Non aggiungere	Don't add
+Non collegato	Not connected
+Non collegato · serve la tua chiave personale	Not connected · needs your personal key
+Non collegato · server di contenuti sulla rete di casa	Not connected · content server on the home network
+Non configurato · riceve la percentuale letta	Not set up · receives the percentage read
+Non disponibile	Not available
+Non hai ancora un ordine tuo: tocca «Cambia l’ordine».	You don't have your own order yet: tap «Change the order».
+Non ho trovato un’edizione sicura di questo libro: cercala tu tra quelle online.	I couldn't find a certain edition of this book: look for it among the online ones.
+Non in biblioteca	Not in the library
+Non indicato	Not given
+Non raggiungibile	Not reachable
+Non riuscita	Failed
+Non trovato su Hardcover:	Not found on Hardcover:
+Non unire	Don't merge
+Non viene creata una seconda scheda: puoi aggiungere questa edizione (ISBN, editore) alla scheda che hai già.	No second page is created: you can add this edition (ISBN, publisher) to the page you already have.
+Non è stato possibile cercare la saga. Controlla la connessione e riprova.	The series could not be searched. Check the connection and try again.
+Nota	Note
+Note personali	Personal notes
+Notte viola	Purple night
+Numero di pagine (facoltativo)	Number of pages (optional)
+Numero nella saga	Number in the series
+Nuova	New
+Nuova cartella	New folder
+Nuova collezione	New collection
+Nuova scheda da Calibre:	New page from Calibre:
+Nuova scheda da Hardcover:	New page from Hardcover:
+Obiettivi di lettura	Reading goals
+Obiettivo di oggi	Today's goal
+Oggi	Today
+OGGI	TODAY
+Oggi e la tua rotta. Tocca per gli obiettivi.	Today and your course. Tap for goals.
+Oggi,	Today,
+Ogni autore, un mondo.	Every author, a world.
+Ogni libro ha la sua copertina	Every book has its cover
+Ogni libro è un punto di partenza.	Every book is a starting point.
+Operazione non completata	Operation not completed
+Operazione non riuscita	Operation failed
+Oppure l’indirizzo che il lettore mostra	Or the address the reader shows
+Ordina per	Sort by
+Ordini cronologico e consigliato: le fonti non li documentano per questa saga.	Chronological and recommended orders: the sources don't document them for this series.
+PERCHÉ HAI LETTO	BECAUSE YOU READ
+Pagina	Page
+Pagina non disponibile:	Page not available:
+Pagine	Pages
+Pagine al giorno	Pages per day
+Pagine lette	Pages read
+Pagine oggi	Pages today
+Pausa	Pause
+Pensiero	Thought
+Per esempio /Libri/Fantasy	For example /Books/Fantasy
+Per generi, autori e voti delle tue letture.	By the genres, authors and ratings of your reading.
+Per i libri senza genere: Impostazioni › Libreria e catalogo › Indicizza i generi.	For books without a genre: Settings › Library and catalogue › Index genres.
+Percentuale	Percentage
+Perché:	Why:
+Popolari	Popular
+Popolari tra i lettori di Open Library e Hardcover, con un’edizione italiana. Non sono classifiche di vendita.	Popular among Open Library and Hardcover readers. These are not sales charts.
+Posizione da impostare	Position to set
+Posizione da verificare: nessun numero viene inventato.	Position to check: no number is invented.
+Posizione nella libreria	Place on the shelf
+Possibili doppioni	Possible duplicates
+Potrebbero interessarti	You might like
+Precedenti	Earlier
+Preferiti	Favourites
+Preparazione	Preparing
+Prima	First
+Prima pubblicazione	First published
+Privacy e progetto	Privacy and project
+Proposte rapide dai titoli e dai metadati già presenti, senza connessione:	Quick suggestions from titles and metadata already here, without a connection:
+Prova un altro titolo, autore o nome di saga.	Try another title, author or series name.
+Pubblicazione	Publication
+Pulsante «+ pagine»	«+ pages» button
+Pulsante «+ %»	«+ %» button
+Qualità del catalogo	Catalogue quality
+Questo file Kindle usa una compressione che Atlante non sa leggere: puoi catalogarlo e aprirlo con un’altra app.	This Kindle file uses a compression Atlante can't read: you can catalogue it and open it with another app.
+Questo libro non ha un file locale. Importa prima un ebook.	This book has no local file. Import an ebook first.
+Questo libro non è più nella libreria.	This book is no longer in the library.
+Questo mese	This month
+Questo tempo non verrà registrato.	This time won't be recorded.
+Quest’anno	This year
+Ragazzi	Young readers
+Recupero online	Online lookup
+Recupero online da Hardcover	Online lookup from Hardcover
+Riassunto	Summary
+Ricerca non disponibile. Controlla la connessione e riprova.	Search not available. Check the connection and try again.
+Riceve la percentuale letta, anche senza EPUB sul telefono.	Receives the percentage read, even without the EPUB on the phone.
+Ricevi avanzamento	Receive progress
+Riconosci saghe e ordine	Recognise series and order
+Riconosci saghe e ordine di lettura	Recognise series and reading order
+Ricontrolla anche i libri già riconosciuti	Also recheck books already recognised
+Ricontrolla le saghe con il catalogo offline per primo, poi Hardcover (se collegato), Wikidata e Open Library: ricostruisce gli elenchi, completa la saga dei libri che non ce l’hanno e toglie i collegamenti ai libri rimossi. Le tue scelte non vengono toccate.	Rechecks series with the offline catalogue first, then Hardcover (if connected), Wikidata and Open Library: rebuilds the lists, completes the series of books without one and removes links to deleted books. Your choices are not touched.
+Riduci	Collapse
+Riempie solo i campi vuoti: quello che hai scritto, la tua edizione e la copertina scelta restano. Per un solo libro: apri il libro › «Completa i dati online».	Fills only empty fields: what you wrote, your edition and the chosen cover stay. For one book: open the book › «Complete the data online».
+Rimuovi	Remove
+Rinomina	Rename
+Ripara duplicati	Repair duplicates
+Ripara duplicati della libreria	Repair library duplicates
+Ripara mappe delle saghe	Repair series maps
+Ripara saghe	Repair series
+Ripara saghe e mappe	Repair series and maps
+Riparazione	Repair
+Riparazioni del catalogo	Catalogue repairs
+Riprendi	Resume
+Riprendi la lettura	Resume reading
+Riprendi la sessione	Resume the session
+Ripristina copertina originale	Restore the original cover
+Ripristina un backup o importa un catalogo	Restore a backup or import a catalogue
+Riprova	Try again
+Risolvi	Resolve
+Risposta di Calibre non valida	Invalid Calibre response
+Risposte dei cataloghi	Catalogue answers
+Risultati	Results
+Romanzo storico	Historical fiction
+Rosa	Pink
+Rosa petalo	Petal pink
+Rovere chiaro	Light oak
+SCHEDA DEL LIBRO	BOOK PAGE
+SENZA SAGA	NO SERIES
+Sabbia	Sand
+Saga	Series
+Saga completa	Complete series
+Saga non identificata	Series not identified
+Saga o sotto-serie	Series or sub-series
+Saga, universo, lingua, anni o formato attivi ·	Series, universe, language, years or format on ·
+Saga, universo, lingua, anni, formato ·	Series, universe, language, years, format ·
+Saghe	Series
+Saghe ambientate nello stesso mondo: collegate all’universo, non alla sequenza di lettura.	Series set in the same world: linked to the universe, not to the reading sequence.
+Saghe da verificare	Series to check
+Saghe, autori e liste che hai creato	Series, authors and lists you created
+Salva	Save
+Salva la sessione	Save the session
+Salva nota	Save note
+Salva recensione	Save review
+Salvia	Sage
+Scaffale	Shelf
+Scarica le copertine mancanti e sostituisce quelle piccole o sfocate con una più nitida della stessa edizione o dello stesso titolo e autore. Le copertine scelte da te non vengono toccate.	Downloads missing covers and replaces small or blurry ones with a sharper one of the same edition or the same title and author. Covers you chose are not touched.
+Scaricamento non riuscito	Download failed
+Scarta	Discard
+Scarta sessione	Discard session
+Scartare la sessione?	Discard the session?
+Scegli copertina dalla galleria	Choose a cover from the gallery
+Scegli il libro e i colori del widget	Choose the widget's book and colours
+Scegli l’edizione	Choose the edition
+Scegli tu sfondo, schede e accento	Choose background, cards and accent
+Scegli un autore dalla ricerca in alto.	Choose an author from the search above.
+Scegli un libro dalla biblioteca e inizia la tua lettura.	Choose a book from the library and start reading.
+Scegli una saga	Choose a series
+Scheda del libro	Book page
+Schede	Cards
+Scollega	Disconnect
+Scopri	Discover
+Scrivi il numero	Type the number
+Scrivi la tua nota	Write your note
+Scrivi una recensione	Write a review
+Scura	Dark
+Scuro	Dark
+Seconda	Second
+Segna 10 pagine lette	Mark 10 pages read
+Segna come letto	Mark as read
+Sembra	Looks like
+Senza ISBN il riconoscimento delle edizioni usa titolo e autore.	Without an ISBN, edition matching uses title and author.
+Senza copertina	No cover
+Senza file (cartaceo o da cercare)	No file (paper or to find)
+Senza numero di pagine	No page count
+Senza saga	No series
+Senza saga, per tua scelta	No series, by your choice
+Servizi collegati	Connected services
+Sessione in corso, apri il timer	Session in progress, open the timer
+Sessioni e recensione precedenti vengono conservate. Il nuovo tentativo riparte da pagina zero.	Earlier sessions and review are kept. The new attempt starts from page zero.
+Settimana	Week
+Sfondo	Background
+Si riconoscono dalle tue saghe, con Hardcover e Wikidata.	Recognised from your series, with Hardcover and Wikidata.
+Sincronizza ora	Sync now
+Sincronizza tutto	Sync everything
+Sincronizzazione	Sync
+Sincronizzazione con Hardcover	Hardcover sync
+Sincronizzazione interrotta	Sync stopped
+Sincronizzazione interrotta: i libri già controllati sono salvati.	Sync stopped: books already checked are saved.
+Sincronizzazione interrotta: niente è stato cambiato.	Sync stopped: nothing was changed.
+Sincronizzazione non riuscita	Sync failed
+Sincronizzazione avviata: segui l’avanzamento nelle notifiche. Puoi usare o chiudere l’app.	Sync started: follow the progress in the notifications. You can use or close the app.
+Solo catalogo, note e copertine (più leggero)	Only catalogue, notes and covers (lighter)
+Solo dentro il libro, non nell’app	Only inside the book, not in the app
+Solo libri di una saga	Only books in a series
+Sono mostrate le prime 250 opere.	The first 250 works are shown.
+Sottotitolo	Subtitle
+Spazio massimo per le copertine	Maximum space for covers
+Sposta	Move
+Sposta in	Move to
+Sposta in un’altra cartella	Move to another folder
+Statistiche	Statistics
+STATISTICHE	STATISTICS
+Stato, pagina e capitolo dal server di contenuti di Calibre.	Status, page and chapter from Calibre's content server.
+Stesso titolo e autore, o stesso ISBN. «Ripara duplicati» unisce da solo quelli certi (stesso ISBN, stessa opera nel catalogo, stesso libro su Hardcover) e ti propone gli altri.	Same title and author, or same ISBN. «Repair duplicates» merges the certain ones by itself (same ISBN, same work in the catalogue, same book on Hardcover) and suggests the others.
+Storia	History
+Storia della lettura	Reading history
+Su hardcover.app accedi, apri Impostazioni › Hardcover API, copia la chiave e incollala qui. La stessa chiave serve anche per Sync.	On hardcover.app sign in, open Settings › Hardcover API, copy the key and paste it here. The same key also works for Sync.
+Su hardcover.app apri Impostazioni › Hardcover API, crea una chiave con accesso alla libreria e incollala qui.	On hardcover.app open Settings › Hardcover API, create a key with library access and paste it here.
+Suggerimenti eliminati	Suggestions deleted
+Suggerimenti validi per	Suggestions valid for
+Sul lettore lascia aperta la schermata di trasferimento file finché lavori qui.	Keep the file transfer screen open on the reader while you work here.
+Sul tuo comodino	On your nightstand
+Svuota copertine	Clear covers
+Svuota suggerimenti	Clear suggestions
+Svuota tutta la cache	Clear the whole cache
+Sync unisce da sola i doppioni certi; qui quelli dubbi, con l’anteprima.	Sync merges certain duplicates by itself; doubtful ones are here, with a preview.
+Sì, è questa	Yes, it's this one
+Sì	Yes
+Tag (separati da virgola)	Tags (comma separated)
+Tema	Theme
+Tema scelto	Chosen theme
+Temi pronti	Ready-made themes
+Tempo della sessione	Session time
+Tempo di lettura	Reading time
+Tempo trascorso	Time elapsed
+Termina	End
+Termina ferma il tempo e ti chiede fin dove sei arrivato.	End stops the time and asks how far you got.
+Terminato il	Finished on
+Testo	Text
+Tieni il mio	Keep mine
+Tieni il voto dell’altra scheda	Keep the other page's rating
+Tieni la recensione dell’altra scheda	Keep the other page's review
+Tipo	Type
+Titolo	Title
+Titolo del capitolo	Chapter title
+Titolo della recensione	Review title
+Titolo originale	Original title
+Titolo, autore o ISBN	Title, author or ISBN
+Tocca il numero per scriverlo	Tap the number to type it
+Tocca un tema: si applica subito a tutta l’app.	Tap a theme: it applies to the whole app at once.
+Togli da Da leggere	Remove from To read
+Togli il filtro	Remove the filter
+Torna a tutte le impostazioni	Back to all settings
+Torna ad Aspetto	Back to Appearance
+Torna alla biblioteca	Back to the library
+Torna alle saghe	Back to series
+Totale pagine (0 se non lo sai)	Total pages (0 if you don't know)
+Totale pagine sconosciuto · indicalo	Total pages unknown · set it
+Traduzione	Translation
+Trama	Plot
+Trama non disponibile.	Plot not available.
+Tre libri vicini all’ultimo che hai finito: dello stesso autore o dello stesso genere.	Three books close to the last one you finished: by the same author or in the same genre.
+Tutte	All
+Tutte le copertine sono già presenti e nitide	All covers are already there and sharp
+Tutte le lingue	All languages
+Tutte le saghe	All series
+Tutti	All
+Tutti gli anni	All years
+Tutti gli autori	All authors
+Tutti gli universi	All universes
+Tutti i formati	All formats
+Tutti i generi	All genres
+Tutti i libri	All books
+Tutte le impostazioni	All settings
+Tutto aggiornato	All up to date
+Umberto Eco · pagina 120 di 503	Umberto Eco · page 120 of 503
+Un indirizzo della rete di casa	An address on the home network
+Un momento per leggere	A moment to read
+Un momento…	One moment…
+Un universo raccoglie più saghe dello stesso mondo. Non è una saga: ognuna ha il suo ordine.	A universe gathers several series from the same world. It isn't a series: each has its own order.
+Una nuova nota	A new note
+Una storia dopo l’altra	One story after another
+Una storia dopo l’altra.	One story after another.
+Unisci	Merge
+Unisco	Merging
+Universi	Universes
+Universo	Universe
+Universo narrativo	Fictional universe
+Uno dei due libri non c’è più (forse già unito).	One of the two books is gone (maybe already merged).
+Usa Hardcover per riconoscere le saghe	Use Hardcover to recognise series
+Usa nella scheda	Use on the page
+Usa quello del catalogo	Use the catalogue's
+Usa questa tonalità	Use this shade
+Usa una chiave personale	Use a personal key
+Usa una data valida AAAA-MM-GG	Use a valid date YYYY-MM-DD
+Utente o password KOReader non corretti	Wrong KOReader user or password
+Vale per le copertine trovate dall’app e per il primo filtro di «Cambia copertina» nella scheda del libro. Con Hardcover collegato trovi anche le copertine inglesi e originali dei tuoi libri italiani. Una copertina scelta da te resta ovunque, anche nei widget.	Applies to covers found by the app and to the first filter of «Change cover» on the book page. With Hardcover connected you also find English and original covers of your translated books. A cover you chose stays everywhere, widgets included.
+Valutazione da 0 a 5, mezze stelle comprese	Rating from 0 to 5, half stars included
+Vedi la scheda completa	See the full page
+Vedi le schede	See the pages
+Verifica	Check
+Verifica dei risultati	Checking the results
+Verifica e salva	Check and save
+Verifico la chiave…	Checking the key…
+Vibrazione	Vibration
+Vista biblioteca	Library view
+Visualizza saga completa	View the whole series
+Visualizza tutti i libri dell’autore	View all the author's books
+Voto del capitolo da 1 a 5 stelle	Chapter rating from 1 to 5 stars
+Voto della recensione	Review rating
+Widget di lettura	Reading widget
+aggiunto dopo il tuo ordine	added after your order
+al mese	a month
+altri conflitti dopo questo.	more conflicts after this one.
+anno di prima pubblicazione sconosciuto	year of first publication unknown
+completati questo mese	finished this month
+completati quest’anno	finished this year
+copertina principale	main cover
+copertine per riga	covers per row
+da Hardcover	from Hardcover
+da Scopri	from Discover
+da leggere	to read
+di ? pagine	of ? pages
+di lettura	of reading
+di un’altra edizione unita	of another merged edition
+giorni di fila	days in a row
+giorno di fila	day in a row
+già presenti	already here
+gli stessi giorni del mese scorso	the same days last month
+il numero di pagine non è noto	the number of pages is unknown
+la fonte	the source
+la settimana scorsa	last week
+lette oggi	read today
+letti oggi	read today
+libri controllati.	books checked.
+libri differiscono	books differ
+libri finiti	books finished
+libri già in biblioteca	books already in the library
+libri inviati	books sent
+libri letti	books read
+libri l’anno	books a year
+libri salvati	books saved
+libri senza copertina	books without a cover
+libro differisce	book differs
+libro finito	book finished
+libro inviato	book sent
+libro letto	book read
+libro salvato	book saved
+libro senza copertina	book without a cover
+libri	books
+libro	book
+pagine	pages
+pagina	page
+minuti	minutes
+minuto	minute
+giorni	days
+giorno	day
+min	min
+minuti al giorno	minutes a day
+minuti oggi	minutes today
+nessun risultato	no results
+nessuna fonte indica il numero	no source gives the number
+pagine al giorno	pages a day
+pagine oggi	pages today
+pagine rimaste	pages left
+parte di	part of
+per cento	percent
+più	more
+quanto hai letto	how much you read
+schede da confermare	pages to confirm
+sì	yes
+in lettura	being read
+letti	read
+letto	read
+da verificare	to check
+doppioni	duplicates
+saghe	series
+universi	universes
+· fino a oggi	· up to today
+· modificato da te	· edited by you
+· solo questa	· only this one
+· I dati possono variare tra edizioni. La scheda non include il file del libro.	· Data may vary between editions. The page doesn't include the book's file.
+» è di nuovo una scheda a sé.	» is a page of its own again.
+È questa la saga?	Is this the series?
+‹ Libro	‹ Book
+‹ Tutte le impostazioni	‹ All settings
+‹ Aspetto	‹ Appearance
+({} con fonti online)	({} with online sources)
+({} riconosciuti per ISBN o titolo e autore)	({} recognised by ISBN or title and author)
+{}, {} da sistemare	{}, {} to fix
+{}, {} pagine	{}, {} pages
+{}, {} per {} pixel	{}, {} by {} pixels
+Aggiorna l’avanzamento di {}	Update the progress of {}
+Aggiungi {} pagine	Add {} pages
+Aggiungi {} per cento	Add {} percent
+Al tuo ritmo arrivi a {}: servono {} libri a settimana.	At your pace you reach {}: you need {} books a week.
+Altri libri di {}	More books by {}
+Libri di {}	Books by {}
+Apri {}	Open {}
+Calibre ha risposto con codice {}.	Calibre answered with code {}.
+Calibre ha risposto {} durante l’aggiornamento di «{}»	Calibre answered {} while updating «{}»
+Cerca il volume {} di {}	Find volume {} of {}
+Cerca in {}	Search in {}
+Chiave valida: collegato come @{}. Riconosco le saghe della libreria in background.	Valid key: connected as @{}. Recognising the library's series in the background.
+Collegato a Hardcover come @{}. Riconosco le saghe della libreria in background.	Connected to Hardcover as @{}. Recognising the library's series in the background.
+Conflitti con Hardcover: {}. Risolvi	Conflicts with Hardcover: {}. Resolve
+Confronto con Hardcover · {} di {}	Comparing with Hardcover · {} of {}
+Copertina di {}	Cover of {}
+Copertina {}	{} cover
+Da 0 a {}	From 0 to {}
+Editore: {}\nAnno: {}	Publisher: {}\nYear: {}
+Filtra per {} {}	Filter by {} {}
+Fonte: Open Library · {}\nEdizione di riferimento: {}	Source: Open Library · {}\nReference edition: {}
+Fonte: catalogo SBN delle biblioteche italiane · {}\nCopertina e trama da Open Library, se disponibili.	Source: SBN catalogue of Italian libraries · {}\nCover and plot from Open Library, when available.
+Hardcover ha risposto con codice {}.	Hardcover answered with code {}.
+Hardcover non ha aggiunto «{}»{}	Hardcover did not add «{}»{}
+Importazione di «{}» avviata in background: puoi continuare a usare l’app.	Import of «{}» started in the background: you can keep using the app.
+Impostazioni di {}	{} settings
+In Calibre manca la colonna {} (numero intero).	The {} column (integer) is missing in Calibre.
+In Calibre manca la colonna {} (testo).	The {} column (text) is missing in Calibre.
+In Calibre manca la colonna {} (testo): senza, lo stato non viene condiviso.	The {} column (text) is missing in Calibre: without it, the status is not shared.
+In media {} pagine nei giorni in cui leggi	On average {} pages on the days you read
+Invio {} di {}: {}	Sending {} of {}: {}
+KOReader: HTTP {}. Nessun avanzamento applicato.	KOReader: HTTP {}. No progress applied.
+LA TUA ROTTA · {}	YOUR COURSE · {}
+La tua rotta {}	Your course {}
+La tua rotta {} · {}	Your course {} · {}
+Lettura della biblioteca Calibre · {}	Reading the Calibre library · {}
+Lettura della libreria Hardcover · {} libri	Reading the Hardcover library · {} books
+Mappa di {}: {}	Map of {}: {}
+Mappa verticale della saga {}: {} volumi in ordine, {} da verificare	Vertical map of the {} series: {} volumes in order, {} to check
+Mesi con almeno un libro finito: {}	Months with at least one book finished: {}
+Modifica il colore {}	Edit the {} colour
+Mostra azioni di {}	Show actions for {}
+Mostra tutte ({})	Show all ({})
+Nessun risultato in {}. Prova a disattivare «solo in questa lingua».	No results in {}. Try turning off «only in this language».
+Nessuna copertina «{}» per questo libro.	No «{}» cover for this book.
+Nessuna impostazione per «{}».	No setting for «{}».
+Non collegato. Scegli «{}» nelle impostazioni Wi-Fi del telefono, poi torna qui.	Not connected. Choose «{}» in the phone's Wi-Fi settings, then come back here.
+Obiettivo di {}	{} goal
+Pagina {} di {}	Page {} of {}
+Per arrivare a {} servono {} libri a settimana.	To reach {} you need {} books a week.
+Posizione da verificare · {}	Position to check · {}
+Ricerca su Hardcover ({} di {})	Searching Hardcover ({} of {})
+Ripresa da {} libri già analizzati	Resumed from {} books already analysed
+Saga incompleta nelle fonti: {}	Series incomplete in the sources: {}
+Saga {}, stesso universo: tocca per aprirne la mappa	{} series, same universe: tap to open its map
+Saturazione e luminosità di {}	Saturation and brightness of {}
+Sposta giù {}	Move {} down
+Sposta su {}	Move {} up
+Stesso genere ({}), i più pubblicati. Nessuno viene aggiunto da solo.	Same genre ({}), the most published. None is added on its own.
+Sul lettore apri il trasferimento file: crea la rete Wi-Fi «{}». Il telefono ci si collega; la rete non ha internet, è normale.	On the reader open file transfer: it creates the «{}» Wi-Fi network. The phone joins it; the network has no internet, that's normal.
+Tonalità di {}	Hue of {}
+Totale pagine: {} · modifica	Total pages: {} · edit
+Unisco {} doppioni di sincronizzazioni precedenti…	Merging {} duplicates from earlier syncs…
+di {} libri	of {} books
+di {} libri · Sul dispositivo · Lettura offline	of {} books · On the device · Offline reading
+di {} pag.	of {} p.
+di {} pagine · {}%	of {} pages · {}%
+di {} · {}	of {} · {}
+evidenziazioni e note in {} libri\n{}	highlights and notes in {} books\n{}
+il n. {} di	no. {} of
+letto il {}	read on {}
+libri in {} gruppi. Tocca un libro per aprire la scheda.	books in {} groups. Tap a book to open its page.
+manca il n. {}	no. {} missing
+n. {} per le fonti	no. {} for the sources
+pag. {} di {}	p. {} of {}
+pagina {} di {}	page {} of {}
+pagine da pagina {}	pages from page {}
+posizione da {}	position from {}
+saturazione {}%, luminosità {}%	saturation {}%, brightness {}%
+stesso numero di «{}»	same number as «{}»
+{} / {} libri analizzati — {}%	{} / {} books analysed — {}%
+{} altri conflitti dopo questo.	{} more conflicts after this one.
+{} cose da guardare	{} things to look at
+{} da decidere	{} to decide
+{} di {} in biblioteca · {} letti	{} of {} in the library · {} read
+{} di {} libri	{} of {} books
+{} di {} libri analizzati	{} of {} books analysed
+{} di {} {} · {}%	{} of {} {} · {}%
+{} doppioni di sincronizzazioni precedenti uniti da soli (resta il tuo libro)	{} duplicates from earlier syncs merged automatically (your book stays)
+{} libri cambiati sia qui sia su Hardcover: scegli tu in Sync › «Conflitti con Hardcover»	{} books changed both here and on Hardcover: choose in Sync › «Conflicts with Hardcover»
+{} libri indicizzati	{} books indexed
+{} libri riconosciuti come già presenti: nessun doppione	{} books recognised as already here: no duplicates
+{} libri su Hardcover · {} collegati\n{} aggiornati su Hardcover · {} aggiornati in Atlante	{} books on Hardcover · {} linked\n{} updated on Hardcover · {} updated in Atlante
+{} libri, note e avanzamenti in un file ZIP	{} books, notes and progress in a ZIP file
+{} pagine · {}	{} pages · {}
+{} pagine · {} min	{} pages · {} min
+{} saghe sicure · {} da confermare · {} schede completate	{} series certain · {} to confirm · {} pages completed
+{} tuoi libri senza posizione verificata: apri la mappa e mettili in ordine con «Cambia l’ordine»	{} of your books without a checked position: open the map and order them with «Change the order»
+{} {} di {} libri analizzati. Tocca per i dettagli	{} {} of {} books analysed. Tap for details
+{} · DA GENNAIO A OGGI	{} · JANUARY TO TODAY
+{} · {} di {} in biblioteca	{} · {} of {} in the library
+{}, di {}, {}	{}, by {}, {}
+{}: {} libri	{}: {} books
+{}: {} libri aggiunti · {} già presenti	{}: {} books added · {} already here
+«{}» di {}	«{}» by {}
+«{}» in Da leggere	«{}» in To read
+«{}» viene cancellato dalla scheda del lettore e non si può recuperare.	«{}» is deleted from the reader's card and can't be recovered.
+«{}» è già nella tua biblioteca	«{}» is already in your library
+«{}». Tocca la copertina da usare: resta tua, l’app non la sostituisce più.	«{}». Tap the cover to use: it stays yours, the app won't replace it any more.
+«{}». Una sola fonte lo conferma (affidabilità {}/100).	«{}». Only one source confirms it (reliability {}/100).
+«{}»: n. {} di {} nella scheda, n. {} nel catalogo (Wikidata)	«{}»: no. {} of {} on the page, no. {} in the catalogue (Wikidata)
+«{}»: nella scheda è il n. {}, per {} è il n. {}	«{}»: on the page it is no. {}, for {} it is no. {}
+«{}»: {} (forse un’edizione o un omnibus)	«{}»: {} (maybe an edition or an omnibus)
+{} · ordinati per {} · tieni premuto un dorso per le azioni	{} · sorted by {} · press and hold a spine for actions
+{} · pagina {} di {}	{} · page {} of {}
+{} · {} da decidere	{} · {} to decide
+{} · {} differenze da decidere	{} · {} differences to decide
+{} · {} già presenti	{} · {} already here
+{} · {} pagine	{} · {} pages
+{} · {} ripetuti nel file	{} · {} repeated in the file
+{} · {} senza file (reimportali da Importa eBook)	{} · {} without a file (import them again from Import eBooks)
+{} · {} senza un genere affidabile: restano senza, nessun genere inventato	{} · {} without a reliable genre: they stay without, no genre invented
+File collegato a «{}»	File linked to «{}»
+Edizione aggiunta a «{}»: nessuna scheda doppia	Edition added to «{}»: no duplicate page
+{}: avviata in background. Puoi continuare a usare l’app.	{}: started in the background. You can keep using the app.
+{} capitoli votati · media {} ★	{} chapters rated · average {} ★
+{} in lettura	{} being read
+{} libri	{} books
+{} libro	{} book
+{} pagine	{} pages
+{} pagina	{} page
+{} letti	{} read
+{} min	{} min
+{} minuti	{} minutes
+{} giorni	{} days
+Tutti  {}	All  {}
+Crema, petrolio e rame	Cream, petrol and copper
+Soft · rosa cipria e malva	Soft · powder pink and mauve
+Soft · lilla e prugna	Soft · lilac and plum
+Soft · verde naturale e lino	Soft · natural green and linen
+Sobrio · azzurro e ardesia	Sober · sky blue and slate
+Caldo · beige e terracotta	Warm · beige and terracotta
+Scuro · acciaio e blu ghiaccio	Dark · steel and ice blue
+Scuro · lavanda e indaco	Dark · lavender and indigo
+Nero puro · contrasto e dettagli rossi	Pure black · contrast and red details
+AMOLED nero	AMOLED black
+Tre colori personalizzati	Three custom colours
+Altri filtri e ordine	More filters and order
+per titolo	by title
+per autore	by author
+per saga	by series
+Buona lettura.	Happy reading.
+Cache e dati temporanei	Cache and temporary data
+Collega Hardcover, Calibre o KOReader qui sotto.	Connect Hardcover, Calibre or KOReader below.
+Come il telefono	Same as the phone
+Lingua dell’app	App language
+Date, voto e note	Dates, rating and notes
+Importa catalogo o backup	Import catalogue or backup
+Importa ed esporta	Import and export
+Invia e ricevi.	Send and receive.
+Nessuna chiave inserita	No key entered
+Nessuna pagina registrata nella settimana prima	No pages recorded the week before
+Progetto e aggiornamenti	Project and updates
+Rimuovi dalla libreria	Remove from the library
+SAGHE	SERIES
+BIBLIOTECA	LIBRARY
+PERSONALE	PERSONAL
+INFO	INFO
+Scelti dalla tua biblioteca	Picked from your library
+Scheda senza file	Page without a file
+Stato, pagina e voto, nei due sensi.	Status, page and rating, both ways.
+giorni attivi	active days
+giorno attivo	active day
+Abbandonato	Abandoned
+{} autori	{} authors
+{} autore	{} author
+{} pagine oggi su {}	{} pages today out of {}
+{} → {} pagine · {} min · lettura {}	{} → {} pages · {} min · reading {}
+lettura {}	reading {}
+{}, selezionato	{}, selected
+{}, selezionata	{}, selected
+Avvia il timer di lettura per {}	Start the reading timer for {}
+In lettura {}%	Reading {}%
+{}  ✓	{}  ✓
+LA TUA LETTURA · TENTATIVO {}	YOUR READING · ATTEMPT {}
+Mancano {} giorni e {} libri.	{} days and {} books to go.
+Mancano {} giorni e {} libro.	{} days and {} book to go.
+Tema {}	Theme: {}
+{} di {}	{} of {}
+{}, {} letti su {}. {}	{}, {} of {} read. {}
+pagina {}	page {}
+Obiettivo mensile ({}) raggiunto in {} mesi su {}	Monthly goal ({}) reached in {} of {} months
+Obiettivo mensile ({}) raggiunto in {} mese su {}	Monthly goal ({}) reached in {} of {} months
+fino a oggi	up to today
+ANTEPRIMA	PREVIEW
+Collega {}	Connect {}
+Evidenziazioni Kindle	Kindle highlights
+In pausa:	Paused:
+Stai leggendo:	Reading now:
+Prossimo:	Next:
+Manca:	Missing:
+MAPPA DELLE LETTURE	READING MAP
+Mappa delle letture	Reading map
+Operazioni in background	Background tasks
+Pensieri, citazioni, domande: ritrovali qui, anche offline.	Thoughts, quotes, questions: find them here, even offline.
+Suggerimenti in cache	Cached suggestions
+Totale: {}	Total: {}
+ISBN / identificatore	ISBN / identifier
+meno	less
+circa {}	about {}
+Inserisci almeno due caratteri	Enter at least two characters

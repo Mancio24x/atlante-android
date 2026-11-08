@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 class WidgetConfigActivity : ComponentActivity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        app.atlante.library.ui.L.init(this)
         val appWidgetId = intent?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID) ?: AppWidgetManager.INVALID_APPWIDGET_ID
         // Closing without saving cancels a widget being added (Android's rule for configuration screens).
         setResult(Activity.RESULT_CANCELED, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
@@ -75,25 +76,25 @@ private fun WidgetSettings(books: List<Book>, chosen0: String?, pages0: Int, per
     var percent by remember { mutableIntStateOf(percent0) }
     var colors by remember { mutableStateOf(colors0) }
     val list = if (showAll) books.filter { it.status != Book.READ }.sortedBy { it.title.lowercase() } else reading
-    Scaffold(topBar = { TopAppBar(title = { Text("Widget di lettura") }) }, bottomBar = {
-        Button(onClick = { onSave(chosen, pages, percent, colors) }, Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding()) { Text("Salva") }
+    Scaffold(topBar = { TopAppBar(title = { Text(app.atlante.library.ui.L.t("Widget di lettura")) }) }, bottomBar = {
+        Button(onClick = { onSave(chosen, pages, percent, colors) }, Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding()) { Text(app.atlante.library.ui.L.t("Salva")) }
     }) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            item { Text("Libro da mostrare", style = MaterialTheme.typography.titleMedium) }
+            item { Text(app.atlante.library.ui.L.t("Libro da mostrare"), style = MaterialTheme.typography.titleMedium) }
             item { Choice("Il libro che stai leggendo ora (cambia da solo)", chosen == null) { chosen = null } }
             items(list, key = { it.id }) { b -> Choice("${b.title} · ${b.author}", chosen == b.id) { chosen = b.id } }
             item {
-                if (reading.isEmpty()) Text("Nessun libro in lettura: puoi sceglierne uno qualsiasi.", style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { showAll = !showAll }) { Text(if (showAll) "Mostra solo i libri in lettura" else "Mostra tutti i libri") }
+                if (reading.isEmpty()) Text(app.atlante.library.ui.L.t("Nessun libro in lettura: puoi sceglierne uno qualsiasi."), style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { showAll = !showAll }) { Text(app.atlante.library.ui.L.t(if (showAll) "Mostra solo i libri in lettura" else "Mostra tutti i libri")) }
             }
-            item { Spacer(Modifier.height(12.dp)); Text("Pulsante «+ pagine»", style = MaterialTheme.typography.titleMedium) }
+            item { Spacer(Modifier.height(12.dp)); Text(app.atlante.library.ui.L.t("Pulsante «+ pagine»"), style = MaterialTheme.typography.titleMedium) }
             item { Steps(listOf(1, 5, 10, 20, 50), pages, " pag.") { pages = it } }
-            item { Spacer(Modifier.height(8.dp)); Text("Pulsante «+ %»", style = MaterialTheme.typography.titleMedium) }
+            item { Spacer(Modifier.height(8.dp)); Text(app.atlante.library.ui.L.t("Pulsante «+ %»"), style = MaterialTheme.typography.titleMedium) }
             item { Steps(listOf(1, 2, 5, 10), percent, "%") { percent = it } }
-            item { Spacer(Modifier.height(8.dp)); Text("Colori", style = MaterialTheme.typography.titleMedium) }
+            item { Spacer(Modifier.height(8.dp)); Text(app.atlante.library.ui.L.t("Colori"), style = MaterialTheme.typography.titleMedium) }
             item {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Widgets.COLOR_MODES.forEach { (id, label) -> FilterChip(colors == id, { colors = id }, label = { Text(label) }) }
+                    Widgets.COLOR_MODES.forEach { (id, label) -> FilterChip(colors == id, { colors = id }, label = { Text(app.atlante.library.ui.L.t(label)) }) }
                 }
             }
         }
@@ -103,7 +104,7 @@ private fun WidgetSettings(books: List<Book>, chosen0: String?, pages0: Int, per
 @Composable
 private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = onClick).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RadioButton(selected, null); Spacer(Modifier.width(8.dp)); Text(label, style = MaterialTheme.typography.bodyLarge)
+        RadioButton(selected, null); Spacer(Modifier.width(8.dp)); Text(app.atlante.library.ui.L.t(label), style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -111,6 +112,6 @@ private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun Steps(values: List<Int>, current: Int, unit: String, onPick: (Int) -> Unit) {
     // One scrolling row: on narrow phones the last step would otherwise be squeezed into a tall, unreadable chip.
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        values.forEach { v -> FilterChip(current == v, { onPick(v) }, label = { Text("+$v$unit", maxLines = 1) }) }
+        values.forEach { v -> FilterChip(current == v, { onPick(v) }, label = { Text(app.atlante.library.ui.L.t("+$v$unit"), maxLines = 1) }) }
     }
 }

@@ -34,5 +34,5 @@ Suite JVM/Robolectric: file reali di prova per ciascun formato, NCX e navigation
 
 - Nessun widget Android risultava implementato nel progetto/manifest recuperato: non c’è un widget esistente da aggiornare. Un widget nuovo richiede un intervento dedicato.
 - AZW3: niente aggiramento DRM, HUFF/CDIC, indice Kindle o fedeltà del layout KF8 completo; per quei file usare un lettore compatibile o convertire legalmente in EPUB.
-- Interfaccia italiana, come concordato; niente traduzione inglese parziale.
+- Interfaccia in italiano e inglese (vedi `ui/L.kt` e `assets/i18n/en.tsv`; i testi nuovi vanno aggiunti al dizionario).
 - Ricerche online dipendono dalla connessione e dalle fonti; nessun dato mancante viene inventato.

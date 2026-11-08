@@ -5,6 +5,7 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
 ## 2026-11-08
+- **Versione inglese.** Impostazioni › Lingua › «Lingua dell’app»: come il telefono (predefinito), Italiano o English; su Android 13+ anche dalle impostazioni di sistema dell’app. Il codice resta in italiano: `ui/L.kt` traduce solo ciò che si vede, con il dizionario `assets/i18n/en.tsv` (frasi esatte, frasi con spazi «{}» per numeri e titoli, date, maiuscole); i titoli dei libri non vengono mai tradotti. Tradotti schermate View e Compose, dialoghi, fogli, toast, notifiche e widget. In inglese la lingua dei libri predefinita è English, Scopri e «Because you read» propongono le edizioni originali e la trama arriva dalla Wikipedia inglese. `HomeShot` con `SHOT_LANG=en` disegna le pagine in inglese e scrive i testi rimasti non tradotti; `TranslationTest` controlla il motore. L’emulatore resta in italiano (`cmd locale set-app-locales`).
 - Aspetto: «Il mio tema» è un cerchio sopra i temi pronti e apre una pagina a tutto schermo (colori in alto, anteprima dal vivo in basso). Un solo tema personalizzato: niente più temi salvati con nome. Indietro da «Il mio tema» torna ad Aspetto; un test controlla il gesto indietro in ogni pagina delle impostazioni.
 
 - **CrossPoint sul suo Wi-Fi**: «Collegati al Wi-Fi del lettore» si collega alla rete aperta «CrossPoint-Reader» (senza

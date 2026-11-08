@@ -12,6 +12,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.FileOutputStream
+import app.atlante.library.ui.L
 
 /** Draws pages to PNG files when SHOT_DIR is set (a visual check without an emulator); does nothing otherwise. */
 @RunWith(RobolectricTestRunner::class)
@@ -25,7 +26,12 @@ class HomeShot {
     }
     @Test fun pages() {
         val out = System.getenv("SHOT_DIR") ?: return
+        val english = System.getenv("SHOT_LANG") == "en"
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        L.choose(ctx, if (english) "en" else "it")
+        if (english) L.misses = sortedSetOf()
         val c = Robolectric.buildActivity(MainActivity::class.java).setup(); val a = c.get()
+        fun shot(a: MainActivity, out: String, name: String) = this.shot(a, out, if (english) "en-$name" else name)
         val store = MainActivity::class.java.getDeclaredField("store").apply { isAccessible = true }.get(a) as LibraryStore
         val b = Book().apply { id = "h".repeat(64); title = "Il nome della rosa"; author = "Umberto Eco"; format = "CATALOGO"; totalPages = 503; currentPage = 214; status = Book.READING }
         ReadingJournal.session(b, 196, 214, 24 * 60, java.time.LocalDate.now())
@@ -51,11 +57,25 @@ class HomeShot {
         MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, "Impostazioni"); shot(a, out, "impostazioni")
         val section = MainActivity::class.java.getDeclaredField("settingsSection").apply { isAccessible = true }
         for (page in listOf("lettura", "lingua", "obiettivi", "aspetto", "tema")) { section.set(a, page); MainActivity::class.java.getDeclaredMethod("showCompanion").apply { isAccessible = true }.invoke(a); shot(a, out, "impostazioni-$page") }
+        for (page in listOf("libreria", "hardcover", "info")) { section.set(a, page); MainActivity::class.java.getDeclaredMethod("showCompanion").apply { isAccessible = true }.invoke(a); shot(a, out, "impostazioni-$page") }
         section.set(a, "")
         for (page in listOf("Sync", "Statistiche", "Scopri", "CrossPoint")) {
             MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, page)
             shot(a, out, page.lowercase())
         }
+        MainActivity::class.java.getDeclaredMethod("details", Book::class.java).apply { isAccessible = true }.invoke(a, store.find(b.id)); shot(a, out, "scheda")
+        MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, "Biblioteca")
+        MainActivity::class.java.getDeclaredField("tab").apply { isAccessible = true }.set(a, "Saghe")
+        MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "saghe")
+        MainActivity::class.java.getDeclaredField("tab").apply { isAccessible = true }.set(a, "Mappa")
+        MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "mappa")
+        MainActivity::class.java.getDeclaredField("tab").apply { isAccessible = true }.set(a, "Universi")
+        MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "universi")
+        MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, "Home")
+        MainActivity::class.java.getDeclaredMethod("openDrawer").apply { isAccessible = true }.invoke(a); shot(a, out, "drawer")
         c.pause().stop().destroy()
+        L.misses?.let { java.io.File("$out/misses.txt").writeText(it.joinToString("\n") { m -> m.replace("\n", "\\n") }) }
+        L.misses = null
+        L.choose(ctx, "")
     }
 }

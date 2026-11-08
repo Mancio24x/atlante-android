@@ -38,12 +38,15 @@ class SettingsRow(@JvmField val group: String, @JvmField val key: String, @JvmFi
 
 /** What the Compose settings pages show and change (MainActivity keeps the preferences). */
 class SettingsState(@JvmField val rows: List<SettingsRow>, @JvmField val readerDark: Boolean, @JvmField val fontSize: Float,
-                    @JvmField val languages: List<String>, @JvmField val language: Int, @JvmField val onlyLanguage: Boolean)
+                    @JvmField val languages: List<String>, @JvmField val language: Int, @JvmField val onlyLanguage: Boolean,
+                    @JvmField val appLanguage: Int = 0)
 
 interface SettingsHost {
     fun open(key: String)
     fun setReaderDark(dark: Boolean); fun setFontSize(size: Float)
     fun setLanguage(index: Int); fun setOnlyLanguage(only: Boolean)
+    /** 0 as the phone, 1 Italian, 2 English. */
+    fun setAppLanguage(index: Int)
     fun openProject()
 }
 
@@ -103,7 +106,7 @@ object SettingsView {
                 }
             }
             if (shown.isEmpty()) Text("Nessuna impostazione per «$query».", Modifier.fillMaxWidth().padding(top = 40.dp), textAlign = TextAlign.Center, color = colors.onSurfaceVariant)
-            Text("Atlante · interfaccia in italiano", Modifier.fillMaxWidth().padding(top = 24.dp), textAlign = TextAlign.Center,
+            Text(if (app.atlante.library.ui.L.english) "Atlante · English interface" else "Atlante · interfaccia in italiano", Modifier.fillMaxWidth().padding(top = 24.dp), textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
     }
@@ -149,6 +152,18 @@ object SettingsView {
         var chosen by remember { mutableIntStateOf(s.language) }
         var only by remember { mutableStateOf(s.onlyLanguage) }
         Column(Modifier.fillMaxWidth()) {
+            Text("Lingua dell’app", Modifier.padding(start = 4.dp, bottom = 6.dp), style = MaterialTheme.typography.titleMedium)
+            Card {
+                listOf("Come il telefono", "Italiano", "English").forEachIndexed { i, name ->
+                    if (i > 0) HorizontalDivider(color = colors.outlineVariant)
+                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).selectable(i == s.appLanguage, role = Role.RadioButton) { if (i != s.appLanguage) host.setAppLanguage(i) }.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(i == s.appLanguage, null); Text(name, Modifier.padding(start = 14.dp), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Text("Lingua dei libri", Modifier.padding(start = 4.dp, bottom = 6.dp), style = MaterialTheme.typography.titleMedium)
             Text("Lingua preferita per cercare libri online. Si salva da sola.", Modifier.padding(start = 4.dp, end = 4.dp, bottom = 14.dp),
                 style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             Card {
@@ -171,7 +186,6 @@ object SettingsView {
                     Switch(only, null)
                 }
             }
-            Text("Lingua dell’interfaccia: italiano.", Modifier.padding(start = 4.dp, top = 10.dp), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
     }
 

@@ -32,7 +32,7 @@ object GoalsView {
     }
 }
 
-private fun monthName(m: YearMonth) = m.month.getDisplayName(TextStyle.FULL, Locale.ITALIAN)
+private fun monthName(m: YearMonth) = m.month.getDisplayName(TextStyle.FULL, app.atlante.library.ui.L.locale())
 
 /**
  * "Obiettivi di lettura" in the settings: no extra taps, the goals open straight on their horizontal wheels
@@ -72,7 +72,7 @@ private fun WheelGoal(title: String, kicker: String, on: Boolean, onSwitch: (Boo
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(kicker.uppercase(Locale.ITALIAN), style = MaterialTheme.typography.labelSmall, color = scheme.primary)
+                    Text(app.atlante.library.ui.L.t(kicker).uppercase(app.atlante.library.ui.L.locale()), style = MaterialTheme.typography.labelSmall, color = scheme.primary)
                     Text(title, style = MaterialTheme.typography.titleMedium)
                 }
                 Switch(on, onSwitch, Modifier.semantics { contentDescription = "$title: " + if (on) "attivo" else "spento" })

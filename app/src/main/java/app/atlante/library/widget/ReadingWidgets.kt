@@ -130,7 +130,7 @@ private fun CoverBox(shown: Widgets.Shown, c: WidgetColors, modifier: GlanceModi
 private fun Progress(shown: Widgets.Shown, c: WidgetColors, big: Boolean) {
     val b = shown.book ?: return
     val pages = if (b.totalPages > 0) " · pagina ${b.currentPage} di ${b.totalPages}" else if (b.currentPage > 0) " · pagina ${b.currentPage}" else ""
-    Text("${shown.percent}%" + if (big) pages else "", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 12.sp, fontWeight = FontWeight.Medium))
+    Text(app.atlante.library.ui.L.t("${shown.percent}%") + if (big) pages else "", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 12.sp, fontWeight = FontWeight.Medium))
     Spacer(GlanceModifier.height(4.dp))
     LinearProgressIndicator(shown.percent / 100f, GlanceModifier.fillMaxWidth().height(6.dp), color = c.accent, backgroundColor = c.track)
 }
@@ -147,9 +147,9 @@ private fun Pill(text: String, c: WidgetColors, primary: Boolean, description: S
 private fun Empty(context: Context, c: WidgetColors, compact: Boolean) {
     Column(GlanceModifier.fillMaxSize().padding(14.dp).clickable(actionStartActivity(Widgets.open(context, MainActivity.OPEN_LIBRARY))),
         verticalAlignment = Alignment.CenterVertically, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Nessun libro in lettura", style = TextStyle(color = c.ink, fontSize = if (compact) 14.sp else 16.sp, fontWeight = FontWeight.Bold))
+        Text(app.atlante.library.ui.L.t("Nessun libro in lettura"), style = TextStyle(color = c.ink, fontSize = if (compact) 14.sp else 16.sp, fontWeight = FontWeight.Bold))
         Spacer(GlanceModifier.height(6.dp))
-        Text("Apri la libreria ›", style = TextStyle(color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.Medium))
+        Text(app.atlante.library.ui.L.t("Apri la libreria ›"), style = TextStyle(color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.Medium))
     }
 }
 
@@ -160,6 +160,7 @@ abstract class ReadingWidget(private val withGoals: Boolean) : GlanceAppWidget()
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
+        app.atlante.library.ui.L.init(context)
         Widgets.store(context)   // loads the library off the main thread before the first draw
         provideContent {
             val state = currentState<Preferences>()
@@ -267,12 +268,12 @@ class LargeWidget : ReadingWidget(true) {
             }
             Spacer(GlanceModifier.height(10.dp))
             val goals = if (roomy) shown.goals else shown.goals.take(2)
-            if (goals.isEmpty()) Text("Attiva gli obiettivi di lettura nelle impostazioni dell’app.", maxLines = 2, style = TextStyle(color = c.muted, fontSize = 12.sp))
+            if (goals.isEmpty()) Text(app.atlante.library.ui.L.t("Attiva gli obiettivi di lettura nelle impostazioni dell’app."), maxLines = 2, style = TextStyle(color = c.muted, fontSize = 12.sp))
             Column(GlanceModifier.fillMaxWidth().clickable(stats)) {
                 goals.forEach { g ->
                     Row(GlanceModifier.fillMaxWidth()) {
-                        Text(g.label, GlanceModifier.defaultWeight(), maxLines = 1, style = TextStyle(color = c.ink, fontSize = 13.sp))
-                        Text("${g.done} / ${g.goal} ${g.unit}" + if (g.unit == "libri") " · ${(g.fraction * 100).toInt()}%" else "",
+                        Text(app.atlante.library.ui.L.t(g.label), GlanceModifier.defaultWeight(), maxLines = 1, style = TextStyle(color = c.ink, fontSize = 13.sp))
+                        Text(app.atlante.library.ui.L.t("${g.done} / ${g.goal} ${g.unit}") + if (g.unit == "libri") " · ${(g.fraction * 100).toInt()}%" else "",
                             maxLines = 1, style = TextStyle(color = c.muted, fontSize = 12.sp, fontWeight = FontWeight.Medium))
                     }
                     Spacer(GlanceModifier.height(3.dp))

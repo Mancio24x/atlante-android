@@ -63,7 +63,7 @@ private val Round20 = RoundedCornerShape(20.dp)
 private const val BOOKS = "EPUB|TXT|CBZ|AZW3"
 
 private fun size(bytes: Long) = when {
-    bytes >= 1024 * 1024 -> String.format(Locale.ITALIAN, "%.1f MB", bytes / 1048576.0)
+    bytes >= 1024 * 1024 -> String.format(app.atlante.library.ui.L.locale(), "%.1f MB", bytes / 1048576.0)
     bytes >= 1024 -> "${bytes / 1024} KB"
     else -> "$bytes byte"
 }

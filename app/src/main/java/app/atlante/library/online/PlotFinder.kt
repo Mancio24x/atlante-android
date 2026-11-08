@@ -19,10 +19,11 @@ object PlotFinder {
     @JvmStatic fun fill(book: Book, catalog: CatalogDao?) {
         if (book.description.isNotBlank()) { book.description = clean(book.description); return }
         val qid = catalog?.let { c -> runCatching { runBlocking { LibraryIndex.match(c, book) } }.getOrNull() }
-        qid?.let { runCatching { wikipedia(it) }.getOrNull() }?.let { set(book, it, "Wikipedia in italiano"); return }
+        val en = app.atlante.library.ui.L.english      // in English, the English article and descriptions first
+        qid?.let { runCatching { wikipedia(it, if (en) "en" else "it") }.getOrNull() }?.let { set(book, it, if (en) "English Wikipedia" else "Wikipedia in italiano"); return }
         if (!sameEditionPossible(book)) return
         val result = runCatching { MetadataEngine.lookup(book, MetadataEngine.Settings()) { } }.getOrNull() ?: return
-        val best = result.editionDescriptions.sortedWith(compareBy({ if (it.language == "ita") 0 else 1 }, { -it.text.length.coerceAtMost(1500) })).firstOrNull() ?: return
+        val best = result.editionDescriptions.sortedWith(compareBy({ if (it.language == (if (en) "eng" else "ita")) 0 else 1 }, { -it.text.length.coerceAtMost(1500) })).firstOrNull() ?: return
         set(book, best.text, best.source)
     }
 
@@ -46,17 +47,17 @@ object PlotFinder {
      * The plot section ("Trama", "Sinossi", "Riassunto"…) of the work's article on it.wikipedia.org (Wikidata
      * sitelink), or null. Not the article's introduction: that says what the book is, not what happens in it.
      */
-    fun wikipedia(qid: Long): String? {
-        val entity = JSONObject(String(OnlineCatalog.request("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q$qid&props=sitelinks&sitefilter=itwiki&format=json", 256 * 1024)))
-        val title = entity.optJSONObject("entities")?.optJSONObject("Q$qid")?.optJSONObject("sitelinks")?.optJSONObject("itwiki")?.optString("title")?.takeIf { it.isNotBlank() } ?: return null
-        val answer = JSONObject(String(OnlineCatalog.request("https://it.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exsectionformat=wiki&redirects=1&format=json&titles=" +
+    fun wikipedia(qid: Long, lang: String = "it"): String? {
+        val entity = JSONObject(String(OnlineCatalog.request("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q$qid&props=sitelinks&sitefilter=${lang}wiki&format=json", 256 * 1024)))
+        val title = entity.optJSONObject("entities")?.optJSONObject("Q$qid")?.optJSONObject("sitelinks")?.optJSONObject("${lang}wiki")?.optString("title")?.takeIf { it.isNotBlank() } ?: return null
+        val answer = JSONObject(String(OnlineCatalog.request("https://$lang.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exsectionformat=wiki&redirects=1&format=json&titles=" +
             URLEncoder.encode(title, "UTF-8"), 2 * 1024 * 1024)))
         val pages = answer.optJSONObject("query")?.optJSONObject("pages") ?: return null
         val page = pages.keys().asSequence().mapNotNull { pages.optJSONObject(it) }.firstOrNull() ?: return null
         return plotSection(page.optString("extract"))
     }
 
-    private val PLOT_HEADINGS = Regex("^(trama|sinossi|riassunto|la trama|trama e personaggi|contenuto)\\b.*", RegexOption.IGNORE_CASE)
+    private val PLOT_HEADINGS = Regex("^(trama|sinossi|riassunto|la trama|trama e personaggi|contenuto|plot|plot summary|synopsis|summary|story)\\b.*", RegexOption.IGNORE_CASE)
 
     /**
      * From an article's plain text with "== Titolo ==" headings: the text of the plot section (its sub-sections

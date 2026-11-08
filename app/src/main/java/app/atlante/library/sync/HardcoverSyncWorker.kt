@@ -41,7 +41,7 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
                 override fun update(message: String) { if (isStopped) settings.cancelled = true; notice(message) }
                 override fun count(done: Int, total: Int) { this@HardcoverSyncWorker.done = done; this@HardcoverSyncWorker.total = total }
             })
-            val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("d MMM HH:mm", Locale.ITALIAN))
+            val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("d MMM HH:mm", app.atlante.library.ui.L.locale()))
             val line = "$time · ${report.pushed} inviati, ${report.pulled} ricevuti, ${report.created + report.added} nuovi"
             prefs.edit().putString("hardcoverConflicts", org.json.JSONArray(report.conflicts).toString()).putString("hardcoverUser", report.user).putString("hardcoverLast", "Ultima sincronizzazione: $line").apply()
             val summary = "${report.remote} libri su Hardcover · ${report.linked} collegati\n${report.pushed} aggiornati su Hardcover · ${report.pulled} aggiornati in Atlante\n" +
@@ -68,8 +68,8 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
 
     private fun info(message: String): ForegroundInfo {
         val c = applicationContext
-        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Sincronizzazione con Hardcover")
-            .setContentText(message).setOnlyAlertOnce(true).setOngoing(true).setSilent(true).setContentIntent(openApp(c))
+        val n = NotificationCompat.Builder(c.also { app.atlante.library.ui.L.init(it) }, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(app.atlante.library.ui.L.t("Sincronizzazione con Hardcover"))
+            .setContentText(app.atlante.library.ui.L.t(message)).setOnlyAlertOnce(true).setOngoing(true).setSilent(true).setContentIntent(openApp(c))
             .setProgress(total, done, total == 0)
             .addAction(0, "Interrompi", WorkManager.getInstance(c).createCancelPendingIntent(id)).build()
         return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(NOTICE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else ForegroundInfo(NOTICE, n)
@@ -77,7 +77,7 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
 
     private fun finished(title: String, text: String) {
         val c = applicationContext
-        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(title).setContentText(text.substringBefore('\n'))
+        val n = NotificationCompat.Builder(c.also { app.atlante.library.ui.L.init(it) }, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(app.atlante.library.ui.L.t(title)).setContentText(app.atlante.library.ui.L.t(text.substringBefore('\n')))
             .setStyle(NotificationCompat.BigTextStyle().bigText(text)).setAutoCancel(true).setContentIntent(openApp(c)).build()
         runCatching { c.getSystemService(NotificationManager::class.java).notify(DONE, n) }
     }
@@ -89,7 +89,7 @@ class HardcoverSyncWorker(context: Context, params: WorkerParameters) : Coroutin
 
         private fun channel(c: Context) {
             if (Build.VERSION.SDK_INT >= 26) c.getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(NotificationChannel(CHANNEL, "Sincronizzazione", NotificationManager.IMPORTANCE_LOW).apply { description = "Avanzamento di Sync con Hardcover" })
+                .createNotificationChannel(NotificationChannel(CHANNEL, app.atlante.library.ui.L.t("Sincronizzazione"), NotificationManager.IMPORTANCE_LOW).apply { description = app.atlante.library.ui.L.t("Avanzamento di Sync con Hardcover") })
         }
 
         private fun openApp(c: Context) = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),

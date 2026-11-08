@@ -132,6 +132,7 @@ public final class MainActivity extends AppCompatActivity {
         // The Material theme must be set before the activity creates its views.
         applyTheme(prefs.getString("theme", DynamicColors.isDynamicColorAvailable() ? "dynamic" : "atlante"));
         super.onCreate(state);
+        app.atlante.library.ui.L.init(this); app.atlante.library.ui.L.watch(getWindow().getDecorView());
         getOnBackPressedDispatcher().addCallback(this, back);
         if (state != null) {
             tab = state.getString("tab", tab); if (tab.equals("Desideri")) tab = "Tutti i libri"; query = state.getString("query", "");
@@ -262,7 +263,7 @@ public final class MainActivity extends AppCompatActivity {
     private String settingsSection = "";
     private static final String[][] SETTINGS = {
         {"PERSONALE","aspetto","Aspetto","tema colori scuro chiaro"},{"PERSONALE","obiettivi","Obiettivi di lettura","rotta libri pagine minuti"},
-        {"PERSONALE","lettura","Lettura","lettore testo dimensione scuro"},{"PERSONALE","lingua","Lingua dei libri","ricerca lingua"},
+        {"PERSONALE","lettura","Lettura","lettore testo dimensione scuro"},{"PERSONALE","lingua","Lingua","lingua app interfaccia inglese english italiano ricerca libri"},
         {"BIBLIOTECA","libreria","Libreria e catalogo","importa ebook epub copertine saghe doppioni generi cache qualità operazioni"},{"BIBLIOTECA","hardcover","Hardcover","chiave saghe universi"},
         {"INFO","info","Privacy e progetto","privacy github aggiornamenti versione"}};
     private String settingsTitle(String key) { if (key.equals("tema")) return "Il mio tema"; for (String[] r : SETTINGS) if (r[1].equals(key)) return r[2]; return "Impostazioni"; }
@@ -274,7 +275,7 @@ public final class MainActivity extends AppCompatActivity {
                 if (g.getYearOn()) v.add(g.getYearBooks() + " libri l’anno"); if (g.getMonthOn()) v.add(g.getMonthBooks() + " al mese"); if (g.getDailyPagesOn()) v.add(g.getDailyPages() + " pagine al giorno"); if (g.getDailyMinutesOn()) v.add(g.getDailyMinutes() + " minuti al giorno");
                 return v.isEmpty() ? "Nessun obiettivo" : TextUtils.join(" · ", v); }
             case "lettura": return (readerDark ? "Lettore scuro" : "Lettore chiaro") + " · testo " + Math.round(fontSize);
-            case "lingua": return OnlineCatalog.languageName(prefs.getString("bookLanguage", "ita")) + (prefs.getBoolean("onlyLanguage", false) ? " · solo questa" : "");
+            case "lingua": return (app.atlante.library.ui.L.getEnglish() ? "English" : "Italiano") + " · " + OnlineCatalog.languageName(prefs.getString("bookLanguage", app.atlante.library.ui.L.getEnglish() ? "eng" : "ita")) + (prefs.getBoolean("onlyLanguage", false) ? " · solo questa" : "");
             case "libreria": return "Importa eBook, copertine, saghe, cache";
             case "hardcover": return app.atlante.library.sync.HardcoverAuth.connected(this) ? "Collegato · saghe, numeri e universi" : "Non collegato";
             default: return "Cosa resta sul telefono · aggiornamenti";
@@ -332,15 +333,17 @@ public final class MainActivity extends AppCompatActivity {
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         ArrayList<app.atlante.library.ui.compose.SettingsRow> rows = new ArrayList<>();
         for (String[] r : SETTINGS) rows.add(new app.atlante.library.ui.compose.SettingsRow(r[0], r[1], r[2], settingsValue(r[1]), settingsIcon(r[1]), r[3], r[1].equals("libreria") ? prefs.getInt("qualityProblems", 0) : 0));
-        ArrayList<String> languages = new ArrayList<>(); int chosen = 0; String code = prefs.getString("bookLanguage", "ita");
+        ArrayList<String> languages = new ArrayList<>(); int chosen = 0; String code = prefs.getString("bookLanguage", app.atlante.library.ui.L.getEnglish() ? "eng" : "ita");
         for (int i = 0; i < OnlineCatalog.LANGUAGES.length; i++) { languages.add(OnlineCatalog.LANGUAGES[i][2]); if (OnlineCatalog.LANGUAGES[i][0].equals(code)) chosen = i; }
-        app.atlante.library.ui.compose.SettingsState state = new app.atlante.library.ui.compose.SettingsState(rows, readerDark, fontSize, languages, chosen, prefs.getBoolean("onlyLanguage", false));
+        app.atlante.library.ui.compose.SettingsState state = new app.atlante.library.ui.compose.SettingsState(rows, readerDark, fontSize, languages, chosen, prefs.getBoolean("onlyLanguage", false),
+            Arrays.asList("", "it", "en").indexOf(app.atlante.library.ui.L.getChoice()));
         return app.atlante.library.ui.compose.SettingsView.create(this, palette, page, state, new app.atlante.library.ui.compose.SettingsHost() {
             @Override public void open(String key) { settingsSection = key; showCompanion(); if (companionScroll != null) companionScroll.post(() -> { if (companionScroll != null) companionScroll.scrollTo(0, 0); }); }
             @Override public void setReaderDark(boolean dark) { readerDark = dark; prefs.edit().putBoolean("dark", dark).apply(); }
             @Override public void setFontSize(float size) { fontSize = size; prefs.edit().putFloat("fontSize", size).apply(); }
             @Override public void setLanguage(int index) { prefs.edit().putString("bookLanguage", OnlineCatalog.LANGUAGES[index][0]).apply(); }
             @Override public void setOnlyLanguage(boolean only) { prefs.edit().putBoolean("onlyLanguage", only).apply(); }
+            @Override public void setAppLanguage(int index) { app.atlante.library.ui.L.choose(MainActivity.this, new String[]{"", "it", "en"}[index]); recreateHere(); }
             @Override public void openProject() { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Mancio24x/atlante-android"))); }
         });
     }
@@ -483,7 +486,7 @@ public final class MainActivity extends AppCompatActivity {
     private void disconnectHardcover() {
         worker.execute(()->{
             app.atlante.library.sync.HardcoverAuth.disconnect(this);
-            runOnUiThread(()->{ app.atlante.library.saga.Hardcover.configure(this); Toast.makeText(this,"Hardcover scollegato",Toast.LENGTH_SHORT).show(); showLibrary(); });
+            runOnUiThread(()->{ app.atlante.library.saga.Hardcover.configure(this); app.atlante.library.ui.L.toast(this,"Hardcover scollegato",Toast.LENGTH_SHORT).show(); showLibrary(); });
         });
     }
 
@@ -498,7 +501,7 @@ public final class MainActivity extends AppCompatActivity {
                     getPreferences(MODE_PRIVATE).edit().putString("hardcoverUser",user).apply();
                     app.atlante.library.saga.Hardcover.configure(this);
                     try { app.atlante.library.saga.SagaScanWorker.recheck(this); } catch(RuntimeException ignored) { }
-                    Toast.makeText(this,"Collegato a Hardcover come @"+user+". Riconosco le saghe della libreria in background.",Toast.LENGTH_LONG).show();
+                    app.atlante.library.ui.L.toast(this,"Collegato a Hardcover come @"+user+". Riconosco le saghe della libreria in background.",Toast.LENGTH_LONG).show();
                     showLibrary(); });
             } catch(Exception e) { runOnUiThread(()->{ waiting.dismiss(); error(e); }); }
         });
@@ -512,7 +515,7 @@ public final class MainActivity extends AppCompatActivity {
                 String user=app.atlante.library.saga.Hardcover.username(key);
                 runOnUiThread(()->{ waiting.dismiss(); if(isFinishing()||isDestroyed()) return;
                     saveHardcoverKey(key,user);
-                    Toast.makeText(this,"Chiave valida: collegato come @"+user+". Riconosco le saghe della libreria in background.",Toast.LENGTH_LONG).show();
+                    app.atlante.library.ui.L.toast(this,"Chiave valida: collegato come @"+user+". Riconosco le saghe della libreria in background.",Toast.LENGTH_LONG).show();
                     showLibrary(); });
             } catch(Exception e) { runOnUiThread(()->{ waiting.dismiss(); error(e); }); }
         });
@@ -616,6 +619,7 @@ public final class MainActivity extends AppCompatActivity {
         return new MaterialAlertDialogBuilder(this) {
             @Override public AlertDialog create() {
                 AlertDialog dialog = super.create();
+                if (dialog.getWindow() != null) app.atlante.library.ui.L.watch(dialog.getWindow().getDecorView());
                 if (dialog.getWindow() != null) dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                     | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
                 return dialog;
@@ -640,7 +644,7 @@ public final class MainActivity extends AppCompatActivity {
                 View swatch = new View(this); swatch.setBackground(background(color, option.line));
                 LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(dp(18), dp(30)); size.setMargins(dp(4),0,0,0); tile.addView(swatch,size);
             }
-            tile.setContentDescription(option.name + ", " + option.description); tile.setMinimumHeight(dp(64));
+            tile.setContentDescription(app.atlante.library.ui.L.t(option.name) + ", " + app.atlante.library.ui.L.t(option.description)); tile.setMinimumHeight(dp(64));
             // Material themes apply when the activity is created: save and recreate.
             tile.setOnClickListener(v -> { getPreferences(MODE_PRIVATE).edit().putString("theme", option.id).commit(); recreateHere(); });
             panel.addView(tile); gap(panel, 10);
@@ -839,6 +843,7 @@ public final class MainActivity extends AppCompatActivity {
      */
     private void libraryMenu() {
         com.google.android.material.bottomsheet.BottomSheetDialog sheet = new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        if (sheet.getWindow() != null) app.atlante.library.ui.L.watch(sheet.getWindow().getDecorView());
         LinearLayout p = column(); p.setPadding(dp(20), dp(8), dp(20), dp(24));
         LinearLayout head = row(); p.addView(head, new LinearLayout.LayoutParams(-1, -2));
         head.addView(text("Filtri e ordine", 22, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
@@ -1469,11 +1474,11 @@ public final class MainActivity extends AppCompatActivity {
             String key = title + "|" + author;
             if (!on) {
                 String created = discoverSaved.remove(key);
-                if (created == null) { boolean kept = discoverMatch(title, author) != null; if (kept) Toast.makeText(MainActivity.this, "Il libro era già nella tua biblioteca: resta lì", Toast.LENGTH_SHORT).show(); return kept; }
+                if (created == null) { boolean kept = discoverMatch(title, author) != null; if (kept) app.atlante.library.ui.L.toast(MainActivity.this, "Il libro era già nella tua biblioteca: resta lì", Toast.LENGTH_SHORT).show(); return kept; }
                 Book b = store.find(created); try { if (b != null) store.remove(b); } catch (Exception e) { error(e); return true; } return false;
             }
             Book existing = discoverMatch(title, author);
-            if (existing != null) { if (!discoverSaved.containsKey(key)) Toast.makeText(MainActivity.this, "«" + existing.title + "» è già nella tua biblioteca", Toast.LENGTH_SHORT).show(); return true; }
+            if (existing != null) { if (!discoverSaved.containsKey(key)) app.atlante.library.ui.L.toast(MainActivity.this, "«" + existing.title + "» è già nella tua biblioteca", Toast.LENGTH_SHORT).show(); return true; }
             Book b = new Book(); b.id = UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
             b.format = "CATALOGO"; b.title = title; b.author = author.isEmpty() ? "Autore sconosciuto" : author; b.status = Book.TO_READ; b.addedAt = System.currentTimeMillis();
             try { store.addCatalog(b); discoverSaved.put(key, b.id); } catch (Exception e) { error(e); return false; }
@@ -1662,7 +1667,7 @@ public final class MainActivity extends AppCompatActivity {
             }
             MaterialButton add = button(b.chapters.isEmpty() ? "Aggiungi capitoli" : "Aggiungi altri capitoli", R.style.Atlante_Button_Text, () -> addChapters(b, refresh[0]));
             add.setIconResource(R.drawable.ic_add); list.addView(add);
-            if (rated > 0) list.addView(text(String.format(Locale.ITALIAN, "%d capitoli votati · media %.1f ★", rated, (double) sum / rated), 13, COPPER, false), 0);
+            if (rated > 0) list.addView(text(String.format(app.atlante.library.ui.L.locale(), "%d capitoli votati · media %.1f ★", rated, (double) sum / rated), 13, COPPER, false), 0);
         };
         refresh[0].run();
         if (b.format.equals("EPUB") && b.chapters.isEmpty() && tocChecked.add(b.id)) worker.execute(() -> {
@@ -1752,7 +1757,7 @@ public final class MainActivity extends AppCompatActivity {
     }
     static String stars(int rating) { StringBuilder s = new StringBuilder(); for (int i = 1; i <= 5; i++) s.append(i <= rating ? '★' : '☆'); return s.toString(); }
     static String italianDate(String iso) {
-        try { return java.time.LocalDate.parse(iso).format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ITALIAN)); }
+        try { return java.time.LocalDate.parse(iso).format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", app.atlante.library.ui.L.locale())); }
         catch (Exception e) { return iso; }
     }
 
@@ -1892,8 +1897,8 @@ public final class MainActivity extends AppCompatActivity {
                         b.title = t; b.author = a.isEmpty() ? "Autore sconosciuto" : a;
                     }
                     if(duplicate==null && app.atlante.library.catalog.BibliographicEngine.sameWorkIn(store.snapshot(),b,catalogDao())!=null){dialog.dismiss();preview(b,next);return;}
-                    if (duplicate != null && canAttach) { Book linked = store.attachFile(b, duplicate); forgetCover(linked.id); Toast.makeText(this, "File collegato a «" + linked.title + "»", Toast.LENGTH_SHORT).show(); }
-                    else if (duplicate != null) { Book linked = store.addEdition(b, duplicate); forgetCover(linked.id); Toast.makeText(this, "Edizione aggiunta a «" + linked.title + "»: nessuna scheda doppia", Toast.LENGTH_SHORT).show(); }
+                    if (duplicate != null && canAttach) { Book linked = store.attachFile(b, duplicate); forgetCover(linked.id); app.atlante.library.ui.L.toast(this, "File collegato a «" + linked.title + "»", Toast.LENGTH_SHORT).show(); }
+                    else if (duplicate != null) { Book linked = store.addEdition(b, duplicate); forgetCover(linked.id); app.atlante.library.ui.L.toast(this, "Edizione aggiunta a «" + linked.title + "»: nessuna scheda doppia", Toast.LENGTH_SHORT).show(); }
                     else store.addCatalog(b);
                     dialog.dismiss(); next.run();
                 }
@@ -2058,9 +2063,9 @@ public final class MainActivity extends AppCompatActivity {
         try {
             Book duplicate = app.atlante.library.catalog.BibliographicEngine.sameWorkIn(store.snapshot(), b, catalogDao());
             onlineBook = null; sheetRequest++;
-            if (duplicate != null) { Toast.makeText(this, "«" + duplicate.title + "» è già nella tua biblioteca", Toast.LENGTH_SHORT).show(); details(duplicate); return; }
+            if (duplicate != null) { app.atlante.library.ui.L.toast(this, "«" + duplicate.title + "» è già nella tua biblioteca", Toast.LENGTH_SHORT).show(); details(duplicate); return; }
             Book added = store.addCatalog(b); forgetCover(added.id);
-            Toast.makeText(this, "Aggiunto alla tua biblioteca", Toast.LENGTH_SHORT).show(); details(added);
+            app.atlante.library.ui.L.toast(this, "Aggiunto alla tua biblioteca", Toast.LENGTH_SHORT).show(); details(added);
         } catch (Exception e) { error(e); }
     }
 
@@ -2076,7 +2081,7 @@ public final class MainActivity extends AppCompatActivity {
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         ArrayList<String> languageNames = new ArrayList<>();
         for (String[] l : OnlineCatalog.LANGUAGES) languageNames.add(l[2]);
-        Picker language = new Picker(panel, "Lingua preferita", languageNames, OnlineCatalog.languageName(prefs.getString("bookLanguage", "ita")));
+        Picker language = new Picker(panel, "Lingua preferita", languageNames, OnlineCatalog.languageName(prefs.getString("bookLanguage", app.atlante.library.ui.L.getEnglish() ? "eng" : "ita")));
         MaterialSwitch only = new MaterialSwitch(this); only.setText("Mostra solo libri in questa lingua"); only.setTextSize(14);
         only.setChecked(prefs.getBoolean("onlyLanguage", false)); only.setMinHeight(dp(48)); panel.addView(only);
         LinearLayout results = column();
@@ -2193,7 +2198,7 @@ public final class MainActivity extends AppCompatActivity {
         String value() { return options.get(index); }
     }
     private static String display(String option) {
-        return option.isEmpty() ? "Non indicato" : option.equals("CATALOGO") ? "Senza file (cartaceo o da cercare)" : option;
+        return app.atlante.library.ui.L.t(option.isEmpty() ? "Non indicato" : option.equals("CATALOGO") ? "Senza file (cartaceo o da cercare)" : option);
     }
     private void manualBook() {
         Book b = new Book();
@@ -2301,7 +2306,7 @@ public final class MainActivity extends AppCompatActivity {
      */
     private void startImport(Uri source) {
         String name = store.name(source);
-        Toast.makeText(this, "Importazione di «" + name + "» avviata in background: puoi continuare a usare l’app.", Toast.LENGTH_LONG).show();
+        app.atlante.library.ui.L.toast(this, "Importazione di «" + name + "» avviata in background: puoi continuare a usare l’app.", Toast.LENGTH_LONG).show();
         worker.execute(() -> {
             File folder = new File(getFilesDir(), "imports"); folder.mkdirs();
             File copy = new File(folder, System.currentTimeMillis() + "-" + name.replaceAll("[^A-Za-z0-9._-]", "_"));
@@ -2368,7 +2373,7 @@ public final class MainActivity extends AppCompatActivity {
         for (Book b : books) { Book current = store.find(b.id); if (current == null) continue;
             String source = current.meta.optString("coverSource", "");
             if (!store.cover(current).isFile() || (improve && !source.equals("gallery") && !source.equals("online") && coverWidth(current) < 300)) { any = true; break; } }
-        if (!any) { if (announce) Toast.makeText(this, "Tutte le copertine sono già presenti e nitide", Toast.LENGTH_SHORT).show(); return; }
+        if (!any) { if (announce) app.atlante.library.ui.L.toast(this, "Tutte le copertine sono già presenti e nitide", Toast.LENGTH_SHORT).show(); return; }
         if (announce) startRepair(app.atlante.library.catalog.RepairWorker.COVERS, improve);
         else app.atlante.library.catalog.RepairWorker.start(this, app.atlante.library.catalog.RepairWorker.COVERS, improve);
         watchRepairs();
@@ -2504,7 +2509,7 @@ public final class MainActivity extends AppCompatActivity {
             if(p==null) p=SeriesCatalog.suggest(b);
             if(p!=null&&(!p.series.equals(b.series)||p.number!=b.number)){books.add(b);proposals.add(p);labels.add(b.title+"\n"+(b.series.isEmpty()?"Senza saga":b.series+" · "+number(b.number))+" → "+p.series+" · "+number(p.number));}
         }
-        if(books.isEmpty()){Toast.makeText(this,"Nessuna nuova saga riconosciuta. Puoi indicare saga e numero nella scheda del libro.",Toast.LENGTH_LONG).show();return;}
+        if(books.isEmpty()){app.atlante.library.ui.L.toast(this,"Nessuna nuova saga riconosciuta. Puoi indicare saga e numero nella scheda del libro.",Toast.LENGTH_LONG).show();return;}
         boolean[] selected=new boolean[books.size()];Arrays.fill(selected,true);
         dialogBuilder().setTitle("Verifica "+books.size()+" proposte")
             .setMultiChoiceItems(labels.toArray(new String[0]),selected,(d,w,checked)->selected[w]=checked)
@@ -2527,7 +2532,7 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void linkKoreader() {
         ArrayList<Book> books=store.snapshot();books.sort((a,b)->a.title.compareToIgnoreCase(b.title));
-        if(books.isEmpty()){Toast.makeText(this,"Aggiungi prima un libro alla biblioteca",Toast.LENGTH_SHORT).show();return;}
+        if(books.isEmpty()){app.atlante.library.ui.L.toast(this,"Aggiungi prima un libro alla biblioteca",Toast.LENGTH_SHORT).show();return;}
         String[] names=new String[books.size()];for(int i=0;i<books.size();i++)names[i]=books.get(i).title+" · "+books.get(i).author;
         dialogBuilder().setTitle("Collega un libro a KOReader").setItems(names,(d,w)->{
             Book b=books.get(w);LinearLayout p=column();p.setPadding(dp(20),dp(12),dp(20),dp(12));
@@ -2553,7 +2558,7 @@ public final class MainActivity extends AppCompatActivity {
         worker.execute(()->{try{
             List<KoreaderSync.Progress> changes=KoreaderSync.receive(server,user,key,books);
             runOnUiThread(()->{busy=false;loading.dismiss();if(isFinishing()||isDestroyed())return;
-                if(changes.isEmpty()){Toast.makeText(this,"Nessun avanzamento trovato. Controlla i collegamenti e invia prima da KOReader.",Toast.LENGTH_LONG).show();return;}
+                if(changes.isEmpty()){app.atlante.library.ui.L.toast(this,"Nessun avanzamento trovato. Controlla i collegamenti e invia prima da KOReader.",Toast.LENGTH_LONG).show();return;}
                 StringBuilder summary=new StringBuilder();for(KoreaderSync.Progress c:changes)summary.append(c.book.title).append(" → ").append(Math.round(c.percentage*100)).append("%\n");
                 dialogBuilder().setTitle("Applica avanzamento KOReader?").setMessage(summary.toString()).setNegativeButton("Annulla",null).setPositiveButton("Applica",(d,w)->{for(KoreaderSync.Progress c:changes)if(store.find(c.book.id)!=null)KoreaderSync.apply(c);save();showLibrary();}).show();
             });
@@ -2626,7 +2631,7 @@ public final class MainActivity extends AppCompatActivity {
         if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},7);
         app.atlante.library.sync.HardcoverSyncWorker.start(this);
-        Toast.makeText(this,"Sincronizzazione avviata: segui l’avanzamento nelle notifiche. Puoi usare o chiudere l’app.",Toast.LENGTH_LONG).show();
+        app.atlante.library.ui.L.toast(this,"Sincronizzazione avviata: segui l’avanzamento nelle notifiche. Puoi usare o chiudere l’app.",Toast.LENGTH_LONG).show();
         watchHardcoverSync();
     }
 
@@ -2643,7 +2648,7 @@ public final class MainActivity extends AppCompatActivity {
         if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},8);
         app.atlante.library.catalog.RepairWorker.start(this, type, everything); watchRepairs();
-        Toast.makeText(this, app.atlante.library.catalog.RepairWorker.title(type) + ": avviata in background. Puoi continuare a usare l’app.", Toast.LENGTH_LONG).show();
+        app.atlante.library.ui.L.toast(this, app.atlante.library.catalog.RepairWorker.title(type) + ": avviata in background. Puoi continuare a usare l’app.", Toast.LENGTH_LONG).show();
     }
 
     /** Operazioni in background: active, queued and finished repairs, their results and the proposals to decide. */
@@ -2759,7 +2764,7 @@ public final class MainActivity extends AppCompatActivity {
             final Exception error=failure; final CalibreSync.Report report=r;
             runOnUiThread(()->{ dialog[0].dismiss(); busy=false; if(isFinishing()||isDestroyed()) return;
                 if(error!=null){ error(error); return; }
-                String when=java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm",Locale.ITALIAN));
+                String when=java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm",app.atlante.library.ui.L.locale()));
                 prefs.edit().putString("calibreLast","Ultima sincronizzazione: "+when+" · "+report.pushed+" inviati, "+report.pulled+" ricevuti, "+report.created+" nuovi").apply();
                 syncReport("Calibre sincronizzato", report.remote+" libri in Calibre ("+report.library+") · "+report.linked+" collegati\n"+report.pushed+" aggiornati in Calibre · "+report.pulled+" aggiornati in Atlante\n"
                     +report.created+" nuove schede in Atlante"+(report.recognized>0?"\n"+report.recognized+" libri riconosciuti come già presenti: nessun doppione":""), report.notes); });
@@ -2832,7 +2837,7 @@ public final class MainActivity extends AppCompatActivity {
         android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
         app.atlante.library.online.MetadataEngine.Settings s=new app.atlante.library.online.MetadataEngine.Settings();
         s.keys.isbndb=prefs.getString("isbndbKey","");
-        String lang=prefs.getString("bookLanguage","ita"); s.language=lang.isEmpty()?"ita":lang;
+        String lang=prefs.getString("bookLanguage", app.atlante.library.ui.L.getEnglish() ? "eng" : "ita"); s.language=lang.isEmpty()?"ita":lang;
         return s;
     }
 
@@ -2989,7 +2994,7 @@ public final class MainActivity extends AppCompatActivity {
                     if (out == null) throw new IOException("Destinazione non disponibile");
                     byte[] buffer = new byte[32768]; int count;
                     while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
-                    runOnUiThread(() -> Toast.makeText(this, "File esportato", Toast.LENGTH_SHORT).show());
+                    runOnUiThread(() -> app.atlante.library.ui.L.toast(this, "File esportato", Toast.LENGTH_SHORT).show());
                 } catch (Exception e) { runOnUiThread(() -> error(e)); }
             });
         }
@@ -3170,7 +3175,7 @@ public final class MainActivity extends AppCompatActivity {
         if (OPEN_OPERATIONS.equals(action)) { if (reading == null) showOperations(); return; }
         if (OPEN_LIBRARY.equals(action)) { if (reading == null) navigate("Biblioteca"); return; }
         Book b = store.find(i.getStringExtra(EXTRA_BOOK) == null ? "" : i.getStringExtra(EXTRA_BOOK));
-        if (b == null) { Toast.makeText(this, "Questo libro non è più nella libreria.", Toast.LENGTH_LONG).show(); navigate("Biblioteca"); return; }
+        if (b == null) { app.atlante.library.ui.L.toast(this, "Questo libro non è più nella libreria.", Toast.LENGTH_LONG).show(); navigate("Biblioteca"); return; }
         if (reading != null) { rememberPage(); reading = null; }
         details(b);
         if (OPEN_PROGRESS.equals(action)) progressEditor(b, 0, false);
@@ -3272,7 +3277,7 @@ public final class MainActivity extends AppCompatActivity {
         if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("IMPOSTAZIONI",settingsSection.isEmpty()?"Impostazioni":settingsTitle(settingsSection)); settingsPage(p); updateBack(); return; }
         if(destination.equals("Sync")) { composePage(syncView()); return; }
         if(destination.equals("CrossPoint")) { composePage(crossPointView()); return; }
-        String day=java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM",Locale.ITALIAN)).toUpperCase(Locale.ITALIAN);
+        String day=java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM",app.atlante.library.ui.L.locale())).toUpperCase(app.atlante.library.ui.L.locale());
         LinearLayout panel=companionPage(day,"Buona lettura.");
         home(panel); sessionBar();
         addBottomNav(); updateBack(); animateIn(panel);
@@ -3354,7 +3359,7 @@ public final class MainActivity extends AppCompatActivity {
         gap(stats,12);
         // This week, Monday to Sunday: copper today, accent on days with reading, line otherwise.
         LinearLayout week=row(); stats.addView(week,new LinearLayout.LayoutParams(-1,-2));
-        java.time.LocalDate monday=today.minusDays(today.getDayOfWeek().getValue()-1); String[] names={"L","M","M","G","V","S","D"};
+        java.time.LocalDate monday=today.minusDays(today.getDayOfWeek().getValue()-1); String[] names=app.atlante.library.ui.L.weekInitials().toArray(new String[0]);
         for(int i=0;i<7;i++) { java.time.LocalDate d=monday.plusDays(i); long[] t=ReadingJournal.totals(all,d); boolean read=t[0]>0||t[1]>0;
             LinearLayout cell=column(); cell.setGravity(Gravity.CENTER_HORIZONTAL); LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1); if(i>0) lp.setMargins(dp(5),0,0,0); week.addView(cell,lp);
             View bar=new View(this); GradientDrawable g=background(d.equals(today)&&read?COPPER:read?SAGE:LINE,Color.TRANSPARENT); g.setCornerRadius(dp(3)); bar.setBackground(g); cell.addView(bar,new LinearLayout.LayoutParams(-1,dp(6)));

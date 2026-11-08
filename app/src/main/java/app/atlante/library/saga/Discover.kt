@@ -76,15 +76,17 @@ class Discover(
             val surnames = BookMatcher.surnames(p.author)
             val sameAuthor = books.filter { b -> BookMatcher.surnames(b.author).any { it in surnames } }
             if (sameAuthor.isEmpty()) return p
-            val it = if (p.italian) p else runCatching { italian(p) }.getOrDefault(p)
-            if (!it.italian) return null
+            // In English the book is suggested in its original edition; in Italian only with a known Italian edition.
+            val it = if (p.italian || app.atlante.library.ui.L.english) p else runCatching { italian(p) }.getOrDefault(p)
+            if (!it.italian && !app.atlante.library.ui.L.english) return null
             val probe = Book().apply { title = it.title; author = it.author }
             return if (owned.matches(it.title).isNotEmpty() || sameAuthor.any { b -> BookMatcher.score(probe, b) >= BookMatcher.SAME_TITLE_AND_AUTHOR }) null else it
         }
         val author = book.author.takeIf { it.isNotBlank() && it != "Autore sconosciuto" }
         if (author != null) {
-            val json = cached("because-author:${author.lowercase()}") {
-                fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode("author:\"$author\" language:ita", "UTF-8") + "&sort=readinglog&limit=20&lang=it"
+            val en = app.atlante.library.ui.L.english
+            val json = cached("because-author:${if (en) "en:" else ""}${author.lowercase()}") {
+                fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode("author:\"$author\" language:" + (if (en) "eng" else "ita"), "UTF-8") + "&sort=readinglog&limit=20&lang=" + (if (en) "en" else "it")
                     + "&fields=key,title,author_name,cover_i,first_publish_year,subject_key,editions,editions.title,editions.language,editions.cover_i")
             }
             val surnames = BookMatcher.surnames(author)
@@ -105,7 +107,7 @@ class Discover(
 
     /** Italian edition of a work (title and cover), or the work as it is. */
     suspend fun italian(p: Pick): Pick {
-        if (p.workKey.startsWith("hc:")) return p        // Hardcover picks already carry the Italian edition
+        if (p.workKey.startsWith("hc:") || app.atlante.library.ui.L.english) return p        // Hardcover picks already carry the Italian edition
         val json = cached("ita:${p.workKey}") { fetch("https://openlibrary.org/works/${p.workKey}/editions.json?limit=100") } ?: return p
         val entries = runCatching { JSONObject(json).optJSONArray("entries") }.getOrNull() ?: return p
         val italian = (0 until entries.length()).mapNotNull { entries.optJSONObject(it) }.filter { e ->
@@ -123,7 +125,7 @@ class Discover(
     private suspend fun candidates(genre: Genre?): List<Pick> {
         // With Hardcover connected: genres voted by its readers, much more reliable than Open Library's subjects.
         if (Hardcover.enabled && (genre == null || genre.hardcover.isNotEmpty())) {
-            val json = cached("hc-discover:${genre?.label ?: "popolari"}") { Hardcover.discoverJson(genre?.hardcover) }
+            val json = cached("hc-discover:${if (app.atlante.library.ui.L.english) "en:" else ""}${genre?.label ?: "popolari"}") { Hardcover.discoverJson(genre?.hardcover) }
             val picks = json?.let { runCatching { parseHardcover(it, genre) }.getOrNull() }.orEmpty()
             if (picks.size >= 6) return picks
         }
@@ -133,7 +135,7 @@ class Discover(
     private suspend fun openLibraryCandidates(genre: Genre?): List<Pick> {
         val year = Year.now().value
         val q = buildString {
-            append("language:ita")
+            append(if (app.atlante.library.ui.L.english) "language:eng" else "language:ita")
             genre?.let { append(" ").append(it.query ?: "subject:${it.subject}") }
             val since = if (genre == null) 1990 else genre.since
             since?.let { append(" first_publish_year:[").append(it).append(" TO ").append(year).append("]") }
@@ -141,8 +143,9 @@ class Discover(
         // lang=it makes Open Library put the best Italian edition first in "editions": its title and cover come
         // with the same answer, with no further request per book.
         // Subjects come too: a work is shown under a genre only when that genre is really its own (see fits).
-        val json = cached("discover3:${genre?.subject ?: "popolari"}") {
-            fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode(q, "UTF-8") + "&sort=readinglog&limit=${if (genre == null) 80 else 200}&lang=it"
+        val en = app.atlante.library.ui.L.english
+        val json = cached("discover3:${if (en) "en:" else ""}${genre?.subject ?: "popolari"}") {
+            fetch("https://openlibrary.org/search.json?q=" + URLEncoder.encode(q, "UTF-8") + "&sort=readinglog&limit=${if (genre == null) 80 else 200}&lang=" + (if (en) "en" else "it")
                 + "&fields=key,title,author_name,cover_i,first_publish_year,subject_key,editions,editions.title,editions.language,editions.cover_i")
         } ?: return emptyList()
         return parse(json).filter { genre == null || fits(genre, it.subjects) }
@@ -222,7 +225,7 @@ class Discover(
                 val cover = it.optJSONObject("image")?.optString("url")?.takeIf { u -> u.startsWith("http") }
                     ?: b.optJSONObject("image")?.optString("url")?.takeIf { u -> u.startsWith("http") } ?: return@mapNotNull null
                 val author = b.optJSONArray("contributions")?.optJSONObject(0)?.optJSONObject("author")?.optString("name")?.takeIf { a -> a.isNotBlank() } ?: return@mapNotNull null
-                val title = Hardcover.italianTitle(it.optString("title")) ?: b.optString("title")
+                val title = (if (app.atlante.library.ui.L.english) null else Hardcover.italianTitle(it.optString("title"))) ?: b.optString("title")
                 Pick("hc:" + b.optInt("id"), title, author, b.optInt("release_year").takeIf { y -> y > 0 }?.toString(), cover, true)
             }
         }
@@ -236,7 +239,7 @@ class Discover(
                 val subjects = d.optJSONArray("subject_key")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
                 val pick = Pick(d.optString("key").substringAfterLast('/'), d.optString("title"), author, d.optInt("first_publish_year").takeIf { it > 0 }?.toString(),
                     OpenLibraryWorks.coverUrl(cover), false, subjects)
-                italianEdition(d)?.let { e ->
+                (if (app.atlante.library.ui.L.english) null else italianEdition(d))?.let { e ->
                     val title = e.optString("title").substringBefore(" : ").trim()
                     val italianCover = e.optLong("cover_i").takeIf { it > 0 }
                     // Without its own cover the Italian edition is completed later by italian().

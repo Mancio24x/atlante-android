@@ -155,20 +155,20 @@ private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minu
 @Composable private fun PeriodCard(data: StatsData, period: String, palette: ThemePalette) {
     val colors = MaterialTheme.colorScheme; val today = LocalDate.now()
     val from: LocalDate; val to: LocalDate; val label: String; val bars: List<Triple<String, Int, Boolean>>; var compare: Pair<LocalDate, LocalDate>? = null; val against: String
-    val it = Locale.ITALIAN
+    val it = app.atlante.library.ui.L.locale()
     when (period) {
         "Settimana" -> { from = today.minusDays(today.dayOfWeek.value - 1L); to = from.plusDays(6)
-            label = "SETTIMANA · ${from.dayOfMonth} – ${to.format(DateTimeFormatter.ofPattern("d MMMM", it))}".uppercase(it)
-            bars = (0..6).map { d -> val day = from.plusDays(d.toLong()); Triple(listOf("L", "M", "M", "G", "V", "S", "D")[d], pagesOn(data, day), day == today) }
+            label = "${app.atlante.library.ui.L.t("Settimana")} · ${from.dayOfMonth} – ${to.format(DateTimeFormatter.ofPattern("d MMMM", it))}".uppercase(it)
+            bars = (0..6).map { d -> val day = from.plusDays(d.toLong()); Triple(app.atlante.library.ui.L.weekInitials()[d], pagesOn(data, day), day == today) }
             compare = from.minusDays(7) to today.minusDays(7); against = "la settimana scorsa" }
         "Mese" -> { from = today.withDayOfMonth(1); to = today.withDayOfMonth(today.lengthOfMonth())
-            label = (today.format(DateTimeFormatter.ofPattern("MMMM yyyy", it)) + " · fino a oggi").uppercase(it)
+            label = (today.format(DateTimeFormatter.ofPattern("MMMM yyyy", it)) + " · " + app.atlante.library.ui.L.t("fino a oggi")).uppercase(it)
             bars = (0 until today.lengthOfMonth()).map { d -> val day = from.plusDays(d.toLong()); Triple(if (d % 7 == 0) "${d + 1}" else "", pagesOn(data, day), day == today) }
             compare = from.minusMonths(1) to today.minusMonths(1); against = "gli stessi giorni del mese scorso" }
         else -> { from = today.withDayOfYear(1); to = today.withDayOfYear(today.lengthOfYear())
             label = "${today.year} · DA GENNAIO A OGGI"
             bars = (1..12).map { m -> val start = LocalDate.of(today.year, m, 1); val p = if (m > today.monthValue) 0 else (0 until start.lengthOfMonth()).sumOf { d -> pagesOn(data, start.plusDays(d.toLong())) }
-                Triple(listOf("G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D")[m - 1], p, m == today.monthValue) }
+                Triple(app.atlante.library.ui.L.monthInitials()[m - 1], p, m == today.monthValue) }
             against = "" }
     }
     val end = if (to.isAfter(today)) today else to
@@ -227,7 +227,7 @@ private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minu
                 Text(if (goal > 0) "$done di $goal libri" else "$done " + if (done == 1) "libro" else "libri", Modifier.padding(top = 4.dp), style = MaterialTheme.typography.titleLarge.copy(fontFamily = Serif))
                 if (goal > 0 && done < goal) {
                     val weeks = ((today.lengthOfYear() - today.dayOfYear) / 7.0).coerceAtLeast(1.0)
-                    val perWeek = String.format(Locale.ITALIAN, "%.1f", (goal - done) / weeks)
+                    val perWeek = String.format(app.atlante.library.ui.L.locale(), "%.1f", (goal - done) / weeks)
                     Text(if (done == 0) "Per arrivare a $goal servono $perWeek libri a settimana." else "Al tuo ritmo arrivi a $projected: servono $perWeek libri a settimana.",
                         style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 } else if (goal > 0) Text("★ Obiettivo annuale raggiunto!", style = MaterialTheme.typography.bodySmall, color = palette.warmColor)
@@ -244,7 +244,7 @@ private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minu
                     val shape = androidx.compose.foundation.shape.RoundedCornerShape(5.dp)
                     Box(Modifier.fillMaxWidth().height(22.dp).clip(shape).background(when { m > today.monthValue -> androidx.compose.ui.graphics.Color.Transparent; m == today.monthValue -> palette.warmColor.copy(alpha = .18f); hit -> colors.primary; else -> colors.outlineVariant })
                         .then(if (m > today.monthValue) Modifier.border(1.dp, colors.outlineVariant, shape) else if (m == today.monthValue) Modifier.border(1.dp, palette.warmColor, shape) else Modifier))
-                    Text(listOf("G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D")[m - 1], Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                    Text(app.atlante.library.ui.L.monthInitials()[m - 1], Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
                 }
             }
         }
@@ -265,11 +265,11 @@ private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minu
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { month = month.minusMonths(1) }) { Text("‹", style = MaterialTheme.typography.titleLarge, color = colors.primary) }
-            Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ITALIAN)).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), textAlign = TextAlign.Center,
+            Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", app.atlante.library.ui.L.locale())).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.titleMedium.copy(fontFamily = Serif))
             IconButton(onClick = { if (month < YearMonth.now()) month = month.plusMonths(1) }, enabled = month < YearMonth.now()) { Text("›", style = MaterialTheme.typography.titleLarge, color = colors.primary) }
         }
-        Row(Modifier.padding(top = 4.dp, bottom = 6.dp)) { listOf("L", "M", "M", "G", "V", "S", "D").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant) } }
+        Row(Modifier.padding(top = 4.dp, bottom = 6.dp)) { app.atlante.library.ui.L.weekInitials().forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant) } }
         val blanks = month.atDay(1).dayOfWeek.value - 1
         val cells = List(blanks) { null } + (1..month.lengthOfMonth()).map { month.atDay(it) }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -282,7 +282,7 @@ private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minu
                             Box(Modifier.weight(1f).aspectRatio(1f).clip(shape).background(if (future) androidx.compose.ui.graphics.Color.Transparent else levels[l])
                                 .then(if (day == selected) Modifier.border(2.dp, palette.warmColor, shape) else Modifier)
                                 .clickable(enabled = !future) { selected = day }
-                                .semantics { contentDescription = day.format(DateTimeFormatter.ofPattern("d MMMM", Locale.ITALIAN)) + if (p > 0) ", $p pagine" else ", nessuna lettura" },
+                                .semantics { contentDescription = day.format(DateTimeFormatter.ofPattern("d MMMM", app.atlante.library.ui.L.locale())) + if (p > 0) ", $p pagine" else ", nessuna lettura" },
                                 contentAlignment = Alignment.Center) {
                                 Text("${day.dayOfMonth}", style = MaterialTheme.typography.bodySmall, fontWeight = if (day == today) FontWeight.Bold else FontWeight.Normal,
                                     color = when { future -> colors.outline; l >= 3 -> colors.onPrimary; else -> colors.onSurface })
@@ -302,7 +302,7 @@ private fun hours(minutes: Long) = if (minutes < 60) "$minutes min" else "${minu
         val list = data.sessions[selected].orEmpty()
         HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 12.dp), color = colors.outlineVariant)
         Row(verticalAlignment = Alignment.Bottom) {
-            Text((if (selected == today) "Oggi, " else "") + selected.format(DateTimeFormatter.ofPattern("d MMMM", Locale.ITALIAN)), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontFamily = Serif))
+            Text((if (selected == today) "Oggi, " else "") + selected.format(DateTimeFormatter.ofPattern("d MMMM", app.atlante.library.ui.L.locale())), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontFamily = Serif))
             Text(if (list.isEmpty()) "Nessuna lettura" else "${list.sumOf { it.pages }} pagine · ${hours(list.sumOf { it.minutes })}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
         list.forEach { s -> Column(Modifier.padding(top = 8.dp)) { Text(s.title, style = MaterialTheme.typography.titleSmall); Text("${s.pages} pagine · ${s.minutes} min", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) } }

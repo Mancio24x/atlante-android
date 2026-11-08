@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 13+: lets the system settings choose the app's language (Impostazioni › Lingua does the same in the app). -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="it"/>
+    <locale android:name="en"/>
+</locale-config>

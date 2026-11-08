@@ -401,8 +401,8 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private fun info(): ForegroundInfo {
         val c = applicationContext
         val text = progressText(job)
-        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(title(job.type))
-            .setContentText(text).setSubText(job.phase).setOnlyAlertOnce(true).setOngoing(true).setSilent(true).setContentIntent(open(c))
+        val n = NotificationCompat.Builder(c.also { app.atlante.library.ui.L.init(it) }, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(app.atlante.library.ui.L.t(title(job.type)))
+            .setContentText(app.atlante.library.ui.L.t(text)).setSubText(app.atlante.library.ui.L.t(job.phase)).setOnlyAlertOnce(true).setOngoing(true).setSilent(true).setContentIntent(open(c))
             .setProgress(job.total, job.done, job.total == 0)
             .addAction(0, "Interrompi", WorkManager.getInstance(c).createCancelPendingIntent(id)).build()
         return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(NOTICE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else ForegroundInfo(NOTICE, n)
@@ -410,8 +410,8 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     private fun finished(c: Context) {
         val title = when (job.state) { "done" -> title(job.type) + ": fatto"; "failed" -> title(job.type) + ": errore"; else -> title(job.type) }
-        val n = NotificationCompat.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(title)
-            .setContentText(job.message.ifEmpty { job.phase }).setAutoCancel(true).setContentIntent(open(c)).build()
+        val n = NotificationCompat.Builder(c.also { app.atlante.library.ui.L.init(it) }, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(app.atlante.library.ui.L.t(title))
+            .setContentText(app.atlante.library.ui.L.t(job.message.ifEmpty { job.phase })).setAutoCancel(true).setContentIntent(open(c)).build()
         runCatching { c.getSystemService(NotificationManager::class.java).notify(DONE, n) }
     }
 
@@ -437,7 +437,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
         private fun channel(c: Context) {
             if (Build.VERSION.SDK_INT >= 26) c.getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(NotificationChannel(CHANNEL, "Riparazioni del catalogo", NotificationManager.IMPORTANCE_LOW).apply { description = "Avanzamento di duplicati, saghe e metadati" })
+                .createNotificationChannel(NotificationChannel(CHANNEL, app.atlante.library.ui.L.t("Riparazioni del catalogo"), NotificationManager.IMPORTANCE_LOW).apply { description = app.atlante.library.ui.L.t("Avanzamento di duplicati, saghe e metadati") })
         }
 
         private fun open(c: Context) = PendingIntent.getActivity(c, 1, Intent(c, MainActivity::class.java).setAction(MainActivity.OPEN_OPERATIONS).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
