@@ -4,6 +4,9 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 (non ogni commit corrisponde a una release). Il dettaglio è in `git log`; qui le modifiche che cambiano il
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
+## 2026-11-09
+- **«Annulla» di Ripara duplicati non lascia più la barra a girare**: annullare una riparazione che in quel momento non era in esecuzione (in attesa del suo turno, o fermata da Android e in pausa) fermava il lavoro ma nessuno aggiornava il suo record, che restava «In corso» / «In attesa» per sempre con la barra in movimento. Ora «Annulla» scrive subito «Annullata»; un lavoro fermato non riscrive più «In corso»; e i record di riparazioni che WorkManager non ha più (app chiusa, lavoro finito altrove) vengono chiusi quando compare la barra. `RepairCancelTest`.
+
 ## 2026-11-08
 - **Pagine e minuti corretti, non sommati**: abbassare la pagina toglieva niente (la sessione valeva 0) e le pagine aggiunte per sbaglio restavano, poi si sommavano alle nuove; ora una pagina che torna indietro toglie le pagine in più dalle ultime sessioni di quella lettura. Senza timer i minuti dell’editor sono il totale di oggi per quel libro e si registra solo la differenza (30 corretto in 20 toglie 10). `ProgressCorrectionTest`.
 - **Ripara duplicati non riparte più da sola**: ogni avvio è contato prima di lavorare, così anche una riparazione uccisa insieme all’app (memoria, crash) non viene rilanciata a ogni apertura; dopo 3 avvii non conclusi si ferma, lo dice e lo registra nei rapporti.

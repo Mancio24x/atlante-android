@@ -24,6 +24,7 @@ import app.atlante.library.sync.HardcoverAuth
 import app.atlante.library.sync.HardcoverSync
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -90,7 +91,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 else runCatching { WorkManager.getInstance(c).getWorkInfoById(this@RepairWorker.id).get(2, java.util.concurrent.TimeUnit.SECONDS)?.state == WorkInfo.State.CANCELLED }.getOrDefault(true)
             job = job.copy(state = if (byYou) "cancelled" else "queued",
                 phase = if (byYou) "Annullato" else "In pausa", finishedAt = System.currentTimeMillis(),
-                message = if (byYou) "Interrotta da te: le modifiche già applicate restano" else "Interrotta da Android: riprende da sola")
+                message = if (byYou) BY_YOU else "Interrotta da Android: riprende da sola")
             if (byYou) dropImportFile()
             else {
                 // Evidence: when, in which phase, after how long, and why Android stopped it (sent with the reports).
@@ -417,6 +418,7 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private suspend fun save(force: Boolean = false) {
         val now = System.currentTimeMillis()
         if (!force && now - lastSaved < 500) return
+        if (isStopped && job.state == "running") return
         lastSaved = now
         dao.putJob(job)
         runCatching { setProgress(workDataOf("done" to job.done, "total" to job.total)) }
@@ -491,6 +493,39 @@ class RepairWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             return request.id
         }
 
-        @JvmStatic fun cancel(c: Context, id: String) = WorkManager.getInstance(c).cancelWorkById(java.util.UUID.fromString(id))
+        private const val BY_YOU = "Interrotta da te: le modifiche già applicate restano"
+
+        /**
+         * «Annulla»: WorkManager stops the run, and the record says so at once. A repair that is not running (waiting
+         * its turn, or stopped by Android and waiting to resume) has no worker to write it: without this it stayed
+         * "In corso" / "In attesa" for ever and the bar kept spinning. A running worker writes the same at its stop.
+         */
+        @JvmStatic fun cancel(c: Context, id: String) {
+            runCatching { WorkManager.getInstance(c).cancelWorkById(java.util.UUID.fromString(id)) }
+            val app = c.applicationContext
+            Thread { kotlinx.coroutines.runBlocking { runCatching {
+                val dao = AtlanteDatabase.get(app).saga()
+                val j = dao.job(id)
+                if (j != null && (j.state == "queued" || j.state == "running"))
+                    dao.putJob(j.copy(state = "cancelled", phase = "Annullato", finishedAt = System.currentTimeMillis(), message = BY_YOU))
+            } } }.start()
+        }
+
+        /**
+         * Records that still say "queued" / "running" while WorkManager has no such work alive (finished, cancelled,
+         * forgotten after the app was killed): settled, so no bar spins for a repair that will never move again.
+         * Records younger than a minute are left alone (the work may not be written in WorkManager yet).
+         */
+        @JvmStatic fun settleOrphans(c: Context) = kotlinx.coroutines.runBlocking {
+            val dao = AtlanteDatabase.get(c).saga(); val wm = WorkManager.getInstance(c); val now = System.currentTimeMillis()
+            for (j in dao.activeJobs().first()) {
+                if (now - j.startedAt < 60_000) continue
+                val info = runCatching { wm.getWorkInfoById(java.util.UUID.fromString(j.id)).get(5, java.util.concurrent.TimeUnit.SECONDS) }.getOrNull()
+                if (info != null && !info.state.isFinished) continue
+                val cancelled = info?.state == WorkInfo.State.CANCELLED
+                dao.putJob(j.copy(state = if (cancelled) "cancelled" else "failed", phase = if (cancelled) "Annullato" else "Interrotta",
+                    finishedAt = now, message = if (cancelled) BY_YOU else "Interrotta: puoi riprenderla"))
+            }
+        }
     }
 }

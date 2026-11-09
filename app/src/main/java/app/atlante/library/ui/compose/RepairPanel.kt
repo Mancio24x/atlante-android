@@ -52,7 +52,10 @@ object RepairViews {
     /** The bar over the bottom navigation, on every page, while a repair runs or waits. */
     @JvmStatic fun bar(activity: ComponentActivity, palette: ThemePalette, onOpen: Runnable): View = ComposeView(activity).apply {
         val dao = AtlanteDatabase.get(activity).saga()
-        setContent { AtlanteTheme(palette) { val jobs by dao.activeJobs().collectAsState(emptyList()); RepairBar(jobs) { onOpen.run() } } }
+        setContent { AtlanteTheme(palette) {
+            // A repair that will never move again (its work is gone) does not keep a bar spinning.
+            LaunchedEffect(Unit) { withContext(Dispatchers.IO) { runCatching { RepairWorker.settleOrphans(activity) } } }
+            val jobs by dao.activeJobs().collectAsState(emptyList()); RepairBar(jobs) { onOpen.run() } } }
     }
 
     @JvmStatic fun operations(activity: ComponentActivity, palette: ThemePalette, host: OperationsHost, onClose: Runnable): View = ComposeView(activity).apply {
