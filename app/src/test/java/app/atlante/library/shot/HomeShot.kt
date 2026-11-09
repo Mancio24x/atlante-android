@@ -66,8 +66,22 @@ class HomeShot {
         }
         MainActivity::class.java.getDeclaredMethod("details", Book::class.java).apply { isAccessible = true }.invoke(a, store.find(b.id)); shot(a, out, "scheda")
         MainActivity::class.java.getDeclaredMethod("navigate", String::class.java).apply { isAccessible = true }.invoke(a, "Biblioteca")
+        // A narrative universe (designs 7b, 7d): a saga with a missing volume and one being read, another saga, a standalone work.
+        fun mid(id: Char, t: String, saga: String, n: Double, st: String, y: String) = Book().apply { this.id = id.toString().repeat(64); title = t; author = "J.R.R. Tolkien"; format = "CATALOGO"
+            series = saga; number = n; status = st; year = y; totalPages = 400; currentPage = if (st == Book.READING) 120 else 0 }
+        val world = listOf(mid('1', "La Compagnia dell’Anello", "Il Signore degli Anelli", 1.0, Book.READ, "1954"), mid('2', "Le due torri", "Il Signore degli Anelli", 2.0, Book.READ, "1954"),
+            mid('3', "Il ritorno del re", "Il Signore degli Anelli", 3.0, Book.READING, "1955"), mid('4', "Appendici", "Il Signore degli Anelli", 5.0, Book.TO_READ, ""),
+            mid('5', "Racconti ritrovati", "Racconti perduti", 1.0, Book.TO_READ, "1983"), mid('6', "Lo Hobbit", "", 0.0, Book.READ, "1937"))
+        for (w in world) store.addCatalog(w)
+        app.atlante.library.model.LibraryQuery.graphUniverses = HashMap(app.atlante.library.model.LibraryQuery.graphUniverses).apply { world.forEach { put(it.id, "Terra di Mezzo") } }
+        kotlinx.coroutines.runBlocking { val dao = app.atlante.library.saga.db.AtlanteDatabase.get(ctx).saga(); val u = dao.insertUniverse(app.atlante.library.saga.db.UniverseEntity(name = "Terra di Mezzo"))
+            for (n in listOf("Il Signore degli Anelli", "Racconti perduti")) dao.insertSeries(app.atlante.library.saga.db.SeriesEntity(name = n, universeId = u)) }
         MainActivity::class.java.getDeclaredField("tab").apply { isAccessible = true }.set(a, "Saghe")
         MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "saghe")
+        val openSaga = MainActivity::class.java.getDeclaredField("openSaga").apply { isAccessible = true }; val sagaOrder = MainActivity::class.java.getDeclaredField("sagaOrder").apply { isAccessible = true }
+        openSaga.set(a, "Il Signore degli Anelli"); MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "saga")
+        sagaOrder.set(a, "Pubblicazione"); MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "saga-pubblicazione")
+        openSaga.set(a, ""); sagaOrder.set(a, "Saga")
         MainActivity::class.java.getDeclaredField("tab").apply { isAccessible = true }.set(a, "Mappa")
         MainActivity::class.java.getDeclaredMethod("showLibrary").apply { isAccessible = true }.invoke(a); shot(a, out, "mappa")
         MainActivity::class.java.getDeclaredField("tab").apply { isAccessible = true }.set(a, "Universi")

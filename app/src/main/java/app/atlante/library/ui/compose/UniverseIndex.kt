@@ -54,20 +54,25 @@ fun UniverseIndex(data: List<Pair<UniverseEntity, List<SeriesSummary>>>?, librar
             data == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
             data.isEmpty() -> Text("Nessun universo per ora. Si riconoscono aprendo i libri delle tue saghe.", style = MaterialTheme.typography.bodyLarge)
             else -> data.forEach { (universe, sagas) ->
-                val read = sagas.sumOf { s -> readIn(library, s.series.name) }
-                val total = sagas.sumOf { it.volumes }.coerceAtLeast(1)
+                // The saga graph may know fewer volumes than the library holds: never less than what you own (no 200%, no "2/0").
+                val singles = library.filter { it.series.isBlank() && universe.name.equals(app.atlante.library.model.LibraryQuery.graphUniverses[it.id], true) }
+                val volumes = sagas.associate { it.series.id to maxOf(it.volumes, ownedIn(library, it.series.name)) }
+                val ownedAll = sagas.sumOf { maxOf(it.owned, ownedIn(library, it.series.name)).coerceAtMost(volumes.getValue(it.series.id)) } + singles.size
+                val read = sagas.sumOf { s -> readIn(library, s.series.name) } + singles.count { it.status == Book.READ }
+                val total = (volumes.values.sum() + singles.size).coerceAtLeast(1)
                 OutlinedCard(Modifier.fillMaxWidth().padding(bottom = 12.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
                     colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.Top) {
                         Column(Modifier.weight(1f)) {
                             Text(universe.name, style = MaterialTheme.typography.titleLarge.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif))
-                            Text("${sagas.size} " + (if (sagas.size == 1) "saga" else "saghe") + " · ${sagas.sumOf { it.owned }} di ${sagas.sumOf { it.volumes }} in biblioteca",
+                            Text("${sagas.size} " + (if (sagas.size == 1) "saga" else "saghe") + (if (singles.isEmpty()) "" else " · ${singles.size} " + (if (singles.size == 1) "opera singola" else "opere singole")) +
+                                " · $ownedAll di $total in biblioteca",
                                 style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                         Box(Modifier.size(44.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                            CircularProgressIndicator(progress = { read.toFloat() / total }, modifier = Modifier.fillMaxSize(), strokeWidth = 5.dp,
+                            CircularProgressIndicator(progress = { read.coerceAtMost(total).toFloat() / total }, modifier = Modifier.fillMaxSize(), strokeWidth = 5.dp,
                                 trackColor = colors.outlineVariant, strokeCap = androidx.compose.ui.graphics.StrokeCap.Round)
-                            Text("${read * 100 / total}%", style = MaterialTheme.typography.labelSmall)
+                            Text("${read.coerceAtMost(total) * 100 / total}%", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     sagas.forEach { s ->
@@ -75,19 +80,40 @@ fun UniverseIndex(data: List<Pair<UniverseEntity, List<SeriesSummary>>>?, librar
                         Row(Modifier.fillMaxWidth().clickable { onSaga(s.series.id) }.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                val r = readIn(library, s.series.name)
+                                val vols = volumes.getValue(s.series.id); val owned = maxOf(s.owned, ownedIn(library, s.series.name)).coerceAtMost(vols)
+                                val r = readIn(library, s.series.name).coerceAtMost(vols); val reading = readingIn(library, s.series.name)
                                 Row { Text(s.series.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                                    Text("$r/${s.volumes} letti", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant) }
+                                    Text("$r/$vols letti", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant) }
                                 Spacer(Modifier.height(8.dp))
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    repeat(s.volumes.coerceIn(1, 40)) { i ->
-                                        val fill = when { i < r -> colors.primary; i < s.owned -> colors.primary.copy(alpha = .45f); else -> androidx.compose.ui.graphics.Color.Transparent }
-                                        Box(Modifier.weight(1f).height(6.dp).then(if (i >= s.owned) Modifier.border(1.dp, colors.outline, androidx.compose.foundation.shape.RoundedCornerShape(3.dp)) else Modifier)
+                                    repeat(vols.coerceIn(1, 40)) { i ->
+                                        val fill = when { i < r -> colors.primary; i < r + reading -> colors.tertiary; i < owned -> colors.primary.copy(alpha = .45f); else -> androidx.compose.ui.graphics.Color.Transparent }
+                                        Box(Modifier.weight(1f).height(6.dp).then(if (i >= owned) Modifier.border(1.dp, colors.outline, androidx.compose.foundation.shape.RoundedCornerShape(3.dp)) else Modifier)
                                             .background(fill, androidx.compose.foundation.shape.RoundedCornerShape(3.dp)))
                                     }
                                 }
                             }
                             Text("›", Modifier.padding(start = 10.dp), color = colors.onSurfaceVariant, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    // Standalone works of the same world (a Hobbit next to the Lord of the Rings), with their state.
+                    if (singles.isNotEmpty()) {
+                        HorizontalDivider(color = colors.outlineVariant)
+                        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp)) {
+                            Text("Opere singole dello stesso mondo", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            Spacer(Modifier.height(8.dp))
+                            @OptIn(ExperimentalLayoutApi::class)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                singles.forEach { b ->
+                                    val dot = when (b.status) { Book.READ -> colors.primary; Book.READING, Book.PAUSED -> colors.tertiary; else -> colors.primary.copy(alpha = .45f) }
+                                    Row(Modifier.height(30.dp).background(colors.surfaceVariant, androidx.compose.foundation.shape.RoundedCornerShape(15.dp)).padding(start = 8.dp, end = 12.dp),
+                                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                        Box(Modifier.size(8.dp).background(dot, androidx.compose.foundation.shape.CircleShape))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(b.title, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -99,3 +125,5 @@ fun UniverseIndex(data: List<Pair<UniverseEntity, List<SeriesSummary>>>?, librar
 }
 
 private fun readIn(library: List<Book>, saga: String) = library.count { it.series.equals(saga, true) && it.status == Book.READ }
+private fun ownedIn(library: List<Book>, saga: String) = library.count { it.series.equals(saga, true) }
+private fun readingIn(library: List<Book>, saga: String) = library.count { it.series.equals(saga, true) && (it.status == Book.READING || it.status == Book.PAUSED) }

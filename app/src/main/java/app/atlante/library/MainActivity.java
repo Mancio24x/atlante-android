@@ -215,19 +215,20 @@ public final class MainActivity extends AppCompatActivity {
         boolean libraryTab = Arrays.asList(STATUS_TABS).contains(tab);
         List<Book> all = store.snapshot(); Set<String> sagaNames = new HashSet<>(); for (Book b : all) if (!b.series.isEmpty()) sagaNames.add(b.series.toLowerCase(Locale.ROOT));
         int authorCount = app.atlante.library.ui.MapGroups.authorNames(all).size();
-        String[][] places = {{"Tutti i libri", Integer.toString(all.size())}, {"Saghe", Integer.toString(sagaNames.size())}, {"Mappa", authorCount + (authorCount == 1 ? " autore" : " autori")}, {"Universi", ""}};
+        Set<String> universeNames = new HashSet<>(); for (Book b : all) { String u = LibraryQuery.graphUniverses.get(b.id); if (u != null && !u.isEmpty()) universeNames.add(u.toLowerCase(Locale.ROOT)); }
+        String[][] places = {{"Tutti i libri", Integer.toString(all.size())}, {"Saghe", Integer.toString(sagaNames.size())}, {"Mappa", authorCount + (authorCount == 1 ? " autore" : " autori")}, {"Universi", universeNames.isEmpty() ? "" : Integer.toString(universeNames.size())}};
         int[] icons = {R.drawable.ic_library, R.drawable.ic_list, R.drawable.ic_map, R.drawable.ic_public};
         for (int i = 0; i < places.length; i++) {
             String name = places[i][0]; boolean selected = name.equals("Tutti i libri") ? libraryTab && destination.equals("Biblioteca") : tab.equals(name) && destination.equals("Biblioteca");
             menu.addView(drawerPlace(icons[i], name, places[i][1], selected, () -> { closeDrawer(); destination = "Biblioteca"; tab = name; openSaga = ""; showLibrary(); }));
         }
         gap(menu, 8); rule(menu); gap(menu, 8);
-        menu.addView(drawerItem("Collezioni", false, () -> { closeDrawer(); collections(); }));
-        menu.addView(drawerItem("Cerca libri online", false, () -> { closeDrawer(); onlineSearch(); }));
-        menu.addView(drawerItem("CrossPoint", destination.equals("CrossPoint"), () -> { closeDrawer(); navigate("CrossPoint"); }));
+        menu.addView(drawerTool(R.drawable.ic_collections, "Collezioni", false, () -> { closeDrawer(); collections(); }));
+        menu.addView(drawerTool(R.drawable.ic_search, "Cerca libri online", false, () -> { closeDrawer(); onlineSearch(); }));
+        menu.addView(drawerTool(R.drawable.ic_book, "CrossPoint", destination.equals("CrossPoint"), () -> { closeDrawer(); navigate("CrossPoint"); }));
         // Backups stay reachable (they are the only copy of notes and progress outside the phone), outside the settings.
-        Button catalog = drawerItem("Backup", false, () -> { closeDrawer(); backupMenu(); }); catalog.setEnabled(!busy); menu.addView(catalog);
-        menu.addView(drawerItem("Impostazioni", false, () -> { closeDrawer(); settings(); }));
+        View catalog = drawerTool(R.drawable.ic_cloud, "Backup", false, () -> { closeDrawer(); backupMenu(); }); catalog.setEnabled(!busy); catalog.setAlpha(busy ? .4f : 1f); menu.addView(catalog);
+        menu.addView(drawerTool(R.drawable.ic_settings, "Impostazioni", false, () -> { closeDrawer(); settings(); }));
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         screen.addView(overlay,new FrameLayout.LayoutParams(-1,-1)); close.requestFocus();
         scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(220).start();
@@ -242,6 +243,13 @@ public final class MainActivity extends AppCompatActivity {
         if (!count.isEmpty()) item.addView(text(count, 13, MUTED, false));
         item.setContentDescription(label + (count.isEmpty() ? "" : ", " + count) + (selected ? ", selezionato" : "")); item.setOnClickListener(v -> action.run());
         item.setLayoutParams(new LinearLayout.LayoutParams(-1, dp(56)));
+        return item;
+    }
+    /** Design 7a, the tools under the places: a muted icon, the label, a slightly lower row. */
+    private View drawerTool(int icon, String label, boolean selected, Runnable action) {
+        View item = drawerPlace(icon, label, "", selected, action);
+        ((ImageView) ((LinearLayout) item).getChildAt(0)).setColorFilter(MUTED);
+        item.setLayoutParams(new LinearLayout.LayoutParams(-1, dp(52)));
         return item;
     }
     /** Navigation drawer row: a full-width pill, filled with the secondary container when selected. */
@@ -809,7 +817,8 @@ public final class MainActivity extends AppCompatActivity {
         boolean place = destination.equals("Biblioteca") && (map || tab.equals("Saghe") || tab.equals("Universi"));
         if (place) {
             if (tab.equals("Saghe") && !openSaga.isEmpty()) { masthead.removeAllViews(); masthead.addView(iconButton(R.drawable.ic_back, "Torna alle saghe", () -> { openSaga = ""; showLibrary(); })); }
-            masthead.addView(pageHeading(map ? "MAPPA DELLE LETTURE" : tab.equals("Saghe") ? (openSaga.isEmpty() ? "SAGHE" : "SAGA") : "UNIVERSI",
+            String universe = tab.equals("Saghe") && !openSaga.isEmpty() ? sagaUniverse(openSaga) : "";
+            masthead.addView(pageHeading(map ? "MAPPA DELLE LETTURE" : tab.equals("Saghe") ? (openSaga.isEmpty() ? "SAGHE" : universe.isEmpty() ? "SAGA" : "SAGA · " + universe.toUpperCase(Locale.ITALIAN)) : "UNIVERSI",
                 map ? "Autore → saghe → libri" : tab.equals("Saghe") ? (openSaga.isEmpty() ? "Una storia dopo l’altra" : openSaga) : "Mondi narrativi"), new LinearLayout.LayoutParams(0, -2, 1));
             if (map) masthead.addView(iconButton(R.drawable.ic_search, "Cerca un autore", this::chooseMapAuthor));
         } else {
@@ -1433,36 +1442,90 @@ public final class MainActivity extends AppCompatActivity {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, height, 1); if (i > 0) lp.setMargins(dp(3), 0, 0, 0); bar.addView(seg, lp); }
         return bar;
     }
-    /** The saga as a vertical map: number, cover, title and state for each volume; missing ones can be searched. */
+    /** Order of the saga page: by the saga's numbers, or by year of publication. */
+    private String sagaOrder = "Saga";
+    /** The narrative universe of a saga, from the saga graph ("" when none is known). */
+    private String sagaUniverse(String saga) {
+        for (Book b : store.snapshot()) if (b.series.equalsIgnoreCase(saga)) { String u = LibraryQuery.graphUniverses.get(b.id); if (u != null && !u.isEmpty()) return u; }
+        return "";
+    }
+    private static boolean bothRead(Book a, Book b) { return a != null && b != null && a.status.equals(Book.READ) && b.status.equals(Book.READ); }
+    private static int yearOf(Book b) { java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\d{4}").matcher(b == null ? "" : b.year); return m.find() ? Integer.parseInt(m.group()) : Integer.MAX_VALUE; }
+    /**
+     * Design 7b: the saga as a vertical map. Number, cover, title and state for each volume, joined by a line (accent
+     * between two volumes read); the one being read outlined in copper; missing ones can be searched. Order by the
+     * saga or by publication; the other sagas of the same universe at the end.
+     */
     private void showSaga(List<Book> list, String name) {
         content.setPadding(dp(16), dp(4), dp(16), dp(28));
         ArrayList<Book> books = sagaBooks(store.snapshot(), name); ArrayList<Book> slots = sagaSlots(books);
         if (books.isEmpty()) { openSaga = ""; showSagas(list); return; }
         int read = 0; for (Book b : books) if (b.status.equals(Book.READ)) read++;
         TextView sub = text(books.get(0).author + " · " + read + " letti, " + books.size() + " in biblioteca, " + slots.size() + " in tutto", 13, MUTED, false); sub.setPadding(dp(4), 0, dp(4), dp(12)); content.addView(sub);
+        // Saga · Pubblicazione, as a small segmented control.
+        LinearLayout seg = row(); seg.setPadding(dp(3), dp(3), dp(3), dp(3)); GradientDrawable sg = background(LINE, Color.TRANSPARENT); sg.setCornerRadius(dp(20)); seg.setBackground(sg);
+        LinearLayout.LayoutParams segSize = new LinearLayout.LayoutParams(-1, dp(40)); segSize.setMargins(0, 0, 0, dp(10)); content.addView(seg, segSize);
+        for (String o : new String[]{"Saga", "Pubblicazione"}) { boolean on = o.equals(sagaOrder);
+            TextView t = text(o, 13, on ? INK : MUTED, false); t.setGravity(Gravity.CENTER); t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            GradientDrawable g = background(on ? WHITE : Color.TRANSPARENT, Color.TRANSPARENT); g.setCornerRadius(dp(17)); t.setBackground(g); if (on) t.setElevation(dp(1));
+            t.setContentDescription("Ordina per " + o.toLowerCase(Locale.ITALIAN) + (on ? ", selezionato" : "")); t.setOnClickListener(v -> { sagaOrder = o; renderContent(); });
+            seg.addView(t, new LinearLayout.LayoutParams(0, -1, 1)); }
         LinearLayout legend = row(); legend.setPadding(dp(4), 0, dp(4), dp(12)); content.addView(legend);
         String[] names = {"Letto", "In lettura", "In biblioteca", "Mancante"}; int[] colors = {SAGE, COPPER, blend(SAGE, WHITE, .45f), Color.TRANSPARENT};
         for (int i = 0; i < 4; i++) { View dot = new View(this); GradientDrawable g = background(colors[i], Color.TRANSPARENT); g.setCornerRadius(dp(5)); if (i == 3) g.setStroke(dp(1.5f), MUTED, dp(3), dp(2)); dot.setBackground(g);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(10), dp(10)); lp.setMargins(i == 0 ? 0 : dp(12), 0, dp(5), 0); legend.addView(dot, lp); legend.addView(text(names[i], 13, MUTED, false)); }
-        LinearLayout box = column(); box.setPadding(dp(14), dp(8), dp(14), dp(8)); MaterialCardView c = card(box); c.setRadius(dp(20)); content.addView(c, new LinearLayout.LayoutParams(-1, -2));
-        for (int i = 0; i < slots.size(); i++) { Book b = slots.get(i); int n = i + 1;
-            LinearLayout line = row(); line.setGravity(Gravity.TOP); line.setPadding(0, dp(8), 0, dp(8)); box.addView(line, new LinearLayout.LayoutParams(-1, -2));
-            FrameLayout art = new FrameLayout(this); line.addView(art, new LinearLayout.LayoutParams(dp(50), dp(72)));
-            if (b != null) art.addView(coverView(b, dp(44), dp(66)), new FrameLayout.LayoutParams(dp(44), dp(66), Gravity.BOTTOM | Gravity.END));
-            else { View empty = new View(this); GradientDrawable g = background(Color.TRANSPARENT, Color.TRANSPARENT); g.setCornerRadius(dp(5)); g.setStroke(dp(1.5f), MUTED, dp(4), dp(3)); empty.setBackground(g); art.addView(empty, new FrameLayout.LayoutParams(dp(44), dp(66), Gravity.BOTTOM | Gravity.END)); }
+        // Each position keeps its saga number; by publication the volumes with a year come first, oldest first.
+        ArrayList<Integer> order = new ArrayList<>(); for (int i = 0; i < slots.size(); i++) order.add(i);
+        if (sagaOrder.equals("Pubblicazione")) order.sort((x, y) -> Integer.compare(yearOf(slots.get(x)), yearOf(slots.get(y))));
+        LinearLayout box = column(); box.setPadding(dp(14), dp(4), dp(14), dp(4)); MaterialCardView c = card(box); c.setRadius(dp(20)); content.addView(c, new LinearLayout.LayoutParams(-1, -2));
+        for (int k = 0; k < order.size(); k++) { int i = order.get(k); Book b = slots.get(i); int n = i + 1;
+            Book before = k > 0 ? slots.get(order.get(k - 1)) : null, after = k + 1 < order.size() ? slots.get(order.get(k + 1)) : null;
+            LinearLayout line = row(); line.setGravity(Gravity.TOP); line.setMinimumHeight(dp(96)); box.addView(line, new LinearLayout.LayoutParams(-1, -2));
+            FrameLayout art = new FrameLayout(this); line.addView(art, new LinearLayout.LayoutParams(dp(54), -1));
+            // The line through the volumes, cover to cover: accent between two read volumes, hairline otherwise.
+            if (k > 0) { View up = new View(this); up.setBackgroundColor(bothRead(before, b) ? SAGE : LINE); FrameLayout.LayoutParams ul = new FrameLayout.LayoutParams(dp(2), dp(45), Gravity.START); ul.setMargins(dp(27), 0, 0, 0); art.addView(up, ul); }
+            if (after != null || k + 1 < order.size()) { View down = new View(this); down.setBackgroundColor(bothRead(b, after) ? SAGE : LINE); FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(dp(2), -1, Gravity.START); dl.setMargins(dp(27), dp(45), 0, 0); art.addView(down, dl); }
+            FrameLayout.LayoutParams coverAt = new FrameLayout.LayoutParams(dp(44), dp(66), Gravity.TOP | Gravity.END); coverAt.setMargins(0, dp(12), dp(4), dp(12));
+            if (b != null) art.addView(coverView(b, dp(44), dp(66)), coverAt);
+            else { View empty = new View(this); GradientDrawable g = background(WHITE, Color.TRANSPARENT); g.setCornerRadius(dp(5)); g.setStroke(dp(1.5f), MUTED, dp(4), dp(3)); empty.setBackground(g); art.addView(empty, coverAt); }
+            if (b != null && (b.status.equals(Book.READING) || b.status.equals(Book.PAUSED))) {
+                View ring = new View(this); GradientDrawable g = background(Color.TRANSPARENT, Color.TRANSPARENT); g.setCornerRadius(dp(7)); g.setStroke(dp(2.5f), COPPER); ring.setBackground(g); ring.setElevation(dp(4));
+                FrameLayout.LayoutParams ra = new FrameLayout.LayoutParams(dp(50), dp(72), Gravity.TOP | Gravity.END); ra.setMargins(0, dp(9), dp(1), 0); art.addView(ring, ra); }
             String num = b != null && b.number > 0 ? number(b.number) : b == null ? Integer.toString(n) : "–";
-            TextView badge = text(num, 11, b == null ? MUTED : ON_ACCENT, false); badge.setGravity(Gravity.CENTER); badge.setTypeface(Typeface.DEFAULT_BOLD); badge.setPadding(dp(5), 0, dp(5), 0); badge.setMinWidth(dp(20));
-            GradientDrawable bg = background(b == null ? WHITE : stateColor(b), b == null ? MUTED : Color.TRANSPARENT); bg.setCornerRadius(dp(10)); badge.setBackground(bg); art.addView(badge, new FrameLayout.LayoutParams(-2, dp(20), Gravity.TOP | Gravity.START));
-            LinearLayout info = column(); info.setPadding(dp(14), dp(10), dp(8), 0); line.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+            TextView badge = text(num, 11, b == null ? MUTED : ON_ACCENT, false); badge.setGravity(Gravity.CENTER); badge.setTypeface(Typeface.DEFAULT_BOLD); badge.setPadding(dp(5), 0, dp(5), 0); badge.setMinWidth(dp(20)); badge.setElevation(dp(5));
+            GradientDrawable bg = background(b == null ? WHITE : stateColor(b), b == null ? MUTED : Color.TRANSPARENT); bg.setCornerRadius(dp(10)); badge.setBackground(bg);
+            FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(-2, dp(20), Gravity.TOP | Gravity.START); bl.setMargins(0, dp(6), 0, 0); art.addView(badge, bl);
+            LinearLayout info = column(); info.setPadding(dp(14), dp(22), dp(8), dp(12)); line.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+            String year = b == null || b.year.isEmpty() ? "" : " · " + b.year;
             if (b != null) {
                 TextView t = text(b.title, 15, INK, false); t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL)); info.addView(t);
                 String state = b.status.equals(Book.READ) ? "Letto" : b.status.equals(Book.TO_READ) ? "In biblioteca · da leggere" : b.status + " · " + progress(b) + "%";
-                info.addView(text(state + (b.year.isEmpty() ? "" : " · " + b.year), 12, b.status.equals(Book.READ) ? SAGE : b.status.equals(Book.TO_READ) ? MUTED : COPPER, false));
+                info.addView(text(state + year, 12, b.status.equals(Book.READ) ? SAGE : b.status.equals(Book.TO_READ) ? MUTED : COPPER, false));
                 if (b.status.equals(Book.READING) || b.status.equals(Book.PAUSED)) { LinearProgressIndicator p = progressBar(b); p.setIndicatorColor(COPPER); p.setTrackThickness(dp(4)); LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(dp(160), -2); pl.setMargins(0, dp(8), 0, 0); info.addView(p, pl); }
                 line.setOnClickListener(v -> details(b));
+                line.setContentDescription(num + ". " + b.title + ", " + state + year);
             } else {
-                info.addView(text("Volume " + n, 15, MUTED, false)); info.addView(text("Non in biblioteca", 13, MUTED, false));
-                MaterialButton find = button("Cerca", R.style.Atlante_Button_Text, () -> { lastOnlineQuery = name + " " + n; prefillOnline = true; onlineSearch(); }); find.setContentDescription("Cerca il volume " + n + " di " + name); line.addView(find);
+                info.addView(text("Volume " + n, 15, MUTED, false)); info.addView(text("Non in biblioteca", 12, MUTED, false));
+                MaterialButton find = button("Cerca", R.style.Atlante_Button_Text, () -> { lastOnlineQuery = name + " " + n; prefillOnline = true; onlineSearch(); }); find.setContentDescription("Cerca il volume " + n + " di " + name);
+                LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-2, -2); fl.gravity = Gravity.CENTER_VERTICAL; line.addView(find, fl);
+            }
+        }
+        // The other sagas of the same narrative universe (a tap opens their map).
+        String universe = sagaUniverse(name);
+        if (!universe.isEmpty()) {
+            TreeMap<String, ArrayList<Book>> others = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+            for (Book b : store.snapshot()) if (!b.series.isEmpty() && !b.series.equalsIgnoreCase(name) && universe.equalsIgnoreCase(LibraryQuery.graphUniverses.get(b.id))) others.computeIfAbsent(b.series, x -> new ArrayList<>());
+            for (String o : new ArrayList<>(others.keySet())) others.put(o, sagaBooks(store.snapshot(), o));
+            if (!others.isEmpty()) {
+                LinearLayout uni = column(); uni.setPadding(dp(16), dp(14), dp(16), dp(8)); MaterialCardView uc = card(uni); uc.setRadius(dp(20));
+                LinearLayout.LayoutParams ul = new LinearLayout.LayoutParams(-1, -2); ul.setMargins(0, dp(12), 0, 0); content.addView(uc, ul);
+                TextView k = sectionLabel("STESSO UNIVERSO · " + universe.toUpperCase(Locale.ITALIAN)); k.setTextSize(11); k.setTextColor(COPPER); uni.addView(k);
+                for (Map.Entry<String, ArrayList<Book>> e : others.entrySet()) { String other = e.getKey();
+                    LinearLayout r = row(); r.setMinimumHeight(dp(44)); uni.addView(r, new LinearLayout.LayoutParams(-1, -2));
+                    TextView arrow = text("- - ▸", 13, COPPER, false); r.addView(arrow);
+                    TextView t = text(other, 15, INK, false); t.setPadding(dp(10), 0, dp(8), 0); t.setMaxLines(1); t.setEllipsize(TextUtils.TruncateAt.END); r.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
+                    r.addView(text(e.getValue().size() + "/" + sagaSlots(e.getValue()).size(), 13, MUTED, false));
+                    r.setContentDescription(other + ", stesso universo: apri la saga"); r.setOnClickListener(v -> { openSaga = other; showLibrary(); }); }
             }
         }
         TextView note = text("Nessun numero inventato: i volumi mancanti vengono dai numeri dei tuoi libri. Ordine e saga si correggono dalla scheda.", 13, MUTED, false); note.setPadding(dp(6), dp(12), dp(6), 0); content.addView(note);
