@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -67,7 +68,7 @@ fun GoalsSection(goals: ReadingGoals, books: List<Book>) {
 private fun WheelGoal(title: String, kicker: String, on: Boolean, onSwitch: (Boolean) -> Unit, value: Int, range: IntRange, unit: String,
                       onValue: (Int) -> Unit, progress: ReadingGoals.Progress, doneLabel: String, note: String?) {
     val scheme = MaterialTheme.colorScheme
-    OutlinedCard(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+    OutlinedCard(Modifier.fillMaxWidth().animateContentSize(), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
         colors = CardDefaults.outlinedCardColors(containerColor = scheme.surfaceContainer)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -169,7 +169,7 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
     }
     LaunchedEffect(value, range) {
         if (!list.isScrollInProgress && !userScroll && centred != value)
-            list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
+            list.animateScrollToItem((value - range.first).coerceIn(0, range.last - range.first))
     }
     BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
         contentDescription = label; stateDescription = format(value)
@@ -185,8 +185,9 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
                 val v = range.first + i
                 val distance = abs(v - centred)
                 val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
+                val grow by animateFloatAsState(if (distance == 0) 1.25f else 1f, label = "grow")
                 Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
+                    Text(format(v), Modifier.alpha(alpha).scale(grow),
                         style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
                         fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
                         color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
