@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -67,13 +68,14 @@ fun GoalsSection(goals: ReadingGoals, books: List<Book>) {
 private fun WheelGoal(title: String, kicker: String, on: Boolean, onSwitch: (Boolean) -> Unit, value: Int, range: IntRange, unit: String,
                       onValue: (Int) -> Unit, progress: ReadingGoals.Progress, doneLabel: String, note: String?) {
     val scheme = MaterialTheme.colorScheme
-    OutlinedCard(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-        colors = CardDefaults.outlinedCardColors(containerColor = scheme.surfaceContainer)) {
+    OutlinedCard(Modifier.fillMaxWidth().animateContentSize(), shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = if (on) scheme.surfaceContainerHigh else scheme.surfaceContainer),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (on) scheme.primary.copy(alpha = 0.35f) else scheme.outlineVariant)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(app.atlante.library.ui.L.t(kicker).uppercase(app.atlante.library.ui.L.locale()), style = MaterialTheme.typography.labelSmall, color = scheme.primary)
-                    Text(title, style = MaterialTheme.typography.titleMedium)
+                    Text(app.atlante.library.ui.L.t(title), style = MaterialTheme.typography.titleMedium)
                 }
                 Switch(on, onSwitch, Modifier.semantics { contentDescription = "$title: " + if (on) "attivo" else "spento" })
             }
@@ -82,12 +84,12 @@ private fun WheelGoal(title: String, kicker: String, on: Boolean, onSwitch: (Boo
                     Spacer(Modifier.height(8.dp))
                     var current by remember(value) { mutableIntStateOf(value.coerceIn(range)) }
                     HorizontalWheel(current, range, true, title, { "$it" }) { v -> current = v; onValue(v) }
-                    Text("$current $unit", Modifier.fillMaxWidth().padding(top = 2.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
+                    Text("$current $unit", Modifier.fillMaxWidth().padding(top = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        style = MaterialTheme.typography.titleSmall, color = scheme.primary)
                     Spacer(Modifier.height(10.dp))
                     val percent = (progress.done * 100 / current.coerceAtLeast(1)).toInt(); val reached = progress.done >= current
                     LinearProgressIndicator(progress = { (percent / 100f).coerceIn(0f, 1f) }, Modifier.fillMaxWidth().height(6.dp),
-                        trackColor = scheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})
+                        color = scheme.primary, trackColor = scheme.primaryContainer, strokeCap = androidx.compose.ui.graphics.StrokeCap.Round, gapSize = 0.dp, drawStopIndicator = {})
                     Text("${progress.done} di $current $doneLabel · ${percent.coerceAtMost(100)}%" + if (reached) " · raggiunto ✓" else "",
                         Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = if (reached) scheme.primary else scheme.onSurfaceVariant)
                     if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
