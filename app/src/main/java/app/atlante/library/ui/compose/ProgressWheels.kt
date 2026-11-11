@@ -6,6 +6,21 @@ import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -17,7 +32,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
@@ -140,13 +154,22 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
 
 /**
  * Horizontal number wheel: flings and snaps to the value under the centre mark, which is larger and coloured;
- * the others fade with the distance. A light tick (optional) for every value passed.
+ * the others fade with the distance and towards the edges, over a ruler (a longer tick every 5 and 10). Tapping a
+ * number glides to it. A light tick (optional) for every value passed.
+ *
+ * The wheel sits in View pages that scroll vertically (Impostazioni, the book editor): a ScrollView parent steals
+ * any drag that drifts a little vertically, so the wheel stopped half way. While a finger is on the wheel the parent
+ * may not intercept, unless the drag is clearly vertical: then the page scrolls as before.
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
-    val itemWidth = 56.dp
+    val digits = maxOf(format(range.first).length, format(range.last).length)
+    val itemWidth = if (digits >= 5) 76.dp else if (digits == 4) 66.dp else 56.dp
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
     val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    val scheme = MaterialTheme.colorScheme
     // Value under the centre mark: the visible item whose middle is closest to the middle of the wheel.
     val centred by remember(range) { derivedStateOf {
         val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
@@ -171,25 +194,59 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
         if (!list.isScrollInProgress && !userScroll && centred != value)
             list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
-        contentDescription = label; stateDescription = format(value)
-        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
-        setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
-    }, contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(76.dp)
+        .pointerInput(view) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                view.parent?.requestDisallowInterceptTouchEvent(true)
+                var moved = Offset.Zero; var decided = false
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) break
+                    if (!decided) {
+                        moved += change.position - change.previousPosition
+                        if (moved.getDistance() > viewConfiguration.touchSlop) {
+                            decided = true
+                            if (abs(moved.y) > abs(moved.x) * 1.5f) view.parent?.requestDisallowInterceptTouchEvent(false)
+                        }
+                    }
+                }
+                view.parent?.requestDisallowInterceptTouchEvent(false)
+            }
+        }
+        .semantics {
+            contentDescription = label; stateDescription = format(value)
+            progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
+            setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
+        }, contentAlignment = Alignment.Center) {
         val side = (maxWidth - itemWidth) / 2
-        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer,
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)) {}
-        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side), modifier = Modifier.fillMaxSize(),
+        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(16.dp), color = lerp(scheme.surfaceContainer, scheme.primary, .16f),
+            border = BorderStroke(2.dp, scheme.primary)) {}
+        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side),
+            modifier = Modifier.fillMaxSize()
+                // The numbers fade out towards both edges, like a real wheel.
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(Brush.horizontalGradient(0f to Color.Transparent, .22f to Color.Black, .78f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                },
             verticalAlignment = Alignment.CenterVertically) {
             items(range.last - range.first + 1) { i ->
                 val v = range.first + i
                 val distance = abs(v - centred)
-                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
-                Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
+                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.72f; 2 -> 0.48f; else -> 0.3f }, label = "alpha")
+                val grow by animateFloatAsState(if (distance == 0) 1.2f else 1f, label = "scale")
+                Box(Modifier.width(itemWidth).fillMaxHeight()
+                    .clickable(onClickLabel = format(v)) { scope.launch { list.animateScrollToItem(i) } }, contentAlignment = Alignment.Center) {
+                    Text(format(v), Modifier.graphicsLayer { this.alpha = alpha; scaleX = grow; scaleY = grow },
                         style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
                         fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        color = if (distance == 0) scheme.primary else scheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+                    // Ruler under the numbers: every value a tick, longer every 5, longest every 10.
+                    val tick = when { v % 10 == 0 -> 10.dp; v % 5 == 0 -> 7.dp; else -> 4.dp }
+                    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp).size(if (distance == 0) 2.dp else 1.dp, tick)
+                        .graphicsLayer { this.alpha = alpha }.background(if (distance == 0) scheme.primary else scheme.outline))
                 }
             }
         }

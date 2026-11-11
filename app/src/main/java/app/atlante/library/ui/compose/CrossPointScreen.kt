@@ -50,6 +50,9 @@ interface CrossPointHost {
     /** Joins the reader's Wi-Fi "CrossPoint-Reader"; [onResult] true when connected. */
     fun joinReaderWifi(onResult: (Boolean) -> Unit)
     fun leaveReaderWifi()
+    /** Books chosen in the library with «Invia a CrossPoint» (title → file), offered as soon as the reader answers. */
+    fun pendingSend(): List<Pair<String, File>>
+    fun clearPending()
 }
 
 object CrossPointView {
@@ -88,6 +91,8 @@ fun CrossPointScreen(host: CrossPointHost) {
     var failed by remember { mutableStateOf<String?>(null) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var target by remember { mutableStateOf<CrossPointClient.Entry?>(null) }
+    var pending by remember { mutableStateOf(host.pendingSend()) }
+    fun dropPending() { if (pending.isNotEmpty()) { pending = emptyList(); host.clearPending() } }
 
     fun client() = CrossPointClient(address!!, binder = host.binder())
     fun say(text: String) { scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(text) } }
@@ -109,9 +114,12 @@ fun CrossPointScreen(host: CrossPointHost) {
         }
     }
     LaunchedEffect(address, path) { if (address != null) load() }
+    // A book sent from its page: the send dialog opens with it ticked as soon as the reader's folder is shown.
+    LaunchedEffect(entries != null) { if (entries != null && pending.isNotEmpty() && dialog == null) dialog = "send" }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 24.dp)) {
+            if (pending.isNotEmpty() && entries == null) PendingCard(pending.joinToString(", ") { "«${it.first}»" }) { dropPending() }
             if (address == null) ConnectCard(host, onAddress = { a -> address = a; host.saveHost(a); path = "/"; status = null })
             else {
                 DeviceCard(address!!, status, failed, onJoin = { host.joinReaderWifi { ok -> if (ok) load() } }, onRetry = { load() }, onForget = { host.leaveReaderWifi(); host.saveHost(null); address = null; status = null; entries = null; failed = null })
@@ -200,8 +208,8 @@ fun CrossPointScreen(host: CrossPointHost) {
             text = { Text("«${e.name}» viene cancellato dalla scheda del lettore e non si può recuperare." + if (e.isDirectory) " Il lettore elimina solo cartelle vuote." else " In Atlante non cambia nulla.") },
             confirmButton = { TextButton(onClick = { dialog = null; run("Elimino…", "«${e.name}» eliminato") { it.delete(child(path, e.name), e.isDirectory) } }) { Text("Elimina", color = colors.error) } },
             dismissButton = { TextButton(onClick = { dialog = null }) { Text("Annulla") } })
-        "send" -> SendDialog(host.libraryFiles(), { dialog = null }) { chosen ->
-            dialog = null
+        "send" -> SendDialog(host.libraryFiles(), pending.map { it.second }.toSet(), { dialog = null; dropPending() }) { chosen ->
+            dialog = null; dropPending()
             scope.launch {
                 var sent = 0; var error: String? = null
                 for ((i, pair) in chosen.withIndex()) {
@@ -214,6 +222,22 @@ fun CrossPointScreen(host: CrossPointHost) {
                 say(if (error == null) "$sent " + (if (sent == 1) "libro inviato" else "libri inviati") + " a CrossPoint" else "Inviati $sent: $error")
                 load()
             }
+        }
+    }
+}
+
+/** «Pronto da inviare»: the book chosen from its page waits for the reader. */
+@Composable private fun PendingCard(titles: String, onDrop: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(Modifier.fillMaxWidth().padding(bottom = 12.dp), shape = Round20, color = lerp(colors.surfaceContainer, colors.primary, .10f)) {
+        Row(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(R.drawable.ic_upload), null, Modifier.size(22.dp), tint = colors.primary)
+            Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                Text("Pronto da inviare", style = MaterialTheme.typography.labelLarge, color = colors.primary)
+                Text(titles, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("Collega il lettore: si apre l’invio.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            }
+            TextButton(onClick = onDrop) { Text("Annulla") }
         }
     }
 }
@@ -349,10 +373,11 @@ private fun signal(rssi: Int) = when { rssi >= -55 -> "ottimo"; rssi >= -67 -> "
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } })
 }
 
-@Composable private fun SendDialog(books: List<Pair<String, File>>, onDismiss: () -> Unit, onSend: (List<Pair<String, File>>) -> Unit) {
+@Composable private fun SendDialog(books: List<Pair<String, File>>, preselected: Set<File>, onDismiss: () -> Unit, onSend: (List<Pair<String, File>>) -> Unit) {
     var query by remember { mutableStateOf("") }
-    var chosen by remember { mutableStateOf(setOf<File>()) }
-    val shown = books.filter { query.isBlank() || it.first.contains(query.trim(), true) }
+    var chosen by remember { mutableStateOf(preselected.filter { f -> books.any { it.second == f } }.toSet()) }
+    // The ticked books first, so the one sent from its page is in sight.
+    val shown = books.filter { query.isBlank() || it.first.contains(query.trim(), true) }.sortedBy { it.second !in preselected }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Invia a CrossPoint") },
         text = { Column {
             if (books.isEmpty()) Text("Nessun libro con il suo file in Atlante: importa prima un EPUB (Impostazioni › Libreria e catalogo › Importa eBook).")

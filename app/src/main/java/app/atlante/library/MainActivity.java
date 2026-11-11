@@ -120,6 +120,8 @@ public final class MainActivity extends AppCompatActivity {
     /** Library tabs shown as chips; each one but the first is a reading state. */
     private static final String[] STATUS_TABS = {"Tutti i libri", "Da leggere", "In lettura", "In pausa", "Letti", "Preferiti"};
     private String coverBookId;
+    /** Book chosen with «Invia a CrossPoint» on its page, offered on the CrossPoint page until sent or dropped. */
+    private String crossPointSend;
     private Book reading;
     private List<String> pages;
     private int page;
@@ -2525,6 +2527,12 @@ public final class MainActivity extends AppCompatActivity {
                 app.atlante.library.crosspoint.CrossPointWifi.join(MainActivity.this, ok -> { runOnUiThread(() -> onResult.invoke(ok)); return kotlin.Unit.INSTANCE; });
             }
             @Override public void leaveReaderWifi() { app.atlante.library.crosspoint.CrossPointWifi.leave(MainActivity.this); }
+            @Override public java.util.List<kotlin.Pair<String, File>> pendingSend() {
+                ArrayList<kotlin.Pair<String, File>> out = new ArrayList<>(); Book b = crossPointSend == null ? null : store.find(crossPointSend);
+                if (b != null && !b.format.equals("CATALOGO") && store.original(b).isFile()) out.add(new kotlin.Pair<>(b.title, store.original(b)));
+                return out;
+            }
+            @Override public void clearPending() { crossPointSend = null; }
         });
     }
     /** Sync (design 5a), drawn in Compose (ui/compose/SyncScreen.kt); the actions are the same methods as before. */
@@ -3601,6 +3609,7 @@ public final class MainActivity extends AppCompatActivity {
         listRow(list, R.drawable.ic_library, "Collezioni", "Le tue liste", () -> { sheet.dismiss(); editCollections(b); });
         listRow(list, R.drawable.ic_book, "Inizia una rilettura", "Le letture precedenti restano", () -> { sheet.dismiss(); reread(b); });
         if (!b.format.equals("CATALOGO")) listRow(list, R.drawable.ic_open_in_new, "Apri con KOReader", "Il file in un altro lettore", () -> { sheet.dismiss(); openKoreader(b); });
+        if (!b.format.equals("CATALOGO") && store.original(b).isFile()) listRow(list, R.drawable.ic_upload, "Invia a CrossPoint", "Al lettore e-ink, via Wi-Fi", () -> { sheet.dismiss(); crossPointSend = b.id; navigate("CrossPoint"); });
         ScrollView scroll = new ScrollView(this); scroll.addView(p); scroll.setBackgroundColor(WHITE);
         sheet.setContentView(scroll); sheet.show();
     }

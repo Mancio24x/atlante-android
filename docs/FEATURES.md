@@ -25,7 +25,7 @@ Solo ciò che è implementato. Per ognuna: dove sta e quale test la copre. La gu
 | Scopri (Hardcover o Open Library per genere, pagina successiva precaricata) | `saga/Discover.kt`, `ui/compose/DiscoverScreen.kt` | `DiscoverTest`, `DiscoverSpeedLiveTest` (live) |
 | Generi normalizzati e grafico delle statistiche | `saga/Genres.kt`, `ui/compose/StatisticsScreen.kt` | `GenreGroupsTest` |
 | Compagno di lettura: timer, sessioni, rotelle di avanzamento, note, recensioni, riletture | `MainActivity`, `model/ReadingJournal.java`, `ui/compose/ProgressWheels.kt` | `ReadingJournalTest`, `SettingsTimerTest`, `GoalsWheelsImportTest` |
-| Obiettivi giorno/mese/anno (anello grande in Impostazioni) | `model/ReadingGoals.kt`, `ui/compose/GoalsSection.kt` | `GoalsWheelsImportTest` |
+| Obiettivi giorno/mese/anno (carte con anello e rotella orizzontale in Impostazioni) | `model/ReadingGoals.kt`, `ui/compose/GoalsSection.kt` | `GoalsWheelsImportTest` |
 | Temi predefiniti e personali | `ui/ThemePalette.java`, `ui/compose/ThemeEditor.kt`, `ui/compose/AtlanteTheme.kt` | `ThemePaletteTest`, `ThemeEditorTest` |
 | Sync Hardcover (in background, senza doppioni, conflitti da scegliere, OAuth o chiave) | `sync/HardcoverSync.java`, `sync/HardcoverSyncWorker.kt`, `sync/HardcoverAuth.kt` | `SyncTest`, `HardcoverLiveTest` (live) |
 | Sync Calibre, KOReader, evidenziazioni Kindle | `sync/CalibreSync.java`, `sync/KoreaderSync.java`, `sync/KindleClippings.java` | `SyncTest`, `CalibreLiveTest` (live) |
@@ -46,4 +46,5 @@ rete Wi-Fi (`CrossPointWifi`), altrimenti Android userebbe i dati mobili. Funzio
 casa (ricerca o indirizzo IP). API del firmware: `GET /api/status`, `GET /api/files?path=`,
 `GET /download?path=`, `POST /upload?path=` (multipart), `POST /mkdir`, `/rename`, `/move`, `/delete`; scoperta con
 «hello» in UDP sulla porta 8134 (risposta `crosspoint (on <nome>);81`). Codice: `crosspoint/CrossPointClient.kt`,
-`ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`.
+`ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`. Dalla scheda di un libro con file, ⋮ › «Invia a CrossPoint» apre questa pagina con il libro
+«Pronto da inviare» e, collegato il lettore, l’invio con il libro già spuntato (`MainActivity.crossPointSend`, `CrossPointHost.pendingSend`).
