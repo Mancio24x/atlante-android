@@ -22,6 +22,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -156,10 +163,12 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
     val onValueNow by rememberUpdatedState(onValue)
     val valueNow by rememberUpdatedState(value)
     var userScroll by remember { mutableStateOf(false) }
+    // A glide started here (tap, − / +) must not report the numbers it passes, or the goal would stop half way.
+    var gliding by remember { mutableStateOf(false) }
     LaunchedEffect(list, range, haptics) {
         snapshotFlow { Triple(list.isScrollInProgress, centred, list.layoutInfo.visibleItemsInfo.isNotEmpty()) }
             .distinctUntilChanged().collect { (scrolling, centre, ready) ->
-                if(scrolling) userScroll=true
+                if(scrolling && !gliding) userScroll=true
                 if(ready && userScroll && centre!=valueNow) {
                     onValueNow(centre)
                     if(haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -168,10 +177,17 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
             }
     }
     LaunchedEffect(value, range) {
-        if (!list.isScrollInProgress && !userScroll && centred != value)
-            list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
+        if (!list.isScrollInProgress && !userScroll && centred != value) {
+            val target = (value - range.first).coerceIn(0, range.last - range.first)
+            // A tap on a nearby number or on − / + glides there; a far jump (typed number) goes at once.
+            if (list.layoutInfo.visibleItemsInfo.isNotEmpty() && abs(centred - value) <= 12) {
+                gliding = true
+                try { list.animateScrollToItem(target) } finally { gliding = false }
+            } else list.scrollToItem(target)
+        }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
+    val host = LocalView.current
+    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).horizontalDragWins(host).semantics {
         contentDescription = label; stateDescription = format(value)
         progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
         setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
@@ -192,6 +208,28 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
                         color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Inside a View ScrollView (settings, book editor) a sideways drag that drifted a little up or down was taken by the
+ * page, and the wheel stopped half way. As soon as the finger moves more sideways than up/down, the parents are told
+ * not to intercept this gesture; a mostly vertical drag still scrolls the page. Nothing is consumed.
+ */
+internal fun Modifier.horizontalDragWins(host: View): Modifier = pointerInput(host) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var moved = Offset.Zero; var decided = false
+        while (true) {
+            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+            if (!decided) {
+                moved += change.positionChange()
+                val slop = viewConfiguration.touchSlop / 2
+                if (abs(moved.x) > slop && abs(moved.x) > abs(moved.y)) { host.parent?.requestDisallowInterceptTouchEvent(true); decided = true }
+                else if (abs(moved.y) > slop * 2) decided = true
+            }
+            if (!change.pressed) break
         }
     }
 }
