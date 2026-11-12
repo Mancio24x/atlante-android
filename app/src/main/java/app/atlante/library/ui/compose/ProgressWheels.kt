@@ -191,8 +191,12 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
             }
     }
     LaunchedEffect(value, range) {
-        if (!list.isScrollInProgress && !userScroll && centred != value)
-            list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
+        if (!list.isScrollInProgress && !userScroll && centred != value) {
+            val target = (value - range.first).coerceIn(0, range.last - range.first)
+            // One step (− / + of the goals) glides; it passes no other number, so nothing half way is reported.
+            if (abs(centred - value) == 1 && list.layoutInfo.visibleItemsInfo.isNotEmpty()) list.animateScrollToItem(target)
+            else list.scrollToItem(target)
+        }
     }
     BoxWithConstraints(Modifier.fillMaxWidth().height(76.dp)
         .pointerInput(view) {

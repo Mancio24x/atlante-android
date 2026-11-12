@@ -4,6 +4,9 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 (non ogni commit corrisponde a una release). Il dettaglio è in `git log`; qui le modifiche che cambiano il
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
+## 2026-11-12
+- **Obiettivi di lettura**: ai lati della rotella orizzontale «−» e «+» spostano l’obiettivo di uno (con la rotella che scivola sul numero), utili per ritocchi precisi senza trascinare.
+
 ## 2026-11-11
 - **Obiettivi di lettura più vicini ai temi**: ogni obiettivo è una carta con l’anello dell’avanzamento come la Rotta di Statistiche (accento del tema, rame quando raggiunto), il nome, l’interruttore su tutta la riga e, aperto, la rotella. Bug grafico corretto: un interruttore ricostruiva tutta la sezione (le rotelle saltavano e l’apertura non si animava); ora si anima solo la sua carta.
 - **Rotella orizzontale** (obiettivi, pagine, percentuale, minuti): bordi sfumati, righello con tacche ogni 1/5/10, toccare un numero ci scorre sopra con un’animazione, larghezza adatta ai numeri di 4–5 cifre (prima «1440» o «+5000» uscivano dalla casella). Nelle pagine che scorrono in verticale la pagina non «ruba» più il gesto quando il dito devia un poco: la rotella gira fino in fondo; un trascinamento chiaramente verticale fa ancora scorrere la pagina.

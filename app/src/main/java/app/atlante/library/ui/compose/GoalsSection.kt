@@ -107,7 +107,14 @@ private fun WheelGoal(title: String, kicker: String, initialOn: Boolean, onSwitc
             AnimatedVisibility(on, enter = expandVertically(tween(260)) + fadeIn(tween(260)), exit = shrinkVertically(tween(200)) + fadeOut(tween(160))) {
                 Column(Modifier.padding(end = 4.dp)) {
                     Spacer(Modifier.height(10.dp))
-                    HorizontalWheel(current, range, true, title, { "$it" }) { v -> current = v; onValue(v) }
+                    val choose: (Int) -> Unit = { v -> val c = v.coerceIn(range); if (c != current) { current = c; onValue(c) } }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FilledTonalIconButton({ choose(current - 1) }, enabled = current > range.first,
+                            modifier = Modifier.semantics { contentDescription = "$title: uno in meno" }) { Text("−", style = MaterialTheme.typography.titleLarge) }
+                        Box(Modifier.weight(1f)) { HorizontalWheel(current, range, true, title, { "$it" }, choose) }
+                        FilledTonalIconButton({ choose(current + 1) }, enabled = current < range.last,
+                            modifier = Modifier.semantics { contentDescription = "$title: uno in più" }) { Text("+", style = MaterialTheme.typography.titleLarge) }
+                    }
                     Spacer(Modifier.height(10.dp))
                     Text("${progress.done} di $current $doneLabel · $percent%" + if (reached) " · raggiunto ✓" else "",
                         style = MaterialTheme.typography.bodySmall, color = if (reached) scheme.tertiary else scheme.onSurfaceVariant)
