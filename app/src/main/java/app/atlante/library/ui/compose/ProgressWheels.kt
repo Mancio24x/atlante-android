@@ -22,6 +22,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -138,6 +145,32 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
     }
 }
 
+/** Animations on unless the system turned them off (Impostazioni sviluppatore / accessibilità). */
+private fun wheelMotion(view: View) = android.provider.Settings.Global.getFloat(view.context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+
+/**
+ * The wheels sit in pages that scroll vertically (a ScrollView): once a drag on the wheel is clearly horizontal the
+ * page may no longer take it over, so a slightly slanted swipe keeps turning the wheel instead of jumping the page.
+ * A vertical drag that starts on the wheel still scrolls the page.
+ */
+internal fun Modifier.keepHorizontalDrag(view: View): Modifier = pointerInput(view) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var dx = 0f; var dy = 0f; var locked = false
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (!locked) {
+                val delta = change.position - change.previousPosition; dx += delta.x; dy += delta.y
+                if (abs(dx) > viewConfiguration.touchSlop / 2 && abs(dx) > abs(dy)) { view.parent?.requestDisallowInterceptTouchEvent(true); locked = true }
+                else if (abs(dy) > viewConfiguration.touchSlop) break
+            }
+            if (!change.pressed) break
+        }
+        if (locked) view.parent?.requestDisallowInterceptTouchEvent(false)
+    }
+}
+
 /**
  * Horizontal number wheel: flings and snaps to the value under the centre mark, which is larger and coloured;
  * the others fade with the distance. A light tick (optional) for every value passed.
@@ -171,7 +204,9 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
         if (!list.isScrollInProgress && !userScroll && centred != value)
             list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
+    val hostView = LocalView.current
+    val scope = rememberCoroutineScope()
+    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).keepHorizontalDrag(hostView).semantics {
         contentDescription = label; stateDescription = format(value)
         progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
         setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
@@ -184,10 +219,20 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
             items(range.last - range.first + 1) { i ->
                 val v = range.first + i
                 val distance = abs(v - centred)
-                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
-                Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
-                        style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                // Tapping a number glides the wheel to it (the value follows when it settles under the mark).
+                Box(Modifier.width(itemWidth).fillMaxHeight().clickable(onClickLabel = format(v)) {
+                    if (wheelMotion(hostView)) scope.launch { list.animateScrollToItem(i) } else onValue(v)
+                }, contentAlignment = Alignment.Center) {
+                    // Fade and size follow the real distance from the mark at every frame (draw phase only, no
+                    // recomposition while scrolling), so the numbers grow and shrink smoothly instead of in steps.
+                    Text(format(v), Modifier.graphicsLayer {
+                        val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+                        val item = info.visibleItemsInfo.firstOrNull { it.index == i }
+                        val d = if (item == null) 3f else (abs(item.offset + item.size / 2f - middle) / item.size.coerceAtLeast(1)).coerceAtMost(3f)
+                        alpha = (1f - d * 0.27f).coerceIn(0.22f, 1f)
+                        val grow = 1f + 0.25f * (1f - d).coerceIn(0f, 1f); scaleX = grow; scaleY = grow
+                    },
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
                         color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }

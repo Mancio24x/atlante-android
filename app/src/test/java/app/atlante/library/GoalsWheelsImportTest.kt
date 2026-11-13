@@ -27,6 +27,15 @@ class GoalsWheelsImportTest {
     private val context get() = ApplicationProvider.getApplicationContext<Context>()
     private fun prefs() = context.getSharedPreferences("goals-test", Context.MODE_PRIVATE).also { it.edit().clear().commit() }
 
+    @Test fun wheelRangeNeverCutsASavedGoal() {
+        // A goal saved with a number above the wheel's usual end (600 pages, 50 books a month) stays as it is.
+        assertEquals(1..500, app.atlante.library.ui.compose.goalRange(1..500, 25))
+        assertEquals(1..600, app.atlante.library.ui.compose.goalRange(1..500, 600))
+        val p = prefs(); p.edit().putInt("monthGoal", 50).commit()
+        val g = ReadingGoals(p)
+        assertTrue(g.monthBooks in app.atlante.library.ui.compose.goalRange(1..30, g.monthBooks))
+    }
+
     @Test fun existingGoalsAreKeptAndDailyProgressUsesSessions() {
         val p = prefs(); p.edit().putInt("yearGoal", 40).putInt("monthGoal", 3).putInt("dailyGoal", 25).commit()   // values saved by older versions
         val g = ReadingGoals(p)

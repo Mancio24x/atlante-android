@@ -199,14 +199,15 @@ public final class MainActivity extends AppCompatActivity {
 
     private void openDrawer() {
         if (drawer != null) { closeDrawer(); return; }
-        drawer = new FrameLayout(this); FrameLayout overlay = drawer;
-        View scrim = new View(this); scrim.setBackgroundColor(0x99000000);
+        app.atlante.library.ui.SwipeCloseLayout swipe = new app.atlante.library.ui.SwipeCloseLayout(this);
+        drawer = swipe; FrameLayout overlay = drawer;
+        View scrim = new View(this); scrim.setBackgroundColor(0x99000000); swipe.setScrim(scrim); swipe.setOnClose(this::closeDrawer);
         overlay.addView(scrim, new FrameLayout.LayoutParams(-1,-1)); scrim.setOnClickListener(v -> closeDrawer());
         int width = Math.min(dp(320), Math.round(getResources().getDisplayMetrics().widthPixels * .86f));
         ScrollView scroll = new ScrollView(this);
         GradientDrawable sheet = new GradientDrawable(); sheet.setColor(WHITE);
         sheet.setCornerRadii(new float[]{0, 0, dp(28), dp(28), dp(28), dp(28), 0, 0}); scroll.setBackground(sheet); scroll.setClipToOutline(true);
-        overlay.addView(scroll, new FrameLayout.LayoutParams(width, -1, Gravity.START));
+        overlay.addView(scroll, new FrameLayout.LayoutParams(width, -1, Gravity.START)); swipe.setSheet(scroll);
         LinearLayout menu = column(); menu.setPadding(dp(12), Math.max(dp(12), insetTop), dp(12), Math.max(dp(24), insetBottom)); scroll.addView(menu);
         LinearLayout top = row(); menu.addView(top);
         Button close = iconButton(R.drawable.ic_menu, "Chiudi menu laterale", this::closeDrawer); top.addView(close);
@@ -231,7 +232,10 @@ public final class MainActivity extends AppCompatActivity {
         menu.addView(drawerTool(R.drawable.ic_settings, "Impostazioni", false, () -> { closeDrawer(); settings(); }));
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         screen.addView(overlay,new FrameLayout.LayoutParams(-1,-1)); close.requestFocus();
-        scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(220).start();
+        if (motion()) {
+            scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(300).setInterpolator(app.atlante.library.ui.SwipeCloseLayout.EMPHASIZED).start();
+            scrim.setAlpha(0); scrim.animate().alpha(1).setDuration(220).start();
+        }
         updateBack();
     }
     /** Drawer row of a library place (design 7a): icon, name, count on the right; a filled pill when selected. */
@@ -263,9 +267,12 @@ public final class MainActivity extends AppCompatActivity {
         if (drawer == null) return;
         FrameLayout closing = drawer; drawer = null; updateBack();
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
-        closing.animate().alpha(0).setDuration(140).withEndAction(() -> {
-            if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing);
-        }).start();
+        Runnable remove = () -> { if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing); };
+        if (!motion()) { remove.run(); return; }
+        // The sheet slides back to the edge (from where a swipe left it) while the scrim fades.
+        View sheet = closing.getChildCount() > 1 ? closing.getChildAt(1) : null, scrim = closing.getChildCount() > 0 ? closing.getChildAt(0) : null;
+        if (sheet != null) sheet.animate().translationX(-sheet.getWidth()).setDuration(200).setInterpolator(app.atlante.library.ui.SwipeCloseLayout.EMPHASIZED_EXIT).start();
+        if (scrim != null) scrim.animate().alpha(0).setDuration(200).withEndAction(remove).start(); else remove.run();
     }
     private void settings() { settingsSection=""; if(!destination.equals("Impostazioni"))getPreferences(MODE_PRIVATE).edit().putString("settingsReturn",destination).apply(); navigate("Impostazioni"); }
 
@@ -3312,8 +3319,8 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void animateIn(View view) {
         if (android.os.Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()) return;
-        view.setAlpha(0); view.setTranslationY(dp(10));
-        view.animate().alpha(1).translationY(0).setDuration(200).start();
+        view.setAlpha(0); view.setTranslationY(dp(12));
+        view.animate().alpha(1).translationY(0).setDuration(260).setInterpolator(app.atlante.library.ui.SwipeCloseLayout.EMPHASIZED).start();
     }
     private void navigate(String next) {
         app.atlante.library.diagnostics.CrashLog.step("pagina: " + next);
@@ -3601,6 +3608,7 @@ public final class MainActivity extends AppCompatActivity {
         listRow(list, R.drawable.ic_library, "Collezioni", "Le tue liste", () -> { sheet.dismiss(); editCollections(b); });
         listRow(list, R.drawable.ic_book, "Inizia una rilettura", "Le letture precedenti restano", () -> { sheet.dismiss(); reread(b); });
         if (!b.format.equals("CATALOGO")) listRow(list, R.drawable.ic_open_in_new, "Apri con KOReader", "Il file in un altro lettore", () -> { sheet.dismiss(); openKoreader(b); });
+        if (!b.format.equals("CATALOGO") && store.original(b).isFile()) listRow(list, R.drawable.ic_upload, "Invia a CrossPoint", "Il file sul lettore e-ink, via Wi-Fi", () -> { sheet.dismiss(); sendToCrossPoint(b); });
         ScrollView scroll = new ScrollView(this); scroll.addView(p); scroll.setBackgroundColor(WHITE);
         sheet.setContentView(scroll); sheet.show();
     }
@@ -3621,6 +3629,33 @@ public final class MainActivity extends AppCompatActivity {
         if(names.isEmpty()) { collections(); return; }
         String[] labels=names.toArray(new String[0]); boolean[] checked=new boolean[labels.length]; for(int i=0;i<labels.length;i++) checked[i]=ReadingJournal.inCollection(b,labels[i]);
         dialogBuilder().setTitle("Collezioni del libro").setMultiChoiceItems(labels,checked,(d,w,on)->checked[w]=on).setNegativeButton("Annulla",null).setNeutralButton("Nuova",(d,w)->collections()).setPositiveButton("Salva",(d,w)->journalEdit(b,c->{org.json.JSONArray a=new org.json.JSONArray(); for(int i=0;i<labels.length;i++) if(checked[i]) a.put(labels[i]); ReadingJournal.put(c,"collections",a);})).show();
+    }
+    /** Sends the book's file to the CrossPoint reader (crosspoint/CrossPointSend.kt), with its progress. */
+    private void sendToCrossPoint(Book b) {
+        File file = store.original(b);
+        if (!file.isFile()) { error(new IOException("Questo libro non ha un file locale. Importa prima un ebook.")); return; }
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        LinearLayout box = column(); box.setPadding(dp(24), dp(8), dp(24), 0);
+        TextView label = text("Cerco il lettore…", 14, MUTED, false); box.addView(label);
+        LinearProgressIndicator bar = new LinearProgressIndicator(this); bar.setIndeterminate(true); solid(bar); gap(box, 10); box.addView(bar, new LinearLayout.LayoutParams(-1, -2));
+        androidx.appcompat.app.AlertDialog wait = dialogBuilder().setTitle("Invia a CrossPoint").setView(box).setCancelable(false).show();
+        app.atlante.library.crosspoint.CrossPointClient.Binder binder = app.atlante.library.crosspoint.CrossPointWifi.binder(this);
+        String saved = prefs.getString("crosspointHost", "");
+        worker.execute(() -> {
+            try {
+                int[] shown = {-1};   // one update per percent, not one per 16 KB block
+                String host = app.atlante.library.crosspoint.CrossPointSend.send(saved, file, b.title, binder, (done, total) -> {
+                    if (total <= 0) return; int percent = (int) (done * 100 / total); if (percent == shown[0]) return; shown[0] = percent;
+                    runOnUiThread(() -> { label.setText(app.atlante.library.ui.L.t("Invio…") + " " + percent + "%");
+                        if (bar.isIndeterminate()) bar.setIndeterminate(false); bar.setProgressCompat(percent, true); }); });
+                prefs.edit().putString("crosspointHost", host).apply();
+                runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return; wait.dismiss();
+                    dialogBuilder().setTitle("Inviato a CrossPoint").setMessage("«" + b.title + "» è sul lettore, nella cartella principale.").setPositiveButton("OK", null).show(); });
+            } catch (Exception e) {
+                runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return; wait.dismiss();
+                    dialogBuilder().setTitle("Invio non riuscito").setMessage(message(e)).setNegativeButton("Chiudi", null).setPositiveButton("Apri CrossPoint", (d, w) -> navigate("CrossPoint")).show(); });
+            }
+        });
     }
     private void openKoreader(Book b) {
         if(!store.original(b).isFile()) {error(new IOException("Questo libro non ha un file locale. Importa prima un ebook."));return;}

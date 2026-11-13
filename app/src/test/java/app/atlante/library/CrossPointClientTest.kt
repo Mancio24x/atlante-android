@@ -65,4 +65,12 @@ class CrossPointClientTest {
             assertTrue(String(f.requests.last().second).contains("name=Dune+1.epub"))
         }
     }
+
+    @Test fun sentFileIsNamedAfterTheBook() {
+        val f = File("/tmp/x/abc123.epub")
+        assertEquals("Il nome della rosa.epub", app.atlante.library.crosspoint.CrossPointSend.fileName("Il nome della rosa", f))
+        assertEquals("1984 Orwell.epub", app.atlante.library.crosspoint.CrossPointSend.fileName("1984: Orwell", f))
+        assertEquals("abc123.epub", app.atlante.library.crosspoint.CrossPointSend.fileName("  ", f))
+        assertEquals("A B.txt", app.atlante.library.crosspoint.CrossPointSend.fileName("A/B", File("x.txt")))
+    }
 }
