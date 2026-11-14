@@ -21,6 +21,20 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
@@ -140,13 +154,17 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
 
 /**
  * Horizontal number wheel: flings and snaps to the value under the centre mark, which is larger and coloured;
- * the others fade with the distance. A light tick (optional) for every value passed.
+ * the others fade with the distance and towards the edges, over a ruler of ticks (a longer one every 5 and 10).
+ * Tapping a number glides to it. A light tick (optional) for every value passed. A sideways drag keeps the page
+ * from scrolling (the wheel sits in the settings' ScrollView, which would otherwise take diagonal swipes).
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
     val itemWidth = 56.dp
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
+    val scheme = MaterialTheme.colorScheme
     // Value under the centre mark: the visible item whose middle is closest to the middle of the wheel.
     val centred by remember(range) { derivedStateOf {
         val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
@@ -156,40 +174,66 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
     val onValueNow by rememberUpdatedState(onValue)
     val valueNow by rememberUpdatedState(value)
     var userScroll by remember { mutableStateOf(false) }
+    var gliding by remember { mutableStateOf(false) }      // the wheel moving itself to a value: not the user choosing
     LaunchedEffect(list, range, haptics) {
         snapshotFlow { Triple(list.isScrollInProgress, centred, list.layoutInfo.visibleItemsInfo.isNotEmpty()) }
             .distinctUntilChanged().collect { (scrolling, centre, ready) ->
-                if(scrolling) userScroll=true
-                if(ready && userScroll && centre!=valueNow) {
+                if (scrolling && !gliding) userScroll = true
+                if (ready && userScroll && centre != valueNow) {
                     onValueNow(centre)
-                    if(haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 }
-                if(!scrolling) userScroll=false
+                if (!scrolling) userScroll = false
             }
     }
     LaunchedEffect(value, range) {
-        if (!list.isScrollInProgress && !userScroll && centred != value)
-            list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
+        if (!list.isScrollInProgress && !userScroll && centred != value) {
+            val target = (value - range.first).coerceIn(0, range.last - range.first)
+            gliding = true
+            try { if (abs(centred - value) <= 12) list.animateScrollToItem(target) else list.scrollToItem(target) } finally { gliding = false }
+        }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(76.dp).semantics {
         contentDescription = label; stateDescription = format(value)
         progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
         setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
+    }.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val slop = viewConfiguration.touchSlop / 2
+            while (true) {
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                val d = change.position - down.position
+                if (abs(d.x) > slop && abs(d.x) > abs(d.y)) { view.parent?.requestDisallowInterceptTouchEvent(true); break }
+                if (abs(d.y) > slop) break                       // a vertical swipe: the page scrolls as usual
+            }
+        }
     }, contentAlignment = Alignment.Center) {
         val side = (maxWidth - itemWidth) / 2
-        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer,
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)) {}
-        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side), modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically) {
+        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(16.dp), color = scheme.primary.copy(alpha = 0.12f),
+            border = BorderStroke(2.dp, scheme.primary)) {}
+        val quiet = remember { MutableInteractionSource() }
+        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side),
+            modifier = Modifier.fillMaxSize().graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
+                drawContent()
+                drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.2f to Color.Black, 0.8f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+            }, verticalAlignment = Alignment.CenterVertically) {
             items(range.last - range.first + 1) { i ->
                 val v = range.first + i
                 val distance = abs(v - centred)
-                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
-                Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
-                        style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.28f }, label = "alpha")
+                val grow by animateFloatAsState(if (distance == 0) 1.3f else 1f, label = "scale")
+                val tick = scheme.outline; val major = v % 10 == 0; val mid = v % 5 == 0
+                Box(Modifier.width(itemWidth).fillMaxHeight().clickable(quiet, indication = null, onClickLabel = format(v)) { onValue(v) }.drawBehind {
+                    val h = if (major) 12.dp.toPx() else if (mid) 9.dp.toPx() else 6.dp.toPx()
+                    drawLine(tick.copy(alpha = if (distance == 0) 0f else 0.55f), Offset(size.width / 2, size.height - 4.dp.toPx() - h),
+                        Offset(size.width / 2, size.height - 4.dp.toPx()), strokeWidth = if (major) 2.dp.toPx() else 1.dp.toPx())
+                }, contentAlignment = Alignment.Center) {
+                    Text(format(v), Modifier.alpha(alpha).scale(grow),
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        color = if (distance == 0) scheme.primary else scheme.onSurfaceVariant, maxLines = 1, softWrap = false)
                 }
             }
         }

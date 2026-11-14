@@ -27,6 +27,20 @@ class GoalsWheelsImportTest {
     private val context get() = ApplicationProvider.getApplicationContext<Context>()
     private fun prefs() = context.getSharedPreferences("goals-test", Context.MODE_PRIVATE).also { it.edit().clear().commit() }
 
+    /** The redesigned section composes, lays out and draws with its wheels (no crash, no setting changed by drawing). */
+    @Test fun goalsSectionDrawsWithItsWheels() {
+        val p = prefs(); val g = ReadingGoals(p); g.yearOn = true; g.yearBooks = 30; g.monthOn = false
+        val a = org.robolectric.Robolectric.buildActivity(app.atlante.library.MainActivity::class.java).setup().get()
+        val v = app.atlante.library.ui.compose.GoalsView.create(a, app.atlante.library.ui.ThemePalette.ALL[0], p, emptyList())
+        a.setContentView(v)
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        v.measure(android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED))
+        v.layout(0, 0, v.measuredWidth, v.measuredHeight)
+        assertTrue(v.measuredHeight > 0)
+        v.draw(android.graphics.Canvas(android.graphics.Bitmap.createBitmap(1080, v.measuredHeight.coerceIn(1, 6000), android.graphics.Bitmap.Config.ARGB_8888)))
+        val after = ReadingGoals(p); assertTrue(after.yearOn); assertEquals(30, after.yearBooks); assertFalse(after.monthOn)
+    }
+
     @Test fun existingGoalsAreKeptAndDailyProgressUsesSessions() {
         val p = prefs(); p.edit().putInt("yearGoal", 40).putInt("monthGoal", 3).putInt("dailyGoal", 25).commit()   // values saved by older versions
         val g = ReadingGoals(p)

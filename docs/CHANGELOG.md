@@ -4,6 +4,21 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 (non ogni commit corrisponde a una release). Il dettaglio è in `git log`; qui le modifiche che cambiano il
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
+## 2026-11-14
+
+- **Obiettivi di lettura come i temi**: ogni obiettivo è una carta arrotondata come le tessere dei temi (bordo
+  d’accento quando è attivo, titolo serif, anello con la percentuale, ✓ quando raggiunto). La rotella orizzontale c’è
+  sempre: spostarla cambia il numero e accende l’obiettivo; toccare un numero vicino ci scorre sopra. Corretto il
+  difetto grafico: ogni interruttore ricostruiva tutta la sezione (le carte saltavano, l’animazione non partiva e le
+  rotelle perdevano la posizione); ora ogni valore è stato Compose e le carte si aprono con un’animazione.
+- **Rotelle più fluide** (obiettivi e aggiornamento dei progressi): numeri che sfumano verso i bordi, righello di
+  tacche (lunga ogni 5 e 10), ingrandimento animato del numero al centro, niente lampo grigio del tocco mentre si
+  scorre, e uno scorrimento in diagonale non fa più muovere la pagina al posto della rotella.
+- **CrossPoint con `crosspoint.local`**: il lettore mostra «http://crosspoint.local/»; ora si può scrivere quel nome (o
+  toccare «Usa «crosspoint.local»»): l’app lo risolve con una domanda mDNS sulla rete di casa (risposta unicast, nessun
+  permesso in più) e si collega all’indirizzo privato trovato; un nome che porta fuori dalla rete di casa è rifiutato.
+  Anche «Cerca CrossPoint» prova `crosspoint.local` quando nessuno risponde all’«hello». Test: `CrossPointClientTest`.
+
 ## 2026-11-09
 - **Saghe, Mappa, Universi come nei design 7a–7d**: la pagina di una saga ha «Saga · Pubblicazione» (per numero o per anno), una linea che unisce i volumi (accento tra due letti), il volume in lettura cerchiato in rame, l’universo nell’intestazione («SAGA · TERRA DI MEZZO») e in fondo «Stesso universo» con le altre saghe di quel mondo. Universi mostra le opere singole dello stesso mondo e i volumi in lettura in rame; l’anello e «letti» non superano più i libri che hai quando il grafo delle saghe conosce meno volumi (prima «200%», «2/0 letti»). Menu laterale: Universi con il numero, Collezioni / Cerca / CrossPoint / Backup / Impostazioni con le icone. «Il tuo ordine» del design non c’è: servirebbe un ordine manuale dei volumi. `HomeShot` disegna anche saga e universo d’esempio.
 - **«Annulla» di Ripara duplicati non lascia più la barra a girare**: annullare una riparazione che in quel momento non era in esecuzione (in attesa del suo turno, o fermata da Android e in pausa) fermava il lavoro ma nessuno aggiornava il suo record, che restava «In corso» / «In attesa» per sempre con la barra in movimento. Ora «Annulla» scrive subito «Annullata»; un lavoro fermato non riscrive più «In corso»; e i record di riparazioni che WorkManager non ha più (app chiusa, lavoro finito altrove) vengono chiusi quando compare la barra. `RepairCancelTest`.
