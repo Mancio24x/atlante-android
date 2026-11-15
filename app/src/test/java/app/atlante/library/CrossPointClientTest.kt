@@ -113,5 +113,9 @@ class CrossPointClientTest {
         }
         assertEquals("Dune'1'X-Evil: 1.epub", CrossPointClient.safeName("Dune\"1\"\r\nX-Evil: 1.epub"))
         assertEquals("file", CrossPointClient.safeName("\r\n"))
+        // A file name sent by the reader (or by whoever answers in its place) stays inside the download folder.
+        assertEquals("library.json", CrossPointClient.localName("../../files/library.json"))
+        assertEquals("Dune.epub", CrossPointClient.localName("Books\\Dune.epub"))
+        assertEquals("file", CrossPointClient.localName(".."))
     }
 }

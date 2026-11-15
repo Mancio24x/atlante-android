@@ -141,6 +141,13 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
         /** A file name for a multipart header: no quotes and no control characters (a line break would start a new header). */
         @JvmStatic fun safeName(name: String) = name.replace("\"", "'").filter { it >= ' ' && it != '\u007f' }.trim().ifEmpty { "file" }
 
+        /**
+         * The name a file of the reader takes on the phone: its last part only. The list comes from the network, and a
+         * name such as "../../files/library.json" must never leave the folder the download goes to.
+         */
+        @JvmStatic fun localName(name: String): String =
+            safeName(name.substringAfterLast('/').substringAfterLast('\\')).let { if (it == "." || it == "..") "file" else it }
+
         private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
         private fun text(b: ByteArray) = String(b, Charsets.UTF_8)
 

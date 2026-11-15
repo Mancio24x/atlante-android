@@ -178,7 +178,7 @@ fun CrossPointScreen(host: CrossPointHost) {
                         scope.launch {
                             busy = "Scarico «${e.name}»…"; progress = 0f
                             try {
-                                val dir = File(host.cacheDir(), "crosspoint").apply { mkdirs() }; val dest = File(dir, e.name)
+                                val dir = File(host.cacheDir(), "crosspoint").apply { mkdirs() }; val dest = File(dir, CrossPointClient.localName(e.name))
                                 withContext(Dispatchers.IO) { client().download(child(path, e.name), dest) { d, t -> if (t > 0) progress = d.toFloat() / t } }
                                 busy = null; host.importFiles(listOf(dest))
                             } catch (x: Exception) { busy = null; say(x.message ?: "Scaricamento non riuscito") }
@@ -207,7 +207,7 @@ fun CrossPointScreen(host: CrossPointHost) {
                 for ((i, pair) in chosen.withIndex()) {
                     val (title, file) = pair
                     busy = "Invio ${i + 1} di ${chosen.size}: $title"; progress = 0f
-                    try { withContext(Dispatchers.IO) { client().upload(path, file, title.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim() + "." + file.extension) { d, t -> if (t > 0) progress = d.toFloat() / t } }; sent++ }
+                    try { withContext(Dispatchers.IO) { client().upload(path, file, app.atlante.library.crosspoint.CrossPointSend.fileName(title, file)) { d, t -> if (t > 0) progress = d.toFloat() / t } }; sent++ }
                     catch (x: Exception) { error = x.message; break }
                 }
                 busy = null; progress = -1f
