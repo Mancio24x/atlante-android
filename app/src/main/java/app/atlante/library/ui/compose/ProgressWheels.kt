@@ -3,6 +3,7 @@ package app.atlante.library.ui.compose
 import android.content.SharedPreferences
 import android.view.View
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -17,8 +18,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -144,52 +151,65 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
-    val itemWidth = 56.dp
-    val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
+    // Wide enough for the longest number at its enlarged size and at the phone's font size ("+2000" was cut to "+200").
+    val chars = maxOf(format(range.first).length, format(range.last).length)
+    val itemWidth = ((22 + 12 * chars) * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)).dp.coerceAtLeast(56.dp)
+    val last = range.last - range.first
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, last))
     val haptic = LocalHapticFeedback.current
     // Value under the centre mark: the visible item whose middle is closest to the middle of the wheel.
     val centred by remember(range) { derivedStateOf {
         val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
         val index = info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - middle) }?.index ?: (value - range.first)
-        range.first + index.coerceIn(0, range.last - range.first)
+        range.first + index.coerceIn(0, last)
     } }
     val onValueNow by rememberUpdatedState(onValue)
     val valueNow by rememberUpdatedState(value)
     var userScroll by remember { mutableStateOf(false) }
+    var moving by remember { mutableStateOf(false) }      // the wheel is turning by itself towards a value set elsewhere
     LaunchedEffect(list, range, haptics) {
         snapshotFlow { Triple(list.isScrollInProgress, centred, list.layoutInfo.visibleItemsInfo.isNotEmpty()) }
             .distinctUntilChanged().collect { (scrolling, centre, ready) ->
-                if(scrolling) userScroll=true
-                if(ready && userScroll && centre!=valueNow) {
+                if (scrolling && !moving) userScroll = true
+                if (ready && userScroll && centre != valueNow) {
                     onValueNow(centre)
-                    if(haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 }
-                if(!scrolling) userScroll=false
+                if (!scrolling) userScroll = false
             }
     }
     LaunchedEffect(value, range) {
-        if (!list.isScrollInProgress && !userScroll && centred != value)
-            list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
+        if (!list.isScrollInProgress && !userScroll && centred != value) {
+            val target = (value - range.first).coerceIn(0, last)
+            // A value a few steps away (a tap on a neighbour) glides there; a distant one (typed) is set at once.
+            if (abs(value - centred) > 8) list.scrollToItem(target)
+            else { moving = true; try { list.animateScrollToItem(target) } finally { moving = false } }
+        }
     }
+    val scheme = MaterialTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
         contentDescription = label; stateDescription = format(value)
-        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
+        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (last - 1).coerceAtLeast(0))
         setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
     }, contentAlignment = Alignment.Center) {
-        val side = (maxWidth - itemWidth) / 2
-        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer,
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)) {}
-        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side), modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically) {
-            items(range.last - range.first + 1) { i ->
+        val side = ((maxWidth - itemWidth) / 2).coerceAtLeast(0.dp)
+        Surface(Modifier.size(itemWidth, 56.dp), shape = RoundedCornerShape(16.dp), color = scheme.primaryContainer,
+            border = BorderStroke(1.5.dp, scheme.primary)) {}
+        // The numbers fade out towards both edges, so the wheel reads as a wheel and nothing is cut sharply.
+        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side),
+            modifier = Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+                drawContent()
+                drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.22f to Color.Black, 0.78f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+            }, verticalAlignment = Alignment.CenterVertically) {
+            items(last + 1, key = { it }) { i ->
                 val v = range.first + i
-                val distance = abs(v - centred)
-                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
+                val here = v == centred
+                // One typeface for every number (the centred one used to switch to the serif headline while turning): only size and colour change.
+                val size by animateFloatAsState(if (here) 1.3f else 1f, label = "size")
+                val color by animateColorAsState(if (here) scheme.onPrimaryContainer else scheme.onSurfaceVariant.copy(alpha = if (abs(v - centred) == 1) 0.85f else 0.6f), label = "color")
                 Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
-                        style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                        fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    Text(format(v), Modifier.graphicsLayer { scaleX = size; scaleY = size }, style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                        fontWeight = if (here) FontWeight.SemiBold else FontWeight.Normal, color = color, maxLines = 1, softWrap = false)
                 }
             }
         }
