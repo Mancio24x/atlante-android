@@ -31,6 +31,37 @@ class CrossPointClientTest {
         assertNull(CrossPointClient.deviceName("something else"))
     }
 
+    @Test fun acceptsTheReaderLocalName() {
+        assertEquals("crosspoint.local", CrossPointClient.mdnsName("http://CrossPoint.local/"))
+        assertNull(CrossPointClient.mdnsName("crosspoint.example.com")); assertNull(CrossPointClient.mdnsName("local"))
+        assertTrue(CrossPointClient.isAcceptable("crosspoint.local")); assertTrue(CrossPointClient.isAcceptable("http://192.168.4.1/"))
+        assertFalse(CrossPointClient.isAcceptable("8.8.8.8"))
+    }
+
+    /** A fake mDNS responder: answers the question with a compressed A record, as the reader's ESP32 does. */
+    @Test fun resolvesCrosspointLocalOverMdns() {
+        java.net.DatagramSocket(0, java.net.InetAddress.getByName("127.0.0.1")).use { responder ->
+            thread(isDaemon = true) {
+                val buf = ByteArray(1500); val p = java.net.DatagramPacket(buf, buf.size)
+                runCatching { responder.receive(p) }.onSuccess {
+                    val q = buf.copyOf(p.length)
+                    assertArrayEquals(CrossPointClient.mdnsQuery("crosspoint.local"), q)
+                    val question = q.copyOfRange(12, q.size)
+                    val answer = byteArrayOf(0x12, 0x34, 0x84.toByte(), 0, 0, 1, 0, 1, 0, 0, 0, 0) + question +
+                        byteArrayOf(0xc0.toByte(), 12, 0, 1, 0x80.toByte(), 1, 0, 0, 0, 120, 0, 4, 192.toByte(), 168.toByte(), 1, 77)
+                    responder.send(java.net.DatagramPacket(answer, answer.size, p.socketAddress))
+                }
+            }
+            assertEquals("192.168.1.77", CrossPointClient.resolveLocal("crosspoint.local", 2000, null, java.net.InetSocketAddress("127.0.0.1", responder.localPort)))
+        }
+        // An answer pointing outside the home network is refused.
+        val bad = byteArrayOf(0x12, 0x34, 0x84.toByte(), 0, 0, 0, 0, 1, 0, 0, 0, 0, 10) + "crosspoint".toByteArray() + byteArrayOf(5) + "local".toByteArray() +
+            byteArrayOf(0, 0, 1, 0x80.toByte(), 1, 0, 0, 0, 120, 0, 4, 8, 8, 8, 8)
+        assertEquals("8.8.8.8", CrossPointClient.mdnsAnswer(bad, bad.size, "crosspoint.local"))
+        assertFalse(CrossPointClient.isLocal("8.8.8.8"))
+        assertNull(CrossPointClient.mdnsAnswer(bad, bad.size, "altro.local"))
+    }
+
     @Test fun listsFoldersFirstFromAChunkedAnswer() = Fake { line, _ ->
         if (line.startsWith("GET /api/files?path=%2FBooks")) ok("""[{"name":"b.epub","size":10,"isDirectory":false,"isEpub":true},{"name":"Saghe","size":0,"isDirectory":true,"isEpub":false},{"name":"A.txt","size":3,"isDirectory":false,"isEpub":false}]""", chunked = true)
         else "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".toByteArray()

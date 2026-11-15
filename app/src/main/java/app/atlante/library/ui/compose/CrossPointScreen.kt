@@ -226,6 +226,18 @@ fun CrossPointScreen(host: CrossPointHost) {
     var joinFailed by remember { mutableStateOf(false) }
     var found by remember { mutableStateOf<List<CrossPointClient.Device>?>(null) }
     var typed by remember { mutableStateOf("") }
+    var resolving by remember { mutableStateOf(false) }; var resolveFailed by remember { mutableStateOf(false) }
+    /** An address is used as it is; a ".local" name (the reader shows "http://crosspoint.local/") is looked up first. */
+    fun connect(value: String) {
+        val name = CrossPointClient.mdnsName(value)
+        if (name == null) { onAddress(value.trim().removePrefix("http://").trimEnd('/')); return }
+        resolving = true; resolveFailed = false
+        scope.launch {
+            val ip = withContext(Dispatchers.IO) { runCatching { CrossPointClient.resolveLocal(name, binder = host.binder()) }.getOrNull() }
+            resolving = false
+            if (ip != null) onAddress(ip) else resolveFailed = true
+        }
+    }
     OutlinedCard(Modifier.fillMaxWidth(), shape = Round20, colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -263,13 +275,18 @@ fun CrossPointScreen(host: CrossPointHost) {
             HorizontalDivider(Modifier.padding(vertical = 16.dp), color = colors.outlineVariant)
             Text("Oppure l’indirizzo che il lettore mostra", style = MaterialTheme.typography.labelLarge)
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(typed, { typed = it.trim() }, Modifier.weight(1f), singleLine = true, placeholder = { Text("192.168.1.20") },
+                OutlinedTextField(typed, { typed = it.trim(); resolveFailed = false }, Modifier.weight(1f), singleLine = true, placeholder = { Text("192.168.1.20") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    isError = typed.isNotEmpty() && !CrossPointClient.isLocal(typed.removePrefix("http://").trimEnd('/')),
-                    supportingText = { if (typed.isNotEmpty() && !CrossPointClient.isLocal(typed.removePrefix("http://").trimEnd('/'))) Text("Un indirizzo della rete di casa") })
-                FilledTonalButton(onClick = { onAddress(typed.removePrefix("http://").trimEnd('/')) }, Modifier.padding(start = 8.dp),
-                    enabled = CrossPointClient.isLocal(typed.removePrefix("http://").trimEnd('/'))) { Text("Collega") }
+                    isError = (typed.isNotEmpty() && !CrossPointClient.isAcceptable(typed)) || resolveFailed,
+                    supportingText = { when {
+                        resolveFailed -> Text("Nessuna risposta da «${CrossPointClient.mdnsName(typed) ?: typed}»: prova l’indirizzo numerico")
+                        typed.isNotEmpty() && !CrossPointClient.isAcceptable(typed) -> Text("Un indirizzo della rete di casa o un nome .local")
+                    } })
+                FilledTonalButton(onClick = { connect(typed) }, Modifier.padding(start = 8.dp),
+                    enabled = !resolving && CrossPointClient.isAcceptable(typed)) { Text(if (resolving) "Cerco…" else "Collega") }
             }
+            TextButton(onClick = { typed = CrossPointClient.READER_NAME; connect(CrossPointClient.READER_NAME) }, Modifier.fillMaxWidth(), enabled = !resolving) {
+                Text("Usa «${CrossPointClient.READER_NAME}»") }
         }
     }
 }
