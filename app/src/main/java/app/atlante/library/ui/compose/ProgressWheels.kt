@@ -3,7 +3,6 @@ package app.atlante.library.ui.compose
 import android.content.SharedPreferences
 import android.view.View
 import androidx.activity.ComponentActivity
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -18,14 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -167,11 +160,8 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
-    // Wide enough for the longest number at its enlarged size and at the phone's font size ("+2000" was cut to "+200").
-    val chars = maxOf(format(range.first).length, format(range.last).length)
-    val itemWidth = ((22 + 12 * chars) * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)).dp.coerceAtLeast(56.dp)
-    val last = range.last - range.first
-    val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, last))
+    val itemWidth = 56.dp
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
     val scheme = MaterialTheme.colorScheme
@@ -179,7 +169,7 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
     val centred by remember(range) { derivedStateOf {
         val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
         val index = info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - middle) }?.index ?: (value - range.first)
-        range.first + index.coerceIn(0, last)
+        range.first + index.coerceIn(0, range.last - range.first)
     } }
     val onValueNow by rememberUpdatedState(onValue)
     val valueNow by rememberUpdatedState(value)
@@ -205,7 +195,7 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
     }
     BoxWithConstraints(Modifier.fillMaxWidth().height(76.dp).semantics {
         contentDescription = label; stateDescription = format(value)
-        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (last - 1).coerceAtLeast(0))
+        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
         setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
     }.pointerInput(Unit) {
         awaitEachGesture {
