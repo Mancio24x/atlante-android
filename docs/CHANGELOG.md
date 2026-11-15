@@ -17,7 +17,8 @@ funzionamento. Aggiungere una voce a ogni rilascio, in cima.
   farli uscire dal bordo. **Obiettivi**: un obiettivo salvato oltre la fine della rotella (600 pagine al giorno, 50
   libri al mese) resta sulla rotella invece di essere mostrato come il massimo (`goalRange`).
 - **CrossPoint**: uno scaricamento interrotto non lascia un file troncato (sarebbe stato importato come intero); un
-  nome di file con ritorni a capo non può aggiungere intestazioni all’invio (`CrossPointClient.safeName`).
+  nome di file con ritorni a capo non può aggiungere intestazioni all’invio (`CrossPointClient.safeName`); un nome
+  mandato dal lettore con «../» non esce più dalla cartella degli scaricamenti (`localName`: poteva sovrascrivere la libreria).
 
 ## 2026-11-14
 
