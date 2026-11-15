@@ -6,7 +6,8 @@ import java.io.IOException
 /**
  * "Invia a CrossPoint" from a book's actions: sends the book's own file to the reader in one tap, to the same root
  * folder the CrossPoint page opens on. It uses the address saved by the CrossPoint page; if that does not answer
- * (the reader changed address, or is on its own Wi-Fi), it looks for the reader on the Wi-Fi once.
+ * (the reader changed address, or is on its own Wi-Fi), it looks for the reader on the Wi-Fi once: by its "hello"
+ * answer first, then by the name it shows on its screen (crosspoint.local).
  */
 object CrossPointSend {
     /** File name on the reader: the book's title (characters the SD card refuses taken out) and the file's extension. */
@@ -30,5 +31,6 @@ object CrossPointSend {
             if (runCatching { CrossPointClient(saved, binder = binder).status() }.isSuccess) return saved
         }
         return runCatching { CrossPointClient.discover(binder = binder) }.getOrDefault(emptyList()).firstOrNull()?.host
+            ?: runCatching { CrossPointClient.resolveLocal(CrossPointClient.READER_NAME, binder = binder) }.getOrNull()
     }
 }

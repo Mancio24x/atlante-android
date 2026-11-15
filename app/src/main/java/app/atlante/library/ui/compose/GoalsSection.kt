@@ -47,6 +47,9 @@ object GoalsView {
 
 private fun monthName(m: YearMonth) = m.month.getDisplayName(TextStyle.FULL, app.atlante.library.ui.L.locale())
 
+/** The wheel's range for a goal: its usual one, longer when the saved goal is above its end (600 pages a day stay 600, not 500). */
+fun goalRange(usual: IntRange, saved: Int): IntRange = usual.first..maxOf(usual.last, saved)
+
 /** One goal as the section shows it: where its switch and number are kept, and how far you are today. */
 private class GoalSpec(val title: String, val kicker: String, val range: IntRange, val unit: String, val doneLabel: String,
                        val isOn: () -> Boolean, val setOn: (Boolean) -> Unit, val get: () -> Int, val set: (Int) -> Unit, val done: Long,
@@ -84,7 +87,8 @@ fun GoalsSection(goals: ReadingGoals, books: List<Book>) {
 private fun WheelGoal(spec: GoalSpec, today: LocalDate) {
     val scheme = MaterialTheme.colorScheme
     var on by remember { mutableStateOf(spec.isOn()) }
-    var current by remember { mutableIntStateOf(spec.get().coerceIn(spec.range)) }
+    val range = remember { goalRange(spec.range, spec.get()) }
+    var current by remember { mutableIntStateOf(spec.get().coerceIn(range)) }
     val percent = (spec.done * 100 / current.coerceAtLeast(1)).toInt(); val reached = spec.done >= current
     val share by animateFloatAsState((percent / 100f).coerceIn(0f, 1f), tween(450), label = "goal")
     val outline by animateColorAsState(if (on) scheme.primary else scheme.outlineVariant, label = "outline")
@@ -108,7 +112,7 @@ private fun WheelGoal(spec: GoalSpec, today: LocalDate) {
             }
             Spacer(Modifier.height(6.dp))
             Box(Modifier.alpha(dim)) {
-                HorizontalWheel(current, spec.range, true, spec.title, { "$it" }) { v ->
+                HorizontalWheel(current, range, true, spec.title, { "$it" }) { v ->
                     current = v; spec.set(v)
                     if (!on) { on = true; spec.setOn(true) }            // choosing a number means you want the goal
                 }

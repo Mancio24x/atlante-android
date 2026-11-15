@@ -56,15 +56,15 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
 
     /** Downloads a file of the reader into [dest]. */
     fun download(path: String, dest: File, progress: Progress? = null) {
-        open("GET", "/download?path=" + enc(path), null, 0) { out -> } .use { r ->
-            FileOutputStream(dest).use { out -> r.body(out, progress) }
-        }
+        // A transfer cut half-way leaves no file behind: a truncated EPUB would be imported as if it were whole.
+        try { open("GET", "/download?path=" + enc(path), null, 0) { }.use { r -> FileOutputStream(dest).use { out -> r.body(out, progress) } } }
+        catch (e: Exception) { dest.delete(); throw e }
     }
 
     /** Sends [file] to [folder] on the reader, under [name] (the server overwrites a file with the same name). */
     fun upload(folder: String, file: File, name: String = file.name, progress: Progress? = null) {
         val boundary = "AtlanteBoundary" + System.nanoTime()
-        val head = ("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + name.replace("\"", "'") + "\"\r\n" +
+        val head = ("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + safeName(name) + "\"\r\n" +
             "Content-Type: application/octet-stream\r\n\r\n").toByteArray(Charsets.UTF_8)
         val tail = "\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8)
         val total = head.size + file.length() + tail.size
@@ -99,7 +99,7 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
             if (r.code !in 200..299) { val msg = text(ByteArrayOutputStream().also { r.body(it, null) }.toByteArray()); r.close(); throw IOException(msg.ifBlank { "CrossPoint ha risposto ${r.code}" }) }
             return r
         } catch (e: SocketTimeoutException) { socket.close(); throw IOException("CrossPoint non risponde: è acceso, con il trasferimento file aperto?") }
-        catch (e: IOException) { socket.close(); throw e }
+        catch (e: Exception) { socket.close(); throw e }
     }
 
     private class Response(private val socket: Socket, private val input: InputStream) : AutoCloseable {
@@ -137,6 +137,9 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
         /** The reader's own Wi-Fi (open, no internet) and its address there (firmware: softAP defaults). */
         const val READER_WIFI = "CrossPoint-Reader"
         const val READER_ADDRESS = "192.168.4.1"
+
+        /** A file name for a multipart header: no quotes and no control characters (a line break would start a new header). */
+        @JvmStatic fun safeName(name: String) = name.replace("\"", "'").filter { it >= ' ' && it != '\u007f' }.trim().ifEmpty { "file" }
 
         private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
         private fun text(b: ByteArray) = String(b, Charsets.UTF_8)

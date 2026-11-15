@@ -4,6 +4,21 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 (non ogni commit corrisponde a una release). Il dettaglio è in `git log`; qui le modifiche che cambiano il
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
+## 2026-11-15
+
+- **Un solo ramo con il lavoro delle ultime notti**: obiettivi come i temi, rotelle e `crosspoint.local` (14 novembre),
+  menu laterale e «Invia a CrossPoint» (13 novembre) erano su rami separati mai uniti a `main`; ora stanno insieme.
+- **Menu laterale**: si chiude trascinandolo verso il bordo (oltre un terzo, o con un colpo veloce), esce scorrendo
+  mentre lo sfondo sfuma; le pagine entrano con il movimento «emphasized» di Material 3 (`ui/SwipeCloseLayout.kt`).
+- **Invia a CrossPoint** dal menu ⋮ di un libro con un file: lo manda al lettore con l’avanzamento
+  (`crosspoint/CrossPointSend.kt`); se l’indirizzo ricordato non risponde cerca il lettore sul Wi-Fi, poi per nome
+  (`crosspoint.local`).
+- **Rotelle**: la casella centrale si allarga per i numeri lunghi («+2000», caratteri grandi del telefono) invece di
+  farli uscire dal bordo. **Obiettivi**: un obiettivo salvato oltre la fine della rotella (600 pagine al giorno, 50
+  libri al mese) resta sulla rotella invece di essere mostrato come il massimo (`goalRange`).
+- **CrossPoint**: uno scaricamento interrotto non lascia un file troncato (sarebbe stato importato come intero); un
+  nome di file con ritorni a capo non può aggiungere intestazioni all’invio (`CrossPointClient.safeName`).
+
 ## 2026-11-14
 
 - **Obiettivi di lettura come i temi**: ogni obiettivo è una carta arrotondata come le tessere dei temi (bordo

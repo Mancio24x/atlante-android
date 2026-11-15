@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
@@ -160,7 +161,9 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
-    val itemWidth = 56.dp
+    // Wide enough for the longest number at its enlarged size and the phone's font size ("+2000" went over the centre box).
+    val chars = maxOf(format(range.first).length, format(range.last).length)
+    val itemWidth = maxOf(56f, (20 + 12 * chars) * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)).dp
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
@@ -210,7 +213,7 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
             }
         }
     }, contentAlignment = Alignment.Center) {
-        val side = (maxWidth - itemWidth) / 2
+        val side = ((maxWidth - itemWidth) / 2).coerceAtLeast(0.dp)
         Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(16.dp), color = scheme.primary.copy(alpha = 0.12f),
             border = BorderStroke(2.dp, scheme.primary)) {}
         val quiet = remember { MutableInteractionSource() }

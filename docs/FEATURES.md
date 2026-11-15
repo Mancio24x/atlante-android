@@ -48,3 +48,5 @@ casa (ricerca, indirizzo IP o il nome `crosspoint.local` che il lettore mostra, 
 `GET /download?path=`, `POST /upload?path=` (multipart), `POST /mkdir`, `/rename`, `/move`, `/delete`; scoperta con
 «hello» in UDP sulla porta 8134 (risposta `crosspoint (on <nome>);81`). Codice: `crosspoint/CrossPointClient.kt`,
 `ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`.
+«Invia a CrossPoint» nel menu ⋮ di un libro con un file (`crosspoint/CrossPointSend.kt`, `MainActivity.sendToCrossPoint`):
+indirizzo ricordato, poi ricerca «hello», poi `crosspoint.local`. Uno scaricamento interrotto cancella il file parziale.

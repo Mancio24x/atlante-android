@@ -104,4 +104,14 @@ class CrossPointClientTest {
         assertEquals("abc123.epub", app.atlante.library.crosspoint.CrossPointSend.fileName("  ", f))
         assertEquals("A B.txt", app.atlante.library.crosspoint.CrossPointSend.fileName("A/B", File("x.txt")))
     }
+
+    @Test fun aCutDownloadLeavesNoFileAndNamesCannotAddHeaders() {
+        Fake { _, _ -> "HTTP/1.1 200 OK\r\nContent-Length: 5000\r\n\r\nonly the beginning".toByteArray() }.use { f ->
+            val copy = File.createTempFile("tronco", ".epub")
+            assertThrows(IOException::class.java) { CrossPointClient("127.0.0.1", f.server.localPort, false).download("/Books/Dune.epub", copy) }
+            assertFalse(copy.exists())
+        }
+        assertEquals("Dune'1'X-Evil: 1.epub", CrossPointClient.safeName("Dune\"1\"\r\nX-Evil: 1.epub"))
+        assertEquals("file", CrossPointClient.safeName("\r\n"))
+    }
 }
