@@ -49,6 +49,12 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
             .sortedWith(compareBy<Entry>({ !it.isDirectory }, { it.name.lowercase() }))
     }
 
+    /** Uploads [file] as [name] into [folder] unless a file with that name is already there; true when sent. */
+    @JvmOverloads fun sendOnce(folder: String, file: File, name: String, progress: Progress? = null): Boolean {
+        if (list(folder).any { !it.isDirectory && it.name.equals(name, ignoreCase = true) }) return false
+        upload(folder, file, name, progress); return true
+    }
+
     fun mkdir(parent: String, name: String) { form("/mkdir", "name" to name, "path" to parent) }
     fun rename(path: String, name: String) { form("/rename", "path" to path, "name" to name) }
     fun move(path: String, destFolder: String) { form("/move", "path" to path, "dest" to destFolder) }
@@ -142,6 +148,14 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
         private fun text(b: ByteArray) = String(b, Charsets.UTF_8)
 
         /** A private IPv4 address of the home network (no names: they could resolve outside it). */
+        /** File name on the reader: "Title - Author.epub", without the characters FAT file systems refuse. */
+        @JvmStatic fun fileName(title: String, author: String, format: String): String {
+            fun clean(s: String) = s.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), " ").replace(Regex("\\s+"), " ").trim()
+            val t = clean(title).ifEmpty { "Libro" }; val a = clean(author).takeUnless { it.isEmpty() || it == "Autore sconosciuto" }
+            val stem = (if (a != null) "$t - $a" else t).take(120).trimEnd('.', ' ')
+            return stem + "." + format.lowercase(java.util.Locale.ROOT)
+        }
+
         @JvmStatic fun isLocal(host: String): Boolean {
             val p = host.trim().split('.'); if (p.size != 4) return false
             val n = p.map { it.toIntOrNull() ?: return false }; if (n.any { it !in 0..255 }) return false

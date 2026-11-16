@@ -3601,6 +3601,7 @@ public final class MainActivity extends AppCompatActivity {
         listRow(list, R.drawable.ic_library, "Collezioni", "Le tue liste", () -> { sheet.dismiss(); editCollections(b); });
         listRow(list, R.drawable.ic_book, "Inizia una rilettura", "Le letture precedenti restano", () -> { sheet.dismiss(); reread(b); });
         if (!b.format.equals("CATALOGO")) listRow(list, R.drawable.ic_open_in_new, "Apri con KOReader", "Il file in un altro lettore", () -> { sheet.dismiss(); openKoreader(b); });
+        if (!b.format.equals("CATALOGO") && store.original(b).isFile()) listRow(list, R.drawable.ic_upload, "Invia a CrossPoint", "Il file sul lettore e-ink, nella rete di casa", () -> { sheet.dismiss(); sendToCrossPoint(b); });
         ScrollView scroll = new ScrollView(this); scroll.addView(p); scroll.setBackgroundColor(WHITE);
         sheet.setContentView(scroll); sheet.show();
     }
@@ -3621,6 +3622,23 @@ public final class MainActivity extends AppCompatActivity {
         if(names.isEmpty()) { collections(); return; }
         String[] labels=names.toArray(new String[0]); boolean[] checked=new boolean[labels.length]; for(int i=0;i<labels.length;i++) checked[i]=ReadingJournal.inCollection(b,labels[i]);
         dialogBuilder().setTitle("Collezioni del libro").setMultiChoiceItems(labels,checked,(d,w,on)->checked[w]=on).setNegativeButton("Annulla",null).setNeutralButton("Nuova",(d,w)->collections()).setPositiveButton("Salva",(d,w)->journalEdit(b,c->{org.json.JSONArray a=new org.json.JSONArray(); for(int i=0;i<labels.length;i++) if(checked[i]) a.put(labels[i]); ReadingJournal.put(c,"collections",a);})).show();
+    }
+    /** Sends the book's file to the CrossPoint reader saved on the CrossPoint page; without one, opens that page. */
+    private void sendToCrossPoint(Book b) {
+        String host = getPreferences(MODE_PRIVATE).getString("crosspointHost", "");
+        if (host.isEmpty()) { app.atlante.library.ui.L.toast(this, "Collega prima il lettore CrossPoint", Toast.LENGTH_LONG).show(); navigate("CrossPoint"); return; }
+        File file = store.original(b); String name = app.atlante.library.crosspoint.CrossPointClient.fileName(b.title, b.author, b.format);
+        app.atlante.library.ui.L.toast(this, "Invio a CrossPoint…", Toast.LENGTH_SHORT).show();
+        worker.execute(() -> {
+            try {
+                boolean sent = new app.atlante.library.crosspoint.CrossPointClient(host, 80, true, app.atlante.library.crosspoint.CrossPointWifi.binder(this)).sendOnce("/", file, name);
+                runOnUiThread(() -> app.atlante.library.ui.L.toast(this, sent ? "Inviato a CrossPoint" : "È già sul lettore", Toast.LENGTH_SHORT).show());
+            } catch (Exception e) {
+                runOnUiThread(() -> dialogBuilder().setTitle("Lettore non raggiungibile")
+                    .setMessage("Accendi CrossPoint e apri il trasferimento file, poi riprova. Se usa la sua rete Wi-Fi, collegati dalla pagina CrossPoint.")
+                    .setNegativeButton("Annulla", null).setPositiveButton("Apri CrossPoint", (d, w) -> navigate("CrossPoint")).show());
+            }
+        });
     }
     private void openKoreader(Book b) {
         if(!store.original(b).isFile()) {error(new IOException("Questo libro non ha un file locale. Importa prima un ebook."));return;}

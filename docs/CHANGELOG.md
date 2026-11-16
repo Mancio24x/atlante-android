@@ -4,6 +4,18 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 (non ogni commit corrisponde a una release). Il dettaglio è in `git log`; qui le modifiche che cambiano il
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
+## 2026-11-16
+- **Obiettivi di lettura come i temi**: ogni obiettivo è una scheda come quelle di Aspetto (nome in serif, bordo
+  nell’accento quando è attivo, superficie del tema) con un anello del progresso; l’interruttore apre e chiude la
+  rotella con un’animazione, senza ridisegnare tutta la pagina. L’obiettivo si salva quando la rotella si ferma (prima
+  ogni numero passato riscriveva le preferenze e lo storico del mese).
+- **Rotella orizzontale** (obiettivi e avanzamento): la pagina che scorre in verticale non le ruba più un trascinamento
+  laterale (si fermava a metà tra due numeri); un trascinamento verticale torna alla pagina. Un solo carattere per
+  tutti i numeri (il centrale passava al serif e cambiava larghezza), ingrandimento e dissolvenza continui mentre gira,
+  celle larghe quanto il numero più lungo, tocco su un numero vicino con scorrimento animato.
+- **Invia a CrossPoint** dalla scheda del libro (⋮): il file va al lettore ricordato, saltato se c’è già
+  (`CrossPointClientTest`).
+
 ## 2026-11-09
 - **Saghe, Mappa, Universi come nei design 7a–7d**: la pagina di una saga ha «Saga · Pubblicazione» (per numero o per anno), una linea che unisce i volumi (accento tra due letti), il volume in lettura cerchiato in rame, l’universo nell’intestazione («SAGA · TERRA DI MEZZO») e in fondo «Stesso universo» con le altre saghe di quel mondo. Universi mostra le opere singole dello stesso mondo e i volumi in lettura in rame; l’anello e «letti» non superano più i libri che hai quando il grafo delle saghe conosce meno volumi (prima «200%», «2/0 letti»). Menu laterale: Universi con il numero, Collezioni / Cerca / CrossPoint / Backup / Impostazioni con le icone. «Il tuo ordine» del design non c’è: servirebbe un ordine manuale dei volumi. `HomeShot` disegna anche saga e universo d’esempio.
 - **«Annulla» di Ripara duplicati non lascia più la barra a girare**: annullare una riparazione che in quel momento non era in esecuzione (in attesa del suo turno, o fermata da Android e in pausa) fermava il lavoro ma nessuno aggiornava il suo record, che restava «In corso» / «In attesa» per sempre con la barra in movimento. Ora «Annulla» scrive subito «Annullata»; un lavoro fermato non riscrive più «In corso»; e i record di riparazioni che WorkManager non ha più (app chiusa, lavoro finito altrove) vengono chiusi quando compare la barra. `RepairCancelTest`.

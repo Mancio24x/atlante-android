@@ -65,4 +65,24 @@ class CrossPointClientTest {
             assertTrue(String(f.requests.last().second).contains("name=Dune+1.epub"))
         }
     }
+
+    @Test fun bookFileNameIsSafeForTheReader() {
+        assertEquals("Dune - Frank Herbert.epub", CrossPointClient.fileName("Dune", "Frank Herbert", "EPUB"))
+        assertEquals("1984 Parte 1 - Orwell.txt", CrossPointClient.fileName("1984: Parte/1", "Orwell", "TXT"))
+        assertEquals("Libro.epub", CrossPointClient.fileName("  ", "Autore sconosciuto", "EPUB"))
+    }
+
+    @Test fun sendOnceSkipsAFileAlreadyOnTheReader() {
+        val book = File.createTempFile("libro", ".epub").apply { writeBytes(ByteArray(100) { 1 }) }
+        Fake { line, _ -> when {
+            line.startsWith("GET /api/files") -> ok("""[{"name":"dune - frank herbert.epub","size":100,"isDirectory":false,"isEpub":true}]""")
+            else -> ok("File uploaded successfully")
+        } }.use { f ->
+            val c = CrossPointClient("127.0.0.1", f.server.localPort, false)
+            assertFalse(c.sendOnce("/", book, "Dune - Frank Herbert.epub"))
+            assertTrue(f.requests.none { it.first.startsWith("POST /upload") })
+            assertTrue(c.sendOnce("/", book, "Il nome della rosa - Umberto Eco.epub"))
+            assertTrue(f.requests.any { it.first.startsWith("POST /upload?path=%2F") })
+        }
+    }
 }

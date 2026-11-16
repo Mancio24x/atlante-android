@@ -19,6 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -140,56 +147,92 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
 
 /**
  * Horizontal number wheel: flings and snaps to the value under the centre mark, which is larger and coloured;
- * the others fade with the distance. A light tick (optional) for every value passed.
+ * the others shrink and fade with the distance, continuously while it turns. A light tick (optional) for every
+ * value passed. Inside a page that scrolls vertically (a View ScrollView) the wheel keeps a sideways drag for
+ * itself, otherwise the page would steal it half way and the wheel would stop between two numbers; a drag that is
+ * mostly vertical is handed back to the page.
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
-    val itemWidth = 56.dp
-    val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
+    val widest = maxOf(format(range.first).length, format(range.last).length)
+    val itemWidth = maxOf(56, 18 + widest * 12).dp
+    val count = range.last - range.first + 1
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, count - 1))
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
+    val density = LocalDensity.current
+    val itemPx = with(density) { itemWidth.toPx() }
     // Value under the centre mark: the visible item whose middle is closest to the middle of the wheel.
     val centred by remember(range) { derivedStateOf {
         val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
         val index = info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - middle) }?.index ?: (value - range.first)
-        range.first + index.coerceIn(0, range.last - range.first)
+        range.first + index.coerceIn(0, count - 1)
     } }
     val onValueNow by rememberUpdatedState(onValue)
     val valueNow by rememberUpdatedState(value)
     var userScroll by remember { mutableStateOf(false) }
+    var gliding by remember { mutableStateOf(false) }     // moved by the code (a tap): no values reported on the way
     LaunchedEffect(list, range, haptics) {
         snapshotFlow { Triple(list.isScrollInProgress, centred, list.layoutInfo.visibleItemsInfo.isNotEmpty()) }
             .distinctUntilChanged().collect { (scrolling, centre, ready) ->
-                if(scrolling) userScroll=true
-                if(ready && userScroll && centre!=valueNow) {
+                if (scrolling && !gliding) userScroll = true
+                if (ready && userScroll && centre != valueNow) {
                     onValueNow(centre)
-                    if(haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 }
-                if(!scrolling) userScroll=false
+                if (!scrolling) userScroll = false
             }
     }
     LaunchedEffect(value, range) {
-        if (!list.isScrollInProgress && !userScroll && centred != value)
-            list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
+        if (!list.isScrollInProgress && !userScroll && centred != value) {
+            val target = (value - range.first).coerceIn(0, count - 1)
+            // A near value (a tap on a number) glides there; a far one (typed) jumps.
+            if (abs(target - (centred - range.first)) <= 8) { gliding = true; try { list.animateScrollToItem(target) } finally { gliding = false } }
+            else list.scrollToItem(target)
+        }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
-        contentDescription = label; stateDescription = format(value)
-        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
-        setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
-    }, contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp)
+        .pointerInput(Unit) {
+            // Before the LazyRow sees the gesture: keep the parent View from intercepting a sideways drag.
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                view.parent?.requestDisallowInterceptTouchEvent(true)
+                var dx = 0f; var dy = 0f
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) break
+                    dx += change.position.x - change.previousPosition.x; dy += change.position.y - change.previousPosition.y
+                    if (abs(dy) > viewConfiguration.touchSlop && abs(dy) > abs(dx) * 1.5f) { view.parent?.requestDisallowInterceptTouchEvent(false); break }
+                    if (abs(dx) > viewConfiguration.touchSlop) break
+                }
+            }
+        }
+        .semantics {
+            contentDescription = label; stateDescription = format(value)
+            progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (count - 2).coerceAtLeast(0))
+            setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
+        }, contentAlignment = Alignment.Center) {
         val side = (maxWidth - itemWidth) / 2
         Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer,
             border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)) {}
         LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side), modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically) {
-            items(range.last - range.first + 1) { i ->
+            items(count, key = { it }) { i ->
                 val v = range.first + i
-                val distance = abs(v - centred)
-                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
-                Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
-                        style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                        fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                val selected = v == centred
+                Box(Modifier.width(itemWidth).fillMaxHeight().clickable(onClickLabel = format(v)) { onValue(v) }, contentAlignment = Alignment.Center) {
+                    Text(format(v), Modifier.graphicsLayer {
+                            // Distance from the centre in items, read while drawing: smooth while turning, no recomposition.
+                            val info = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == i }
+                            val middle = (list.layoutInfo.viewportStartOffset + list.layoutInfo.viewportEndOffset) / 2f
+                            val d = if (info == null) 3f else (abs(info.offset + info.size / 2f - middle) / itemPx).coerceAtMost(3f)
+                            val s = 1.25f - 0.12f * d.coerceAtMost(1f) - 0.04f * (d - 1f).coerceIn(0f, 2f)
+                            scaleX = s; scaleY = s; alpha = (1f - 0.28f * d).coerceIn(0.2f, 1f)
+                        },
+                        style = MaterialTheme.typography.titleMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, softWrap = false)
                 }
             }
         }
