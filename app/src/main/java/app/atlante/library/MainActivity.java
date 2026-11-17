@@ -3312,8 +3312,9 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void animateIn(View view) {
         if (android.os.Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()) return;
-        view.setAlpha(0); view.setTranslationY(dp(10));
-        view.animate().alpha(1).translationY(0).setDuration(200).start();
+        view.animate().cancel(); view.setAlpha(0); view.setTranslationY(dp(12));
+        // Decelerating: the page arrives quickly and settles softly, like the Material page transitions.
+        view.animate().alpha(1).translationY(0).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
     }
     private void navigate(String next) {
         app.atlante.library.diagnostics.CrashLog.step("pagina: " + next);
@@ -3372,7 +3373,7 @@ public final class MainActivity extends AppCompatActivity {
         top.addView(destination.equals("Scopri")?pageHeading("SCOPRI","La prossima storia."):destination.equals("Sync")?pageHeading("SYNC","Invia e ricevi."):destination.equals("CrossPoint")?pageHeading("CROSSPOINT","Il tuo lettore e-ink"):pageHeading("","Statistiche"),new LinearLayout.LayoutParams(0,-2,1));
         top.addView(iconButton(R.drawable.ic_settings,"Impostazioni",this::settings));
         root.addView(content,new LinearLayout.LayoutParams(-1,0,1));
-        addBottomNav(); updateBack();
+        addBottomNav(); updateBack(); animateIn(content);
     }
 
     private void showCompanion() {
@@ -3386,7 +3387,7 @@ public final class MainActivity extends AppCompatActivity {
             composePage(app.atlante.library.ui.compose.DiscoverView.create(this,palette,sagaHost,this::openLink,this::collections));
             return;
         }
-        if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("IMPOSTAZIONI",settingsSection.isEmpty()?"Impostazioni":settingsTitle(settingsSection)); settingsPage(p); updateBack(); return; }
+        if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("IMPOSTAZIONI",settingsSection.isEmpty()?"Impostazioni":settingsTitle(settingsSection)); settingsPage(p); updateBack(); animateIn(p); return; }
         if(destination.equals("Sync")) { composePage(syncView()); return; }
         if(destination.equals("CrossPoint")) { composePage(crossPointView()); return; }
         String day=java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM",app.atlante.library.ui.L.locale())).toUpperCase(app.atlante.library.ui.L.locale());
@@ -3601,8 +3602,33 @@ public final class MainActivity extends AppCompatActivity {
         listRow(list, R.drawable.ic_library, "Collezioni", "Le tue liste", () -> { sheet.dismiss(); editCollections(b); });
         listRow(list, R.drawable.ic_book, "Inizia una rilettura", "Le letture precedenti restano", () -> { sheet.dismiss(); reread(b); });
         if (!b.format.equals("CATALOGO")) listRow(list, R.drawable.ic_open_in_new, "Apri con KOReader", "Il file in un altro lettore", () -> { sheet.dismiss(); openKoreader(b); });
+        if (!b.format.equals("CATALOGO") && store.original(b).isFile()) listRow(list, R.drawable.ic_upload, "Invia a CrossPoint", "Il file sul lettore e-ink, nella rete di casa", () -> { sheet.dismiss(); sendToCrossPoint(b); });
         ScrollView scroll = new ScrollView(this); scroll.addView(p); scroll.setBackgroundColor(WHITE);
         sheet.setContentView(scroll); sheet.show();
+    }
+    /** One book to the CrossPoint reader (crosspoint/CrossPointSend.kt): saved address or discovery, else the CrossPoint page. */
+    private void sendToCrossPoint(Book b) {
+        File file = store.original(b);
+        if (!file.isFile()) { error(new IOException("Questo libro non ha un file sul telefono. Importa prima un ebook.")); return; }
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        String saved = prefs.getString("crosspointHost", "");
+        app.atlante.library.crosspoint.CrossPointClient.Binder binder = app.atlante.library.crosspoint.CrossPointWifi.binder(this);
+        LinearLayout box = row(); box.setPadding(dp(24), dp(16), dp(24), dp(16));
+        CircularProgressIndicator spinner = new CircularProgressIndicator(this); spinner.setIndeterminate(true); box.addView(spinner);
+        TextView label = text(app.atlante.library.ui.L.t("Cerco il lettore…"), 15, INK, false); label.setPadding(dp(16), 0, 0, 0); box.addView(label);
+        AlertDialog wait = dialogBuilder().setTitle("Invia a CrossPoint").setView(box).setCancelable(false).create(); wait.show();
+        new Thread(() -> {
+            String host = app.atlante.library.crosspoint.CrossPointSend.reach(saved, binder);
+            if (host == null) { runOnUiThread(() -> { wait.dismiss(); if (isFinishing() || isDestroyed()) return;
+                dialogBuilder().setTitle("Lettore non trovato").setMessage("Apri sul CrossPoint la schermata di trasferimento file, sulla stessa rete Wi-Fi del telefono (o collegati al Wi-Fi «CrossPoint-Reader»).")
+                    .setNegativeButton("Chiudi", null).setPositiveButton("Apri CrossPoint", (d, w) -> navigate("CrossPoint")).show(); }); return; }
+            prefs.edit().putString("crosspointHost", host).apply();
+            try {
+                app.atlante.library.crosspoint.CrossPointSend.send(host, file, b.title, binder, percent -> { runOnUiThread(() -> {
+                    label.setText(app.atlante.library.ui.L.t("Invio") + " " + percent + "%"); }); return kotlin.Unit.INSTANCE; });
+                runOnUiThread(() -> { wait.dismiss(); if (isFinishing() || isDestroyed()) return; app.atlante.library.ui.L.toast(this, "«" + b.title + "» inviato a CrossPoint", Toast.LENGTH_SHORT).show(); });
+            } catch (Exception e) { runOnUiThread(() -> { wait.dismiss(); error(e); }); }
+        }).start();
     }
     private void reread(Book b) {
         if(b.id.equals(timerBook)) { dialogBuilder().setTitle("Sessione in corso").setMessage("Concludi o scarta la sessione prima di iniziare una rilettura.").setPositiveButton("Apri sessione",(dd,ww)->timerScreen(b)).setNegativeButton("Annulla",null).show(); return; }

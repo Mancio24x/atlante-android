@@ -47,3 +47,5 @@ casa (ricerca o indirizzo IP). API del firmware: `GET /api/status`, `GET /api/fi
 `GET /download?path=`, `POST /upload?path=` (multipart), `POST /mkdir`, `/rename`, `/move`, `/delete`; scoperta con
 «hello» in UDP sulla porta 8134 (risposta `crosspoint (on <nome>);81`). Codice: `crosspoint/CrossPointClient.kt`,
 `ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`.
+Un solo libro si invia anche dalla sua scheda (⋮ › «Invia a CrossPoint», `crosspoint/CrossPointSend.kt`): indirizzo
+ricordato se risponde, altrimenti la ricerca; il file va nella radice della scheda con il titolo come nome.
