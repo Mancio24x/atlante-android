@@ -28,6 +28,20 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.atlante.library.ui.ThemePalette
 import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -140,13 +154,19 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
 
 /**
  * Horizontal number wheel: flings and snaps to the value under the centre mark, which is larger and coloured;
- * the others fade with the distance. A light tick (optional) for every value passed.
+ * the others fade with the distance and towards the edges. A light tick (optional) for every value passed.
+ * The cells are as wide as the longest number (1440, +250), so no number spills over its neighbours or the mark;
+ * a sideways drag keeps the gesture even inside a vertically scrolling page (the page no longer steals it
+ * after a slight vertical slip), while a clearly vertical drag still scrolls the page.
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
-    val itemWidth = 56.dp
+    val longest = maxOf(format(range.first).length, format(range.last).length, format(value).length)
+    val itemWidth = (22 + 13 * longest).coerceIn(56, 92).dp
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
     val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
     // Value under the centre mark: the visible item whose middle is closest to the middle of the wheel.
     val centred by remember(range) { derivedStateOf {
         val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
@@ -171,27 +191,61 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
         if (!list.isScrollInProgress && !userScroll && centred != value)
             list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
+    val scheme = MaterialTheme.colorScheme
+    BoxWithConstraints(Modifier.fillMaxWidth().height(76.dp).keepSidewaysDrag(view).semantics {
         contentDescription = label; stateDescription = format(value)
         progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
         setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
     }, contentAlignment = Alignment.Center) {
-        val side = (maxWidth - itemWidth) / 2
-        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer,
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)) {}
-        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side), modifier = Modifier.fillMaxSize(),
+        val side = ((maxWidth - itemWidth) / 2).coerceAtLeast(0.dp)
+        // The centre mark: a rounded window in the theme's container colour, with the accent outline.
+        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(16.dp), color = scheme.primaryContainer,
+            border = BorderStroke(2.dp, scheme.primary)) {}
+        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side),
+            modifier = Modifier.fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()   // the numbers fade out towards both edges, like a real wheel
+                    drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.22f to Color.Black, 0.78f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                },
             verticalAlignment = Alignment.CenterVertically) {
-            items(range.last - range.first + 1) { i ->
+            items(range.last - range.first + 1, key = { it }) { i ->
                 val v = range.first + i
                 val distance = abs(v - centred)
-                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
-                Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
-                        style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                        fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.72f; 2 -> 0.48f; else -> 0.3f }, label = "alpha")
+                val grow by animateFloatAsState(if (distance == 0) 1f else 0.8f, label = "size")
+                Column(Modifier.width(itemWidth).fillMaxHeight().clickable { scope.launch { list.animateScrollToItem(i) }; onValue(v) },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text(format(v), Modifier.graphicsLayer { this.alpha = alpha; scaleX = grow; scaleY = grow },
+                        style = MaterialTheme.typography.titleLarge, fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
+                        color = if (distance == 0) scheme.onPrimaryContainer else scheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+                    Box(Modifier.padding(top = 4.dp).size(width = 2.dp, height = if (distance == 0) 8.dp else 4.dp)
+                        .background(if (distance == 0) scheme.primary else scheme.outline.copy(alpha = alpha * 0.6f), RoundedCornerShape(1.dp)))
                 }
             }
         }
     }
 }
+
+/**
+ * A drag that starts sideways stays with this element: the vertically scrolling View page around it (ScrollView,
+ * bottom sheet) is asked not to take the gesture; once the drag is clearly vertical the page gets it back.
+ * Nothing is consumed: the wheel's own scrolling works as before.
+ */
+fun Modifier.keepSidewaysDrag(view: View): Modifier =
+    pointerInput(view) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            view.parent?.requestDisallowInterceptTouchEvent(true)
+            var moved = Offset.Zero
+            while (true) {
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                moved += change.position - change.previousPosition
+                if (moved.getDistance() > viewConfiguration.touchSlop) {
+                    if (abs(moved.y) > abs(moved.x) * 1.2f) view.parent?.requestDisallowInterceptTouchEvent(false)
+                    break
+                }
+            }
+        }
+    }

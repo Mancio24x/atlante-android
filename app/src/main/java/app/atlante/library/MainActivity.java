@@ -199,11 +199,11 @@ public final class MainActivity extends AppCompatActivity {
 
     private void openDrawer() {
         if (drawer != null) { closeDrawer(); return; }
-        drawer = new FrameLayout(this); FrameLayout overlay = drawer;
-        View scrim = new View(this); scrim.setBackgroundColor(0x99000000);
-        overlay.addView(scrim, new FrameLayout.LayoutParams(-1,-1)); scrim.setOnClickListener(v -> closeDrawer());
         int width = Math.min(dp(320), Math.round(getResources().getDisplayMetrics().widthPixels * .86f));
+        View scrim = new View(this); scrim.setBackgroundColor(0x99000000);
         ScrollView scroll = new ScrollView(this);
+        drawer = new DrawerFrame(this, scroll, scrim, width); FrameLayout overlay = drawer;
+        overlay.addView(scrim, new FrameLayout.LayoutParams(-1,-1)); scrim.setOnClickListener(v -> closeDrawer());
         GradientDrawable sheet = new GradientDrawable(); sheet.setColor(WHITE);
         sheet.setCornerRadii(new float[]{0, 0, dp(28), dp(28), dp(28), dp(28), 0, 0}); scroll.setBackground(sheet); scroll.setClipToOutline(true);
         overlay.addView(scroll, new FrameLayout.LayoutParams(width, -1, Gravity.START));
@@ -231,8 +231,43 @@ public final class MainActivity extends AppCompatActivity {
         menu.addView(drawerTool(R.drawable.ic_settings, "Impostazioni", false, () -> { closeDrawer(); settings(); }));
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         screen.addView(overlay,new FrameLayout.LayoutParams(-1,-1)); close.requestFocus();
-        scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(220).start();
+        scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(260).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start();
+        scrim.setAlpha(0); scrim.animate().alpha(1).setDuration(220).start();
         updateBack();
+    }
+    /**
+     * The drawer's overlay: a drag to the left (on the menu or on the dimmed page) moves the menu with the finger;
+     * let go past a third of its width, or with a quick flick, and it closes, otherwise it slides back.
+     * Vertical drags still scroll the menu.
+     */
+    private final class DrawerFrame extends FrameLayout {
+        private final View sheet, scrim; private final int width; private final int slop;
+        private float downX, downY, lastX; private long lastTime; private float speed; private boolean dragging; boolean leaving;
+        DrawerFrame(Context c, View sheet, View scrim, int width) { super(c); this.sheet = sheet; this.scrim = scrim; this.width = width; slop = android.view.ViewConfiguration.get(c).getScaledTouchSlop(); }
+        @Override public boolean dispatchTouchEvent(android.view.MotionEvent e) { return leaving || super.dispatchTouchEvent(e); }
+        @Override public boolean onInterceptTouchEvent(android.view.MotionEvent e) {
+            if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) { downX = lastX = e.getX(); downY = e.getY(); lastTime = e.getEventTime(); speed = 0; dragging = false; }
+            else if (e.getActionMasked() == android.view.MotionEvent.ACTION_MOVE && !dragging) {
+                float dx = e.getX() - downX, dy = e.getY() - downY;
+                if (dx < -slop && Math.abs(dx) > Math.abs(dy) * 1.5f) { dragging = true; sheet.animate().cancel(); scrim.animate().cancel(); downX = e.getX(); }
+            }
+            return dragging;
+        }
+        @Override public boolean onTouchEvent(android.view.MotionEvent e) {
+            if (!dragging) return super.onTouchEvent(e);
+            float dx = Math.min(0, e.getX() - downX);
+            switch (e.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_MOVE:
+                    long dt = Math.max(1, e.getEventTime() - lastTime); speed = (e.getX() - lastX) / dt; lastX = e.getX(); lastTime = e.getEventTime();
+                    sheet.setTranslationX(dx); scrim.setAlpha(Math.max(0f, 1f + dx / width)); return true;
+                case android.view.MotionEvent.ACTION_UP: case android.view.MotionEvent.ACTION_CANCEL:
+                    dragging = false;
+                    if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP && (-dx > width / 3f || speed < -0.9f * getResources().getDisplayMetrics().density)) closeDrawer();
+                    else { sheet.animate().translationX(0).setDuration(200).setInterpolator(new android.view.animation.DecelerateInterpolator()).start(); scrim.animate().alpha(1).setDuration(200).start(); }
+                    return true;
+                default: return true;
+            }
+        }
     }
     /** Drawer row of a library place (design 7a): icon, name, count on the right; a filled pill when selected. */
     private View drawerPlace(int icon, String label, String count, boolean selected, Runnable action) {
@@ -263,9 +298,14 @@ public final class MainActivity extends AppCompatActivity {
         if (drawer == null) return;
         FrameLayout closing = drawer; drawer = null; updateBack();
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
-        closing.animate().alpha(0).setDuration(140).withEndAction(() -> {
+        // The menu slides back out to the left while the page under it lightens (from where a drag left it).
+        View sheet = closing.getChildCount() > 1 ? closing.getChildAt(1) : null;
+        if (sheet != null) { sheet.animate().cancel(); sheet.animate().translationX(-Math.max(sheet.getWidth(), dp(1))).setDuration(200).setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f)).start(); }
+        View scrim = closing.getChildAt(0); if (scrim != null) { scrim.animate().cancel(); scrim.animate().alpha(0).setDuration(200).start(); }
+        if (closing instanceof DrawerFrame) ((DrawerFrame) closing).leaving = true;   // taps during the slide do not reach the menu
+        closing.postDelayed(() -> {
             if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing);
-        }).start();
+        }, 210);
     }
     private void settings() { settingsSection=""; if(!destination.equals("Impostazioni"))getPreferences(MODE_PRIVATE).edit().putString("settingsReturn",destination).apply(); navigate("Impostazioni"); }
 
@@ -3601,6 +3641,7 @@ public final class MainActivity extends AppCompatActivity {
         listRow(list, R.drawable.ic_library, "Collezioni", "Le tue liste", () -> { sheet.dismiss(); editCollections(b); });
         listRow(list, R.drawable.ic_book, "Inizia una rilettura", "Le letture precedenti restano", () -> { sheet.dismiss(); reread(b); });
         if (!b.format.equals("CATALOGO")) listRow(list, R.drawable.ic_open_in_new, "Apri con KOReader", "Il file in un altro lettore", () -> { sheet.dismiss(); openKoreader(b); });
+        if (!b.format.equals("CATALOGO")) listRow(list, R.drawable.ic_ereader, "Invia a CrossPoint", "Il file sul lettore e-ink", () -> { sheet.dismiss(); sendToCrossPoint(b); });
         ScrollView scroll = new ScrollView(this); scroll.addView(p); scroll.setBackgroundColor(WHITE);
         sheet.setContentView(scroll); sheet.show();
     }
@@ -3621,6 +3662,30 @@ public final class MainActivity extends AppCompatActivity {
         if(names.isEmpty()) { collections(); return; }
         String[] labels=names.toArray(new String[0]); boolean[] checked=new boolean[labels.length]; for(int i=0;i<labels.length;i++) checked[i]=ReadingJournal.inCollection(b,labels[i]);
         dialogBuilder().setTitle("Collezioni del libro").setMultiChoiceItems(labels,checked,(d,w,on)->checked[w]=on).setNegativeButton("Annulla",null).setNeutralButton("Nuova",(d,w)->collections()).setPositiveButton("Salva",(d,w)->journalEdit(b,c->{org.json.JSONArray a=new org.json.JSONArray(); for(int i=0;i<labels.length;i++) if(checked[i]) a.put(labels[i]); ReadingJournal.put(c,"collections",a);})).show();
+    }
+    /**
+     * The book's file straight to the CrossPoint reader last used on the CrossPoint page (its address is remembered
+     * there), in the reader's main folder, named like «Invia libri» does; without a reader yet, opens that page.
+     */
+    private void sendToCrossPoint(Book b) {
+        File file = store.original(b);
+        if (!file.isFile()) { error(new IOException("Questo libro non ha un file locale. Importa prima un ebook.")); return; }
+        String host = getPreferences(MODE_PRIVATE).getString("crosspointHost", "");
+        if (host.isEmpty()) { app.atlante.library.ui.L.toast(this, "Collega prima il lettore nella pagina CrossPoint", Toast.LENGTH_LONG).show(); navigate("CrossPoint"); return; }
+        String stem = b.title.replaceAll("[\\\\/:*?\"<>|]", " ").trim();
+        String name = (stem.isEmpty() ? "libro" : stem) + "." + b.format.toLowerCase(Locale.ROOT);
+        AlertDialog loading = loading("CrossPoint", "Invio al lettore…");
+        worker.execute(() -> {
+            Exception failure = null;
+            try { new app.atlante.library.crosspoint.CrossPointClient(host, 80, true, app.atlante.library.crosspoint.CrossPointWifi.binder(this)).upload("/", file, name, null); }
+            catch (Exception e) { failure = e; }
+            Exception f = failure;
+            runOnUiThread(() -> { loading.dismiss(); if (isFinishing() || isDestroyed()) return;
+                if (f == null) { app.atlante.library.ui.L.toast(this, "Inviato a CrossPoint", Toast.LENGTH_SHORT).show(); return; }
+                app.atlante.library.diagnostics.CrashLog.error(this, "Invio a CrossPoint", f);
+                dialogBuilder().setTitle("CrossPoint non risponde").setMessage("Accendi il lettore, apri il trasferimento file e controlla che telefono e lettore siano sulla stessa rete Wi-Fi (o collegati al Wi-Fi del lettore dalla pagina CrossPoint).")
+                    .setNegativeButton("Chiudi", null).setPositiveButton("Apri CrossPoint", (d, w) -> navigate("CrossPoint")).show(); });
+        });
     }
     private void openKoreader(Book b) {
         if(!store.original(b).isFile()) {error(new IOException("Questo libro non ha un file locale. Importa prima un ebook."));return;}
