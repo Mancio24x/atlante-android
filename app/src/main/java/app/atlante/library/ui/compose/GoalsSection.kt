@@ -5,7 +5,6 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -92,7 +91,7 @@ private fun WheelGoal(icon: Int, title: String, kicker: String, initiallyOn: Boo
     var current by remember { mutableIntStateOf(value.coerceIn(range)) }
     val reached = on && progress.done >= current
     val border by animateColorAsState(if (on) scheme.primary else scheme.outlineVariant, tween(220), label = "border")
-    Surface(Modifier.fillMaxWidth().animateContentSize(tween(260)), shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer,
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer,
         border = BorderStroke(if (on) 1.5.dp else 1.dp, border)) {
         Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(on, role = Role.Switch) { on = it; onSwitch(it) }

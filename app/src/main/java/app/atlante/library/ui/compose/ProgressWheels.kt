@@ -214,7 +214,7 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
                 val distance = abs(v - centred)
                 val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.72f; 2 -> 0.48f; else -> 0.3f }, label = "alpha")
                 val grow by animateFloatAsState(if (distance == 0) 1f else 0.8f, label = "size")
-                Column(Modifier.width(itemWidth).fillMaxHeight().clickable { scope.launch { list.animateScrollToItem(i) }; onValue(v) },
+                Column(Modifier.width(itemWidth).fillMaxHeight().clickable { scope.launch { list.animateScrollToItem(i) } },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Text(format(v), Modifier.graphicsLayer { this.alpha = alpha; scaleX = grow; scaleY = grow },
                         style = MaterialTheme.typography.titleLarge, fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
