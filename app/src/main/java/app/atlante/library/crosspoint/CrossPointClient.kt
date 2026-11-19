@@ -96,11 +96,17 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
             if (method == "POST") headers.append("Content-Length: $length\r\n")
             out.write(headers.append("\r\n").toString().toByteArray(Charsets.UTF_8)); write(out); out.flush()
             val r = Response(socket, BufferedInputStream(socket.getInputStream(), 32768))
-            if (r.code !in 200..299) { val msg = text(ByteArrayOutputStream().also { r.body(it, null) }.toByteArray()); r.close(); throw IOException(msg.ifBlank { "CrossPoint ha risposto ${r.code}" }) }
+            if (r.code !in 200..299) { val msg = text(ByteArrayOutputStream().also { r.body(it, null) }.toByteArray()); r.close(); throw Refused(msg.ifBlank { "CrossPoint ha risposto ${r.code}" }) }
             return r
         } catch (e: SocketTimeoutException) { socket.close(); throw IOException("CrossPoint non risponde: è acceso, con il trasferimento file aperto?") }
         catch (e: IOException) { socket.close(); throw e }
     }
+
+    /** The reader answered, but with an error (full card, a name it refuses…): asking another address would not help. */
+    class Refused(message: String) : IOException(message)
+
+    /** Who took a file: the reader's address (a new one when the remembered one no longer answered) and whether it was already there. */
+    data class Sent(val host: String, val alreadyThere: Boolean)
 
     private class Response(private val socket: Socket, private val input: InputStream) : AutoCloseable {
         val code: Int; private val headers = HashMap<String, String>()
@@ -151,6 +157,27 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
         /** "crosspoint (on CrossPoint-ab12);81" → the device name. */
         @JvmStatic fun deviceName(reply: String): String? =
             Regex("^crosspoint \\(on (.+)\\);\\d+$").find(reply.trim())?.groupValues?.get(1)
+
+        /**
+         * Sends [file] to the main folder of the reader at [saved]. On the home Wi-Fi the router gives the reader a new
+         * address now and then: when [saved] does not answer at all, the readers on the Wi-Fi are looked for ([find])
+         * and the file goes to the first that answers. A file with the same name and size already in that folder is not
+         * sent again. A reader that answers with an error ([Refused]) is not replaced by another one.
+         */
+        @JvmStatic @JvmOverloads fun send(saved: String, file: File, name: String, binder: Binder?, port: Int = 80, localOnly: Boolean = true,
+                                          find: () -> List<Device> = { discover(2500, binder) }): Sent {
+            fun to(host: String): Sent {
+                val c = CrossPointClient(host, port, localOnly, binder)
+                val there = try { c.list("/").any { !it.isDirectory && it.name == name && it.size == file.length() } }
+                    catch (e: Exception) { if (e is Refused || e is org.json.JSONException) false else throw e }
+                if (!there) c.upload("/", file, name)
+                return Sent(host, there)
+            }
+            try { return to(saved) } catch (e: Refused) { throw e } catch (first: IOException) {
+                for (d in find()) if (d.host != saved) { try { return to(d.host) } catch (e: Refused) { throw e } catch (e: IOException) { } }
+                throw first
+            }
+        }
 
         /** Readers on the Wi-Fi: a "hello" broadcast, every CrossPoint answers with its name; at most [millis]. */
         @JvmStatic @JvmOverloads fun discover(millis: Int = 2500, binder: Binder? = null): List<Device> {

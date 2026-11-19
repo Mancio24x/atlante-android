@@ -49,4 +49,6 @@ casa (ricerca o indirizzo IP). API del firmware: `GET /api/status`, `GET /api/fi
 `ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`.
 Dalla scheda di un libro con file, menu ⋮ › «Invia a CrossPoint» manda il file al lettore ricordato (cartella
 principale, stesso nome di «Invia libri»); senza un lettore collegato apre la pagina CrossPoint
-(`MainActivity.sendToCrossPoint`).
+(`MainActivity.sendToCrossPoint`). Se l’indirizzo ricordato non risponde, il lettore viene cercato sul Wi-Fi e il
+nuovo indirizzo ricordato; un file già presente (stesso nome e dimensione) non viene rimandato
+(`CrossPointClient.send`, `CrossPointSendTest`).

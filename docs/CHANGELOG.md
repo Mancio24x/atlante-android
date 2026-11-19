@@ -4,6 +4,10 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 (non ogni commit corrisponde a una release). Il dettaglio è in `git log`; qui le modifiche che cambiano il
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
+## 2026-11-19
+- **CrossPoint ritrovato sulla rete di casa**: «Invia a CrossPoint» non si ferma più quando il router ha dato al lettore un nuovo indirizzo: se quello ricordato non risponde, l’app cerca il lettore sul Wi-Fi, gli manda il file e ricorda il nuovo indirizzo (anche per la pagina CrossPoint). Un file con lo stesso nome e la stessa dimensione già sul lettore non viene rimandato («È già su CrossPoint»). Un lettore che risponde con un errore (scheda piena) non viene sostituito da un altro. `CrossPointClient.send`, `CrossPointSendTest`.
+- **Pagine in dissolvenza**: Scopri, Statistiche, Sync, CrossPoint e le pagine delle Impostazioni entrano con la stessa dissolvenza della Home (decelerata); una pagina ricostruita a metà animazione riparte da capo invece di restare semitrasparente.
+
 ## 2026-11-18
 - **Obiettivi di lettura come i temi**: ogni obiettivo è una tessera come quelle di Aspetto (superficie del tema, angoli 22 dp, contorno dell’accento quando è attivo) con la sua icona, che diventa una spunta a obiettivo raggiunto; l’interruttore apre e chiude la tessera con un’animazione invece di ricostruire la pagina; la barra di avanzamento si riempie con un’animazione.
 - **Rotelle orizzontali senza difetti**: i numeri lunghi (1440 minuti, +250 pagine, 500) uscivano dalla cella e dal riquadro centrale (testo ingrandito del 25% in una cella fissa di 56 dp); ora la cella è larga quanto il numero più lungo, i numeri sfumano verso i bordi e ognuno ha la sua tacca. Un trascinamento di lato resta alla rotella anche se il dito scivola un poco in verticale (prima la pagina se lo prendeva e la rotella si fermava); uno chiaramente verticale scorre ancora la pagina. Toccare un valore lo porta al centro con un’animazione.

@@ -3352,8 +3352,9 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void animateIn(View view) {
         if (android.os.Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()) return;
-        view.setAlpha(0); view.setTranslationY(dp(10));
-        view.animate().alpha(1).translationY(0).setDuration(200).start();
+        // A page rebuilt while the previous one was still fading in starts again from the beginning (no half-faded page).
+        view.animate().cancel(); view.setAlpha(0); view.setTranslationY(dp(12));
+        view.animate().alpha(1).translationY(0).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
     }
     private void navigate(String next) {
         app.atlante.library.diagnostics.CrashLog.step("pagina: " + next);
@@ -3412,7 +3413,7 @@ public final class MainActivity extends AppCompatActivity {
         top.addView(destination.equals("Scopri")?pageHeading("SCOPRI","La prossima storia."):destination.equals("Sync")?pageHeading("SYNC","Invia e ricevi."):destination.equals("CrossPoint")?pageHeading("CROSSPOINT","Il tuo lettore e-ink"):pageHeading("","Statistiche"),new LinearLayout.LayoutParams(0,-2,1));
         top.addView(iconButton(R.drawable.ic_settings,"Impostazioni",this::settings));
         root.addView(content,new LinearLayout.LayoutParams(-1,0,1));
-        addBottomNav(); updateBack();
+        addBottomNav(); updateBack(); animateIn(content);
     }
 
     private void showCompanion() {
@@ -3426,7 +3427,7 @@ public final class MainActivity extends AppCompatActivity {
             composePage(app.atlante.library.ui.compose.DiscoverView.create(this,palette,sagaHost,this::openLink,this::collections));
             return;
         }
-        if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("IMPOSTAZIONI",settingsSection.isEmpty()?"Impostazioni":settingsTitle(settingsSection)); settingsPage(p); updateBack(); return; }
+        if(destination.equals("Impostazioni")) { LinearLayout p=companionPage("IMPOSTAZIONI",settingsSection.isEmpty()?"Impostazioni":settingsTitle(settingsSection)); settingsPage(p); updateBack(); animateIn(p); return; }
         if(destination.equals("Sync")) { composePage(syncView()); return; }
         if(destination.equals("CrossPoint")) { composePage(crossPointView()); return; }
         String day=java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM",app.atlante.library.ui.L.locale())).toUpperCase(app.atlante.library.ui.L.locale());
@@ -3676,12 +3677,14 @@ public final class MainActivity extends AppCompatActivity {
         String name = (stem.isEmpty() ? "libro" : stem) + "." + b.format.toLowerCase(Locale.ROOT);
         AlertDialog loading = loading("CrossPoint", "Invio al lettore…");
         worker.execute(() -> {
-            Exception failure = null;
-            try { new app.atlante.library.crosspoint.CrossPointClient(host, 80, true, app.atlante.library.crosspoint.CrossPointWifi.binder(this)).upload("/", file, name, null); }
+            Exception failure = null; app.atlante.library.crosspoint.CrossPointClient.Sent sent = null;
+            try { sent = app.atlante.library.crosspoint.CrossPointClient.send(host, file, name, app.atlante.library.crosspoint.CrossPointWifi.binder(this)); }
             catch (Exception e) { failure = e; }
-            Exception f = failure;
+            Exception f = failure; app.atlante.library.crosspoint.CrossPointClient.Sent done = sent;
+            // The router gave the reader a new address: remember it, the CrossPoint page will use it too.
+            if (done != null && !done.getHost().equals(host)) getPreferences(MODE_PRIVATE).edit().putString("crosspointHost", done.getHost()).apply();
             runOnUiThread(() -> { loading.dismiss(); if (isFinishing() || isDestroyed()) return;
-                if (f == null) { app.atlante.library.ui.L.toast(this, "Inviato a CrossPoint", Toast.LENGTH_SHORT).show(); return; }
+                if (f == null) { app.atlante.library.ui.L.toast(this, done.getAlreadyThere() ? "È già su CrossPoint" : "Inviato a CrossPoint", Toast.LENGTH_SHORT).show(); return; }
                 app.atlante.library.diagnostics.CrashLog.error(this, "Invio a CrossPoint", f);
                 dialogBuilder().setTitle("CrossPoint non risponde").setMessage("Accendi il lettore, apri il trasferimento file e controlla che telefono e lettore siano sulla stessa rete Wi-Fi (o collegati al Wi-Fi del lettore dalla pagina CrossPoint).")
                     .setNegativeButton("Chiudi", null).setPositiveButton("Apri CrossPoint", (d, w) -> navigate("CrossPoint")).show(); });
