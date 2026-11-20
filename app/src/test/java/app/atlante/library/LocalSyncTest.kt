@@ -31,7 +31,7 @@ class LocalSyncTest {
     }
     private val pin = "123456"
     private val auth = mapOf("x-auth-user" to "atlante", "x-auth-key" to SyncCore.md5(pin))
-    private fun sync(lib: Lib) = LocalSync(lib, File.createTempFile("cp", ".json").apply { delete() }) { pin }
+    private fun sync(lib: Lib) = LocalSync(lib, File.createTempFile("crosspoint", ".json").apply { delete() }) { pin }
     private fun progress(doc: String, p: Double, meta: JSONObject? = null) =
         JSONObject().put("document", doc).put("progress", "/body/DocFragment[3]/body/p[12]/text().0").put("percentage", p)
             .put("device", "CrossPoint").put("device_id", "X4").apply { if (meta != null) put("metadata", meta) }.toString()
