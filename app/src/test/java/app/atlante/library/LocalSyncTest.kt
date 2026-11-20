@@ -46,7 +46,7 @@ class LocalSyncTest {
     }
 
     @Test fun aBookSentByAtlanteMovesForwardWithASession() {
-        val rosa = book('r', "Il nome della rosa", "Umberto Eco", 500, 100)
+        val rosa = book('9', "Il nome della rosa", "Umberto Eco", 500, 100)
         val lib = Lib(rosa); val s = sync(lib)
         val doc = SyncCore.md5(LocalSync.sentName(rosa))           // the reader's default: MD5 of the file name
         assertEquals(204, s.handle("GET", "/syncs/progress/$doc", auth, "").code)
