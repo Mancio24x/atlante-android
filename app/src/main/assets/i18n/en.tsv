@@ -1121,3 +1121,24 @@ Le tue liste	Your lists
 Le letture precedenti restano	Earlier readings stay
 Il file in un altro lettore	The file in another reader
 oggi, in tutto: correggilo se serve	today, in all: correct it if needed
+Nessun obiettivo attivo	No active goals
+Tutti raggiunti ✓	All reached ✓
+{} di {} raggiunti	{} of {} reached
+Spento	Off
+Minuti	Minutes
+Sincronizza le letture	Sync your reading
+Il lettore manda ad Atlante la pagina a cui sei, sul Wi-Fi di casa, senza account.	The reader sends Atlante the page you are on, over your home Wi-Fi, with no account.
+Sincronizza le letture: attivo	Sync your reading: on
+Sincronizza le letture: spento	Sync your reading: off
+Non riesco ad aprire la porta {}: chiudi altre app che la usano e riprova.	Cannot open port {}: close other apps using it and try again.
+Sul lettore: Impostazioni › KOReader Sync	On the reader: Settings › KOReader Sync
+Server	Server
+Utente	User
+Password	Password
+Collega il telefono al Wi-Fi	Connect the phone to Wi-Fi
+Poi «Registra» o «Accedi» e, mentre leggi, «Sincronizza avanzamento» dal menu del libro. I libri inviati da qui si riconoscono dal file, gli altri da titolo, autore e ISBN. Atlante va solo avanti: non tocca i libri segnati «Letto».	Then “Register” or “Log in” and, while reading, “Sync progress” from the book menu. Books sent from here are recognised by their file, the others by title, author and ISBN. Atlante only moves forward: books marked “Read” are not touched.
+Ultimo: {}	Last: {}
+Nuova password	New password
+CrossPoint: «{}» al {}%	CrossPoint: “{}” at {}%
+CrossPoint: «{}» non è nella libreria	CrossPoint: “{}” is not in the library
+CrossPoint: «{}» già aggiornato	CrossPoint: “{}” already up to date

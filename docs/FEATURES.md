@@ -47,3 +47,14 @@ casa (ricerca o indirizzo IP). API del firmware: `GET /api/status`, `GET /api/fi
 `GET /download?path=`, `POST /upload?path=` (multipart), `POST /mkdir`, `/rename`, `/move`, `/delete`; scoperta con
 «hello» in UDP sulla porta 8134 (risposta `crosspoint (on <nome>);81`). Codice: `crosspoint/CrossPointClient.kt`,
 `ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`.
+
+**Sincronizza le letture** (stessa pagina, card in fondo): Atlante è un server KOSync sulla porta 7200
+(`crosspoint/LocalSync.kt`, avviato da `MainActivity.startLocalSync` finché l'app è aperta, preferenza `crosspointSync`).
+Sul lettore: Impostazioni › KOReader Sync, server `<IP del telefono>:7200`, utente `atlante`, password = PIN a 6 cifre
+(`crosspointSyncPin`, «Nuova password» lo cambia; un tentativo sbagliato risponde dopo 0,4 s). API: `POST /users/create`,
+`GET /users/auth`, `PUT /syncs/progress`, `GET /syncs/progress/<documento>` (204 se sconosciuto). Il documento si lega a un
+libro dal nome del file inviato da Atlante (`LocalSync.sentName`, l'MD5 è l'id «Filename» del lettore) o dall'hash
+binario KOReader del file in Atlante, poi da ISBN / titolo e autore (`BibliographicEngine.sameWorkIn`). L'avanzamento va
+solo avanti, crea una sessione nel diario, al 100% segna «Letto»; i libri già «Letto» restano come sono. Le posizioni
+ricevute (XPath del lettore) sono in `files/crosspoint-sync.json` e sono le sole restituite al lettore. Solo indirizzi
+della rete locale.

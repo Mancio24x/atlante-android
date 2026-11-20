@@ -17,7 +17,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
@@ -139,19 +154,27 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
 }
 
 /**
- * Horizontal number wheel: flings and snaps to the value under the centre mark, which is larger and coloured;
- * the others fade with the distance. A light tick (optional) for every value passed.
+ * Horizontal number wheel, like a ruler under a window: flings and snaps to the value under the centre window.
+ * Numbers grow and fade smoothly with their distance from the centre (drawn per frame, no font or size jumps),
+ * the edges fade out, a tap on a number glides to it, and a light tick (optional) marks every value passed.
+ * A sideways drag keeps the page around it from scrolling.
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
-    val itemWidth = 56.dp
-    val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
+    val last = range.last - range.first
+    // Wide enough for the longest number (the centred one is drawn 30% larger): "5000" or "+2000" stay inside the window.
+    val digits = maxOf(format(range.first).length, format(range.last).length)
+    val itemWidth = maxOf(56, 14 * digits + 16).dp
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, last))
     val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    val scheme = MaterialTheme.colorScheme
     // Value under the centre mark: the visible item whose middle is closest to the middle of the wheel.
     val centred by remember(range) { derivedStateOf {
         val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
         val index = info.visibleItemsInfo.minByOrNull { abs(it.offset + it.size / 2 - middle) }?.index ?: (value - range.first)
-        range.first + index.coerceIn(0, range.last - range.first)
+        range.first + index.coerceIn(0, last)
     } }
     val onValueNow by rememberUpdatedState(onValue)
     val valueNow by rememberUpdatedState(value)
@@ -167,29 +190,72 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
                 if(!scrolling) userScroll=false
             }
     }
+    // A value chosen elsewhere (typed, or a goal reset): glide there when close, jump when far.
     LaunchedEffect(value, range) {
-        if (!list.isScrollInProgress && !userScroll && centred != value)
-            list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
+        if (!list.isScrollInProgress && !userScroll && centred != value) {
+            val target = (value - range.first).coerceIn(0, last)
+            if (abs(target - (centred - range.first)) <= 30) list.animateScrollToItem(target) else list.scrollToItem(target)
+        }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(76.dp).semantics {
         contentDescription = label; stateDescription = format(value)
-        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
+        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (last - 1).coerceAtLeast(0))
         setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
+    }.pointerInput(Unit) {
+        // Once a drag is clearly sideways, the scrolling page (a View ScrollView) must not take it over.
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            var moved = Offset.Zero; var decided = false
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                if (!decided) {
+                    moved += change.positionChange()
+                    if (moved.getDistance() > viewConfiguration.touchSlop) {
+                        decided = true
+                        if (abs(moved.x) > abs(moved.y)) view.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                }
+            }
+        }
     }, contentAlignment = Alignment.Center) {
         val side = (maxWidth - itemWidth) / 2
-        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer,
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)) {}
-        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side), modifier = Modifier.fillMaxSize(),
+        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(16.dp), color = scheme.primaryContainer,
+            border = BorderStroke(2.dp, scheme.primary)) {}
+        val tick = scheme.outlineVariant
+        LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side),
+            modifier = Modifier.fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.16f to Color.Black, 0.84f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                },
             verticalAlignment = Alignment.CenterVertically) {
-            items(range.last - range.first + 1) { i ->
+            items(last + 1) { i ->
                 val v = range.first + i
-                val distance = abs(v - centred)
-                val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
-                Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
-                        style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                        fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                val centre = v == centred
+                Box(Modifier.width(itemWidth).fillMaxHeight()
+                    .drawBehind {
+                        // Ruler ticks: a long one under every number, a short one between two numbers.
+                        val y = size.height - 4.dp.toPx()
+                        drawLine(tick, Offset(size.width / 2, y - 9.dp.toPx()), Offset(size.width / 2, y), 2.dp.toPx(), StrokeCap.Round)
+                        drawLine(tick, Offset(0f, y - 4.dp.toPx()), Offset(0f, y), 1.5.dp.toPx(), StrokeCap.Round)
+                    }
+                    .clickable(onClickLabel = format(v)) { scope.launch { list.animateScrollToItem(i) } },
+                    contentAlignment = Alignment.Center) {
+                    Text(format(v), Modifier.graphicsLayer {
+                        // Distance from the centre in items, read at draw time: smooth while the wheel moves.
+                        val info = list.layoutInfo
+                        val item = info.visibleItemsInfo.firstOrNull { it.index == i }
+                        val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+                        val d = if (item == null) 3f else (abs(item.offset + item.size / 2f - middle) / item.size.coerceAtLeast(1)).coerceIn(0f, 3f)
+                        val s = 1f + 0.3f * (1f - d.coerceAtMost(1f))
+                        scaleX = s; scaleY = s
+                        alpha = (1f - 0.25f * d).coerceIn(0.25f, 1f)
+                    },
+                        style = MaterialTheme.typography.titleMedium, fontWeight = if (centre) FontWeight.Bold else FontWeight.Medium,
+                        color = if (centre) scheme.onPrimaryContainer else scheme.onSurfaceVariant, maxLines = 1, softWrap = false)
                 }
             }
         }

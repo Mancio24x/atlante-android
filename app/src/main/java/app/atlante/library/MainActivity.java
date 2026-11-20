@@ -171,6 +171,7 @@ public final class MainActivity extends AppCompatActivity {
         if (destination.equals("Cerca")) destination = "Biblioteca"; // "Cerca" was replaced by Sync: the library has the search bar
         shelfView = prefs.getBoolean("shelfView", false);
         restoreTimer(); showLibrary();
+        if (getPreferences(MODE_PRIVATE).getBoolean("crosspointSync", false)) startLocalSync(null);
         if (state == null && isWidgetIntent(getIntent())) widgetIntent = getIntent();
         if (state == null && app.atlante.library.sync.HardcoverAuth.isCallback(getIntent().getData())) finishHardcoverLogin(getIntent().getData());
         if (keepPage && state.getString("detail") != null) { Book b = store.find(state.getString("detail")); if (b != null) details(b); }
@@ -2501,6 +2502,35 @@ public final class MainActivity extends AppCompatActivity {
 
     // ---- Sync: Hardcover, Calibre, Kindle highlights ----------------------------------------------
 
+    /** "Atlante locale": the CrossPoint reader's KOReader Sync server, while the app is open (crosspoint/LocalSync.kt). */
+    private app.atlante.library.crosspoint.LocalSyncServer localSync;
+    private void startLocalSync(java.util.function.Consumer<Boolean> done) {
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        if (store == null) { if (done != null) done.accept(false); return; }
+        if (localSync != null && localSync.getRunning()) { if (done != null) done.accept(true); return; }
+        if (prefs.getString("crosspointSyncPin", "").isEmpty()) prefs.edit().putString("crosspointSyncPin", app.atlante.library.crosspoint.LocalSync.newPin()).apply();
+        app.atlante.library.crosspoint.LocalSync sync = new app.atlante.library.crosspoint.LocalSync(new app.atlante.library.crosspoint.LocalSync.Library() {
+            @Override public java.util.List<Book> books() { return store.snapshot(); }
+            @Override public File file(Book b) { File f = store.original(b); return f.isFile() ? f : null; }
+            @Override public void replace(Book b) { try { store.replace(b); } catch (Exception e) { throw new IllegalStateException(e); } }
+        }, new File(getFilesDir(), "crosspoint-sync.json"), () -> prefs.getString("crosspointSyncPin", ""));
+        sync.setOnEvent(e -> {
+            String time = java.time.LocalTime.now().withNano(0).withSecond(0).toString();
+            String line = "«" + e.getTitle() + "» → " + e.getPercent() + "% · " + time;
+            prefs.edit().putString("crosspointSyncLast", line).apply();
+            runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return;
+                app.atlante.library.ui.L.toast(this, e.getApplied() ? "CrossPoint: «" + e.getTitle() + "» al " + e.getPercent() + "%"
+                    : e.getBook() == null ? "CrossPoint: «" + e.getTitle() + "» non è nella libreria" : "CrossPoint: «" + e.getTitle() + "» già aggiornato", Toast.LENGTH_SHORT).show(); });
+            return kotlin.Unit.INSTANCE;
+        });
+        app.atlante.library.crosspoint.LocalSyncServer server = new app.atlante.library.crosspoint.LocalSyncServer(sync, app.atlante.library.crosspoint.LocalSync.PORT);
+        localSync = server;
+        new Thread(() -> {
+            boolean ok; try { server.start(); ok = true; } catch (Exception e) { ok = false; }
+            boolean result = ok; runOnUiThread(() -> { if (!result && localSync == server) localSync = null; if (done != null) done.accept(result); });
+        }, "atlante-crosspoint-start").start();
+    }
+
     /** CrossPoint: the e-ink reader's files over the home Wi-Fi (ui/compose/CrossPointScreen.kt). */
     private View crossPointView() {
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
@@ -2525,6 +2555,18 @@ public final class MainActivity extends AppCompatActivity {
                 app.atlante.library.crosspoint.CrossPointWifi.join(MainActivity.this, ok -> { runOnUiThread(() -> onResult.invoke(ok)); return kotlin.Unit.INSTANCE; });
             }
             @Override public void leaveReaderWifi() { app.atlante.library.crosspoint.CrossPointWifi.leave(MainActivity.this); }
+            @Override public boolean localSyncOn() { return prefs.getBoolean("crosspointSync", false) && localSync != null && localSync.getRunning(); }
+            @Override public void setLocalSync(boolean on, kotlin.jvm.functions.Function1<? super Boolean, kotlin.Unit> onResult) {
+                if (!on) { prefs.edit().putBoolean("crosspointSync", false).apply(); if (localSync != null) { localSync.stop(); localSync = null; } onResult.invoke(true); return; }
+                startLocalSync(ok -> { prefs.edit().putBoolean("crosspointSync", ok).apply(); onResult.invoke(ok); });
+            }
+            @Override public java.util.List<String> localSyncAddresses() { return app.atlante.library.crosspoint.LocalSync.addresses(); }
+            @Override public String localSyncPin() {
+                if (prefs.getString("crosspointSyncPin", "").isEmpty()) prefs.edit().putString("crosspointSyncPin", app.atlante.library.crosspoint.LocalSync.newPin()).apply();
+                return prefs.getString("crosspointSyncPin", "");
+            }
+            @Override public String newLocalSyncPin() { String pin = app.atlante.library.crosspoint.LocalSync.newPin(); prefs.edit().putString("crosspointSyncPin", pin).apply(); return pin; }
+            @Override public String localSyncLast() { String l = prefs.getString("crosspointSyncLast", ""); return l.isEmpty() ? null : l; }
         });
     }
     /** Sync (design 5a), drawn in Compose (ui/compose/SyncScreen.kt); the actions are the same methods as before. */
@@ -3308,6 +3350,7 @@ public final class MainActivity extends AppCompatActivity {
     /** Restart for a theme change, staying on the current page. */
     private void recreateHere() { getPreferences(MODE_PRIVATE).edit().putBoolean("keepPageOnce", true).putString("settingsSectionOnce", settingsSection).commit(); recreate(); }
     @Override protected void onDestroy() {
+        if (localSync != null) { localSync.stop(); localSync = null; }
         uiHandler.removeCallbacksAndMessages(null); worker.shutdown(); catalogWorker.shutdown(); coverWorker.shutdown(); covers.shutdown(); super.onDestroy();
     }
     private void animateIn(View view) {

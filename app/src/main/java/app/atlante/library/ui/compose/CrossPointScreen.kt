@@ -50,6 +50,16 @@ interface CrossPointHost {
     /** Joins the reader's Wi-Fi "CrossPoint-Reader"; [onResult] true when connected. */
     fun joinReaderWifi(onResult: (Boolean) -> Unit)
     fun leaveReaderWifi()
+    /** "Atlante locale": the reader's KOReader Sync sends its progress to the phone (crosspoint/LocalSync.kt). */
+    fun localSyncOn(): Boolean
+    /** Turns the local sync server on or off; [onResult] false when the port could not be opened. */
+    fun setLocalSync(on: Boolean, onResult: (Boolean) -> Unit)
+    /** "192.168.1.23:7200" for every Wi-Fi or hotspot address of the phone; empty with no Wi-Fi. */
+    fun localSyncAddresses(): List<String>
+    fun localSyncPin(): String
+    fun newLocalSyncPin(): String
+    /** The last progress received: "«Titolo» → 45% · 14:32", or null. */
+    fun localSyncLast(): String?
 }
 
 object CrossPointView {
@@ -152,6 +162,8 @@ fun CrossPointScreen(host: CrossPointHost) {
                         style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
             }
+            Spacer(Modifier.height(16.dp))
+            LocalSyncCard(host)
         }
         busy?.let { label ->
             Surface(Modifier.align(Alignment.TopCenter).padding(12.dp).fillMaxWidth(), shape = RoundedCornerShape(14.dp), color = colors.surfaceContainer, shadowElevation = 3.dp) {
@@ -271,6 +283,54 @@ fun CrossPointScreen(host: CrossPointHost) {
                     enabled = CrossPointClient.isLocal(typed.removePrefix("http://").trimEnd('/'))) { Text("Collega") }
             }
         }
+    }
+}
+
+/**
+ * "Sincronizza le letture": Atlante as the reader's KOReader Sync server on the same Wi-Fi. When it is on, the card
+ * shows what to type on the reader (server, user, PIN) and the last progress received.
+ */
+@Composable private fun LocalSyncCard(host: CrossPointHost) {
+    val colors = MaterialTheme.colorScheme
+    var on by remember { mutableStateOf(host.localSyncOn()) }
+    var pin by remember { mutableStateOf(host.localSyncPin()) }
+    var failed by remember { mutableStateOf(false) }
+    val addresses = remember(on) { host.localSyncAddresses() }
+    val last = remember(on) { host.localSyncLast() }
+    OutlinedCard(Modifier.fillMaxWidth(), shape = Round20, colors = CardDefaults.outlinedCardColors(containerColor = colors.surfaceContainer)) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).background(lerp(colors.surfaceContainer, colors.primary, .14f)), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_sync), null, Modifier.size(24.dp), tint = colors.primary) }
+                Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                    Text("Sincronizza le letture", style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif))
+                    Text("Il lettore manda ad Atlante la pagina a cui sei, sul Wi-Fi di casa, senza account.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+                Switch(on, { v -> host.setLocalSync(v) { ok -> on = v && ok; failed = v && !ok } },
+                    Modifier.semantics { contentDescription = "Sincronizza le letture: " + if (on) "attivo" else "spento" })
+            }
+            if (failed) Text("Non riesco ad aprire la porta ${app.atlante.library.crosspoint.LocalSync.PORT}: chiudi altre app che la usano e riprova.",
+                Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = colors.error)
+            androidx.compose.animation.AnimatedVisibility(on) {
+                Column(Modifier.padding(top = 12.dp)) {
+                    Text("Sul lettore: Impostazioni › KOReader Sync", style = MaterialTheme.typography.titleSmall, color = colors.primary)
+                    SyncField("Server", if (addresses.isEmpty()) "Collega il telefono al Wi-Fi" else addresses.joinToString("  o  ") { "$it:${app.atlante.library.crosspoint.LocalSync.PORT}" })
+                    SyncField("Utente", app.atlante.library.crosspoint.LocalSync.USER)
+                    SyncField("Password", pin)
+                    Text("Poi «Registra» o «Accedi» e, mentre leggi, «Sincronizza avanzamento» dal menu del libro. I libri inviati da qui si riconoscono dal file, gli altri da titolo, autore e ISBN. Atlante va solo avanti: non tocca i libri segnati «Letto».",
+                        Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    if (last != null) Text("Ultimo: $last", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = colors.primary)
+                    TextButton(onClick = { pin = host.newLocalSyncPin() }, Modifier.padding(top = 4.dp)) { Text("Nuova password") }
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun SyncField(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.width(84.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace))
     }
 }
 

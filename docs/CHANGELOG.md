@@ -4,6 +4,22 @@ Le release sono numerate `1.0.<numero di esecuzione del workflow>` e nascono a o
 (non ogni commit corrisponde a una release). Il dettaglio è in `git log`; qui le modifiche che cambiano il
 funzionamento. Aggiungere una voce a ogni rilascio, in cima.
 
+## 2026-11-20
+
+- **CrossPoint › Sincronizza le letture («Atlante locale»)**: Atlante fa da server KOReader Sync per il lettore CrossPoint,
+  sul Wi-Fi di casa o sull'hotspot del telefono, senza account né internet. Sul lettore, Impostazioni › KOReader Sync:
+  server `<IP del telefono>:7200`, utente `atlante`, password = il PIN mostrato nella pagina CrossPoint. Dal menu del libro
+  «Sincronizza avanzamento» porta la pagina in Atlante (con una sessione nel diario); il libro si riconosce dal file inviato
+  da Atlante (nome o hash KOReader) o da titolo, autore e ISBN. Va solo avanti e non tocca i libri «Letto»; al lettore
+  torna soltanto la posizione che ha mandato lui. Funziona con Atlante aperto (`crosspoint/LocalSync.kt`, `LocalSyncTest`).
+- **Obiettivi di lettura** nei colori del tema: in alto «La tua rotta» con un anello per obiettivo (rame quando è raggiunto),
+  poi una card per obiettivo; interruttori e barre animati, la pagina non si ricostruisce più a ogni tocco (prima le rotelle
+  tornavano indietro e la card si apriva senza animazione).
+- **Rotella orizzontale** (obiettivi, pagine, percentuale, minuti): il numero al centro non cambia più carattere e misura
+  di colpo (passava al serif a scatti), cresce e sfuma in modo continuo; tacche da righello, bordi sfumati, un tocco su un
+  numero ci scorre sopra, i numeri a 4-5 cifre («5000», «+2000») restano nella finestra; un trascinamento laterale non fa
+  più scorrere la pagina sotto.
+
 ## 2026-11-09
 - **Saghe, Mappa, Universi come nei design 7a–7d**: la pagina di una saga ha «Saga · Pubblicazione» (per numero o per anno), una linea che unisce i volumi (accento tra due letti), il volume in lettura cerchiato in rame, l’universo nell’intestazione («SAGA · TERRA DI MEZZO») e in fondo «Stesso universo» con le altre saghe di quel mondo. Universi mostra le opere singole dello stesso mondo e i volumi in lettura in rame; l’anello e «letti» non superano più i libri che hai quando il grafo delle saghe conosce meno volumi (prima «200%», «2/0 letti»). Menu laterale: Universi con il numero, Collezioni / Cerca / CrossPoint / Backup / Impostazioni con le icone. «Il tuo ordine» del design non c’è: servirebbe un ordine manuale dei volumi. `HomeShot` disegna anche saga e universo d’esempio.
 - **«Annulla» di Ripara duplicati non lascia più la barra a girare**: annullare una riparazione che in quel momento non era in esecuzione (in attesa del suo turno, o fermata da Android e in pausa) fermava il lavoro ma nessuno aggiornava il suo record, che restava «In corso» / «In attesa» per sempre con la barra in movimento. Ora «Annulla» scrive subito «Annullata»; un lavoro fermato non riscrive più «In corso»; e i record di riparazioni che WorkManager non ha più (app chiusa, lavoro finito altrove) vengono chiusi quando compare la barra. `RepairCancelTest`.
