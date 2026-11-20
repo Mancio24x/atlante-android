@@ -57,7 +57,7 @@ class LocalSync(private val library: Library, private val records: File, private
                 method == "POST" && path == "/users/create" -> {
                     val j = runCatching { JSONObject(body) }.getOrDefault(JSONObject())
                     if (j.optString("username") == USER && keyOk(j.optString("password"))) Reply(201, JSONObject().put("username", USER).toString())
-                    else Reply(402, JSONObject().put("code", 2002).put("message", "Username is already registered.").toString())
+                    else { Thread.sleep(400); Reply(402, JSONObject().put("code", 2002).put("message", "Username is already registered.").toString()) }
                 }
                 !authorized(headers) -> { Thread.sleep(400); Reply(401,   // a slow "no": guessing the PIN takes days
                     JSONObject().put("code", 2001).put("message", "Unauthorized").toString()) }
