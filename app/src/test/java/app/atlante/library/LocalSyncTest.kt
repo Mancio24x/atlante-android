@@ -50,7 +50,7 @@ class LocalSyncTest {
         val lib = Lib(rosa); val s = sync(lib)
         val doc = SyncCore.md5(LocalSync.sentName(rosa))           // the reader's default: MD5 of the file name
         assertEquals(204, s.handle("GET", "/syncs/progress/$doc", auth, "").code)
-        assertEquals(200, s.handle("PUT", "/syncs/progress", auth, progress(doc, .5)).code)
+        val put = s.handle("PUT", "/syncs/progress", auth, progress(doc, .5)); assertEquals(put.body, 200, put.code)
         val now = lib.books.single()
         assertEquals(250, now.currentPage); assertEquals(50, now.percent); assertEquals(Book.READING, now.status)
         val sessions = ReadingJournal.array(now, "sessions"); assertEquals(150, sessions.getJSONObject(sessions.length() - 1).getInt("pages"))

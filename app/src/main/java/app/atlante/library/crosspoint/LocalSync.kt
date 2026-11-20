@@ -66,7 +66,7 @@ class LocalSync(private val library: Library, private val records: File, private
                 method == "GET" && path.startsWith("/syncs/progress/") -> get(path.removePrefix("/syncs/progress/"))
                 else -> Reply(404, JSONObject().put("message", "Not found").toString())
             }
-        } catch (e: Exception) { Reply(400, JSONObject().put("code", 2003).put("message", "Invalid request").toString()) }
+        } catch (e: Exception) { Reply(400, JSONObject().put("code", 2003).put("message", "Invalid request: " + e.javaClass.simpleName).toString()) }
     }
 
     private fun ok(j: JSONObject) = Reply(200, j.toString())
