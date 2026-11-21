@@ -199,7 +199,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private void openDrawer() {
         if (drawer != null) { closeDrawer(); return; }
-        drawer = new FrameLayout(this); FrameLayout overlay = drawer;
+        drawer = new app.atlante.library.ui.SwipeCloseFrame(this, this::closeDrawer); FrameLayout overlay = drawer;   // a swipe to the left closes it
         View scrim = new View(this); scrim.setBackgroundColor(0x99000000);
         overlay.addView(scrim, new FrameLayout.LayoutParams(-1,-1)); scrim.setOnClickListener(v -> closeDrawer());
         int width = Math.min(dp(320), Math.round(getResources().getDisplayMetrics().widthPixels * .86f));
@@ -231,7 +231,8 @@ public final class MainActivity extends AppCompatActivity {
         menu.addView(drawerTool(R.drawable.ic_settings, "Impostazioni", false, () -> { closeDrawer(); settings(); }));
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         screen.addView(overlay,new FrameLayout.LayoutParams(-1,-1)); close.requestFocus();
-        scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(220).start();
+        scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(260).setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start();
+        scrim.setAlpha(0); scrim.animate().alpha(1).setDuration(220).start();
         updateBack();
     }
     /** Drawer row of a library place (design 7a): icon, name, count on the right; a filled pill when selected. */
@@ -263,7 +264,10 @@ public final class MainActivity extends AppCompatActivity {
         if (drawer == null) return;
         FrameLayout closing = drawer; drawer = null; updateBack();
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
-        closing.animate().alpha(0).setDuration(140).withEndAction(() -> {
+        // The panel slides back to the edge while the scrim fades (from wherever a swipe left it).
+        if (closing.getChildCount() > 1) { View panel = closing.getChildAt(1);
+            panel.animate().translationX(-panel.getWidth()).setDuration(200).setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f)).start(); }
+        closing.animate().alpha(0).setDuration(200).withEndAction(() -> {
             if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing);
         }).start();
     }
@@ -1728,6 +1732,11 @@ public final class MainActivity extends AppCompatActivity {
         if (!b.format.equals("CATALOGO")) {
             panel.addView(button(b.page > 0 ? "Riprendi la lettura" : "Leggi", 0, () -> { sheet.dismiss(); openReader(b); }), new LinearLayout.LayoutParams(-1, -2));
             gap(panel, 12);
+            File original = store.original(b);
+            if (original.isFile()) {
+                MaterialButton send = button("Invia a CrossPoint", R.style.Atlante_Button_Tonal, () -> sendToCrossPoint(b, original, sheet::dismiss));
+                send.setIconResource(R.drawable.ic_upload); panel.addView(send, new LinearLayout.LayoutParams(-1, -2)); gap(panel, 12);
+            }
         }
         panel.addView(companionReadingCard(b)); gap(panel, 12);
         MaterialButton timer = button(timerBook != null && timerBook.equals(b.id) ? "Riprendi la sessione" : "Avvia il timer di lettura", R.style.Atlante_Button_Tonal, () -> startTimer(b));
@@ -2501,6 +2510,30 @@ public final class MainActivity extends AppCompatActivity {
 
     // ---- Sync: Hardcover, Calibre, Kindle highlights ----------------------------------------------
 
+    /**
+     * Sends a book's file straight to the CrossPoint reader remembered on its page (main folder of the card), on the
+     * reader's own Wi-Fi or the home one. With no reader yet, it opens the CrossPoint page to connect one.
+     */
+    private void sendToCrossPoint(Book b, File file, Runnable closeSheet) {
+        String host = getPreferences(MODE_PRIVATE).getString("crosspointHost", "");
+        if (host.isEmpty() || !app.atlante.library.crosspoint.CrossPointClient.isLocal(host)) {
+            app.atlante.library.ui.L.toast(this, "Collega prima il lettore nella pagina CrossPoint", Toast.LENGTH_LONG).show();
+            closeSheet.run(); navigate("CrossPoint"); return;
+        }
+        AlertDialog wait = loading("Invia a CrossPoint", "Invio di «" + b.title + "» al lettore…");
+        worker.execute(() -> {
+            String result;
+            try {
+                new app.atlante.library.crosspoint.CrossPointClient(host, 80, true, app.atlante.library.crosspoint.CrossPointWifi.binder(this))
+                    .upload("/", file, app.atlante.library.crosspoint.CrossPointClient.fileName(b.title, file), null);
+                result = "«" + b.title + "» è sul lettore";
+            } catch (Exception e) {
+                result = "Lettore non raggiungibile (" + host + "): sul CrossPoint apri il trasferimento file e riprova";
+            }
+            String message = result;
+            runOnUiThread(() -> { if (wait.isShowing()) wait.dismiss(); app.atlante.library.ui.L.toast(this, message, Toast.LENGTH_LONG).show(); });
+        });
+    }
     /** CrossPoint: the e-ink reader's files over the home Wi-Fi (ui/compose/CrossPointScreen.kt). */
     private View crossPointView() {
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
@@ -3313,7 +3346,7 @@ public final class MainActivity extends AppCompatActivity {
     private void animateIn(View view) {
         if (android.os.Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()) return;
         view.setAlpha(0); view.setTranslationY(dp(10));
-        view.animate().alpha(1).translationY(0).setDuration(200).start();
+        view.animate().alpha(1).translationY(0).setDuration(220).setInterpolator(new android.view.animation.DecelerateInterpolator(1.8f)).start();
     }
     private void navigate(String next) {
         app.atlante.library.diagnostics.CrashLog.step("pagina: " + next);

@@ -207,7 +207,7 @@ fun CrossPointScreen(host: CrossPointHost) {
                 for ((i, pair) in chosen.withIndex()) {
                     val (title, file) = pair
                     busy = "Invio ${i + 1} di ${chosen.size}: $title"; progress = 0f
-                    try { withContext(Dispatchers.IO) { client().upload(path, file, title.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim() + "." + file.extension) { d, t -> if (t > 0) progress = d.toFloat() / t } }; sent++ }
+                    try { withContext(Dispatchers.IO) { client().upload(path, file, CrossPointClient.fileName(title, file)) { d, t -> if (t > 0) progress = d.toFloat() / t } }; sent++ }
                     catch (x: Exception) { error = x.message; break }
                 }
                 busy = null; progress = -1f

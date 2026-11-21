@@ -142,6 +142,12 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
         private fun text(b: ByteArray) = String(b, Charsets.UTF_8)
 
         /** A private IPv4 address of the home network (no names: they could resolve outside it). */
+        /** The name a book gets on the reader: its title (without characters a FAT card refuses) and the file's extension. */
+        @JvmStatic fun fileName(title: String, file: File): String {
+            val clean = title.replace(Regex("[\\\\/:*?\"<>|]"), " ").replace(Regex("\\s+"), " ").trim().trimStart('.').take(120).trim()
+            return (clean.ifEmpty { file.nameWithoutExtension }) + if (file.extension.isEmpty()) "" else "." + file.extension
+        }
+
         @JvmStatic fun isLocal(host: String): Boolean {
             val p = host.trim().split('.'); if (p.size != 4) return false
             val n = p.map { it.toIntOrNull() ?: return false }; if (n.any { it !in 0..255 }) return false

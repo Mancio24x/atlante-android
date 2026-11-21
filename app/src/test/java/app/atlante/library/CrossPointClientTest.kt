@@ -31,6 +31,15 @@ class CrossPointClientTest {
         assertNull(CrossPointClient.deviceName("something else"))
     }
 
+    @Test fun bookNamesTheCardAccepts() {
+        assertEquals("Il nome della rosa.epub", CrossPointClient.fileName("Il nome della rosa", File("x/abc.epub")))
+        assertEquals("Dune Messia.epub", CrossPointClient.fileName("Dune: Messia", File("abc.epub")))
+        assertEquals("A C DC.txt", CrossPointClient.fileName("A/C\\DC?", File("q.txt")))
+        assertEquals("hidden.epub", CrossPointClient.fileName(".hidden", File("q.epub")))
+        assertEquals("q.epub", CrossPointClient.fileName("  ", File("q.epub")))
+        assertEquals("Senza estensione", CrossPointClient.fileName("Senza estensione", File("q")))
+    }
+
     @Test fun listsFoldersFirstFromAChunkedAnswer() = Fake { line, _ ->
         if (line.startsWith("GET /api/files?path=%2FBooks")) ok("""[{"name":"b.epub","size":10,"isDirectory":false,"isEpub":true},{"name":"Saghe","size":0,"isDirectory":true,"isEpub":false},{"name":"A.txt","size":3,"isDirectory":false,"isEpub":false}]""", chunked = true)
         else "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".toByteArray()
