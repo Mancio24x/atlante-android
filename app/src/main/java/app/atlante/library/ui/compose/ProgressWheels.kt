@@ -17,8 +17,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -140,13 +146,18 @@ private fun BigValue(value: String, detail: String, onTap: () -> Unit) {
 
 /**
  * Horizontal number wheel: flings and snaps to the value under the centre mark, which is larger and coloured;
- * the others fade with the distance. A light tick (optional) for every value passed.
+ * the others shrink and fade with the distance. A light tick (optional) for every value passed.
+ * Inside a View ScrollView (the settings pages) a sideways drag keeps the page from stealing the gesture, and a
+ * drag that stops between two numbers settles on the nearest one, so the number is never left half outside the mark.
  */
 @Composable
 fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String, format: (Int) -> String, onValue: (Int) -> Unit) {
-    val itemWidth = 56.dp
+    // Wide enough for the longest number at the centre size (four digits did not fit in 56 dp and were cut).
+    val longest = maxOf(format(range.first).length, format(range.last).length)
+    val itemWidth = if (longest <= 3) 56.dp else (16 * longest + 8).dp
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, range.last - range.first))
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     // Value under the centre mark: the visible item whose middle is closest to the middle of the wheel.
     val centred by remember(range) { derivedStateOf {
         val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
@@ -156,40 +167,64 @@ fun HorizontalWheel(value: Int, range: IntRange, haptics: Boolean, label: String
     val onValueNow by rememberUpdatedState(onValue)
     val valueNow by rememberUpdatedState(value)
     var userScroll by remember { mutableStateOf(false) }
+    var moving by remember { mutableStateOf(false) }       // the wheel is turning itself to a value chosen elsewhere
     LaunchedEffect(list, range, haptics) {
         snapshotFlow { Triple(list.isScrollInProgress, centred, list.layoutInfo.visibleItemsInfo.isNotEmpty()) }
             .distinctUntilChanged().collect { (scrolling, centre, ready) ->
-                if(scrolling) userScroll=true
+                if(scrolling && !moving) userScroll=true
                 if(ready && userScroll && centre!=valueNow) {
                     onValueNow(centre)
                     if(haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
+                if(!scrolling && ready && !moving) {
+                    // A drag taken over by the page, or stopped without a fling, leaves the row between two numbers.
+                    val info = list.layoutInfo; val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2
+                    val item = info.visibleItemsInfo.firstOrNull { it.index == centre - range.first }
+                    val off = item?.let { it.offset + it.size / 2 - middle } ?: 0
+                    if (abs(off) > 1) list.animateScrollBy(off.toFloat(), androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow))
                 }
                 if(!scrolling) userScroll=false
             }
     }
     LaunchedEffect(value, range) {
         if (!list.isScrollInProgress && !userScroll && centred != value)
-            list.scrollToItem((value - range.first).coerceIn(0, range.last - range.first))
+            try { moving = true; list.animateScrollToItem((value - range.first).coerceIn(0, range.last - range.first)) } finally { moving = false }
     }
     BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp).semantics {
         contentDescription = label; stateDescription = format(value)
         progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat(), (range.last - range.first - 1).coerceAtLeast(0))
         setProgress { target -> onValue(target.roundToInt().coerceIn(range)); true }
+    }.pointerInput(Unit) {
+        // A sideways drag belongs to the wheel: tell the scrolling page around it not to take it over.
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false); var claimed = false
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                val d = change.position - down.position
+                if (!claimed && abs(d.x) > viewConfiguration.touchSlop / 2 && abs(d.x) > abs(d.y)) { view.parent?.requestDisallowInterceptTouchEvent(true); claimed = true }
+                if (!change.pressed) break
+            }
+        }
     }, contentAlignment = Alignment.Center) {
         val side = (maxWidth - itemWidth) / 2
-        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer,
+        Surface(Modifier.size(itemWidth, 60.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer,
             border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)) {}
         LazyRow(state = list, flingBehavior = rememberSnapFlingBehavior(list), contentPadding = PaddingValues(horizontal = side), modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically) {
             items(range.last - range.first + 1) { i ->
                 val v = range.first + i
                 val distance = abs(v - centred)
+                // One text size for every number, scaled in the drawing layer: the row no longer re-measures (and jumps)
+                // each time a number reaches or leaves the centre.
                 val alpha by animateFloatAsState(when (distance) { 0 -> 1f; 1 -> 0.7f; 2 -> 0.45f; else -> 0.25f }, label = "alpha")
-                Box(Modifier.width(itemWidth).fillMaxHeight().clickable { onValue(v) }, contentAlignment = Alignment.Center) {
-                    Text(format(v), Modifier.alpha(alpha).scale(if (distance == 0) 1.25f else 1f),
-                        style = if (distance == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                val size by animateFloatAsState(when (distance) { 0 -> 1.15f; 1 -> 0.9f; else -> 0.8f }, label = "scale")
+                Box(Modifier.width(itemWidth).fillMaxHeight().clickable(onClickLabel = format(v)) { onValue(v) }, contentAlignment = Alignment.Center) {
+                    Text(format(v), Modifier.graphicsLayer { this.alpha = alpha; scaleX = size; scaleY = size },
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Normal,
-                        color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        color = if (distance == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, softWrap = false)
                 }
             }
         }
