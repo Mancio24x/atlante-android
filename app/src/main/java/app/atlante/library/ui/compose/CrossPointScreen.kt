@@ -262,13 +262,32 @@ fun CrossPointScreen(host: CrossPointHost) {
             }
             HorizontalDivider(Modifier.padding(vertical = 16.dp), color = colors.outlineVariant)
             Text("Oppure l’indirizzo che il lettore mostra", style = MaterialTheme.typography.labelLarge)
+            val bare = CrossPointClient.bareHost(typed)
+            val byName = CrossPointClient.isMdnsName(bare)
+            val valid = CrossPointClient.isLocal(bare) || byName
+            var resolving by remember { mutableStateOf(false) }
+            var unresolved by remember { mutableStateOf<String?>(null) }
+            // "crosspoint.local": the phone asks the Wi-Fi (multicast DNS) for the reader's address, then connects to it.
+            fun connect(target: String) {
+                if (!CrossPointClient.isMdnsName(target)) { onAddress(target); return }
+                resolving = true; unresolved = null
+                scope.launch {
+                    val ip = withContext(Dispatchers.IO) { runCatching { CrossPointClient.resolveLocal(target, binder = host.binder()) }.getOrNull() }
+                    resolving = false
+                    if (ip != null) onAddress(ip) else unresolved = target
+                }
+            }
+            OutlinedButton(onClick = { connect(CrossPointClient.MDNS_NAME) }, Modifier.fillMaxWidth().padding(top = 8.dp).height(48.dp), enabled = !resolving) {
+                Icon(painterResource(R.drawable.ic_link), null, Modifier.size(20.dp))
+                Text(if (resolving) "Cerco ${CrossPointClient.MDNS_NAME}…" else "Collega ${CrossPointClient.MDNS_NAME}", Modifier.padding(start = 8.dp)) }
+            unresolved?.let { Text("$it non risponde: il lettore e il telefono devono essere sulla stessa rete Wi-Fi. Prova con l’indirizzo numerico.",
+                Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = colors.tertiary) }
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(typed, { typed = it.trim() }, Modifier.weight(1f), singleLine = true, placeholder = { Text("192.168.1.20") },
+                OutlinedTextField(typed, { typed = it.trim(); unresolved = null }, Modifier.weight(1f), singleLine = true, placeholder = { Text("192.168.1.20") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    isError = typed.isNotEmpty() && !CrossPointClient.isLocal(typed.removePrefix("http://").trimEnd('/')),
-                    supportingText = { if (typed.isNotEmpty() && !CrossPointClient.isLocal(typed.removePrefix("http://").trimEnd('/'))) Text("Un indirizzo della rete di casa") })
-                FilledTonalButton(onClick = { onAddress(typed.removePrefix("http://").trimEnd('/')) }, Modifier.padding(start = 8.dp),
-                    enabled = CrossPointClient.isLocal(typed.removePrefix("http://").trimEnd('/'))) { Text("Collega") }
+                    isError = typed.isNotEmpty() && !valid,
+                    supportingText = { if (typed.isNotEmpty() && !valid) Text("Un indirizzo della rete di casa o un nome .local") })
+                FilledTonalButton(onClick = { connect(bare) }, Modifier.padding(start = 8.dp), enabled = valid && !resolving) { Text("Collega") }
             }
         }
     }

@@ -47,3 +47,7 @@ casa (ricerca o indirizzo IP). API del firmware: `GET /api/status`, `GET /api/fi
 `GET /download?path=`, `POST /upload?path=` (multipart), `POST /mkdir`, `/rename`, `/move`, `/delete`; scoperta con
 «hello» in UDP sulla porta 8134 (risposta `crosspoint (on <nome>);81`). Codice: `crosspoint/CrossPointClient.kt`,
 `ui/compose/CrossPointScreen.kt`, `MainActivity.crossPointView`. Indirizzo ricordato in `crosspointHost`.
+«Collega crosspoint.local» (o un nome `.local` scritto nel campo) chiede l’indirizzo al Wi-Fi con una domanda mDNS
+(record A, risposta unicast, `CrossPointClient.resolveLocal`) e accetta solo un indirizzo privato della rete di casa; la
+ricerca prova anche `crosspoint.local` quando nessuno risponde al «hello» (router che bloccano il broadcast).
+`CrossPointClientTest.crosspointLocalIsResolvedOnTheHomeNetwork`.

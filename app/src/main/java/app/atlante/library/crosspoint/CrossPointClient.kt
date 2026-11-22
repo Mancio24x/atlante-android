@@ -152,6 +152,78 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
         @JvmStatic fun deviceName(reply: String): String? =
             Regex("^crosspoint \\(on (.+)\\);\\d+$").find(reply.trim())?.groupValues?.get(1)
 
+        /** The name the reader announces on the home Wi-Fi (multicast DNS), shown on its file-transfer screen. */
+        const val MDNS_NAME = "crosspoint.local"
+        private const val MDNS_PORT = 5353
+
+        /** A multicast-DNS name of the home network ("crosspoint.local"): one label, then ".local". */
+        @JvmStatic fun isMdnsName(host: String): Boolean = Regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.local\\.?$", RegexOption.IGNORE_CASE).matches(host.trim())
+
+        /** What the user typed ("http://crosspoint.local/", " 192.168.1.20 ") as a bare host. */
+        @JvmStatic fun bareHost(typed: String): String = typed.trim().removePrefix("http://").removePrefix("HTTP://").substringBefore('/').substringBefore(':').trim()
+
+        /** A query for the A record (IPv4) of [name], asking for a unicast answer (RFC 6762 §5.4). */
+        @JvmStatic fun mdnsQuery(name: String, id: Int = 0): ByteArray {
+            val out = ByteArrayOutputStream()
+            fun u16(v: Int) { out.write(v shr 8 and 0xff); out.write(v and 0xff) }
+            u16(id); u16(0); u16(1); u16(0); u16(0); u16(0)
+            for (label in name.trim().trimEnd('.').split('.')) { val b = label.toByteArray(Charsets.UTF_8); out.write(b.size); out.write(b) }
+            out.write(0); u16(1); u16(0x8001)                                   // type A, class IN with the "unicast response" bit
+            return out.toByteArray()
+        }
+
+        /** The IPv4 address an mDNS answer gives for [name], or null (another name, no A record, a broken packet). */
+        @JvmStatic fun mdnsAnswer(packet: ByteArray, length: Int, name: String): String? = runCatching {
+            fun u16(at: Int) = (packet[at].toInt() and 0xff shl 8) or (packet[at + 1].toInt() and 0xff)
+            fun readName(start: Int): Pair<String, Int> {           // name and the offset after it (compression pointers followed)
+                val labels = ArrayList<String>(); var at = start; var end = -1; var jumps = 0
+                while (true) {
+                    require(at < length); val len = packet[at].toInt() and 0xff
+                    when {
+                        len == 0 -> { if (end < 0) end = at + 1; break }
+                        len and 0xc0 == 0xc0 -> { require(++jumps < 20); if (end < 0) end = at + 2; at = ((len and 0x3f) shl 8) or (packet[at + 1].toInt() and 0xff) }
+                        else -> { require(at + 1 + len <= length); labels += String(packet, at + 1, len, Charsets.UTF_8); at += 1 + len }
+                    }
+                }
+                return labels.joinToString(".") to end
+            }
+            require(length >= 12 && u16(2) and 0x8000 != 0)                     // a response
+            val questions = u16(4); val records = u16(6) + u16(8) + u16(10)
+            var at = 12
+            repeat(questions) { at = readName(at).second + 4 }
+            val wanted = name.trim().trimEnd('.')
+            repeat(records) {
+                val (n, after) = readName(at); val type = u16(after); val size = u16(after + 8); val data = after + 10
+                require(data + size <= length)
+                if (type == 1 && size == 4 && n.equals(wanted, ignoreCase = true))
+                    return@runCatching (0 until 4).joinToString(".") { i -> (packet[data + i].toInt() and 0xff).toString() }
+                at = data + size
+            }
+            null
+        }.getOrNull()
+
+        /**
+         * Finds the address of [name] ("crosspoint.local") on the Wi-Fi with a multicast-DNS question; only a private
+         * address of the home network is accepted. Null when nobody answers within [millis].
+         */
+        @JvmStatic @JvmOverloads fun resolveLocal(name: String = MDNS_NAME, millis: Int = 2000, binder: Binder? = null): String? {
+            if (!isMdnsName(name)) return null
+            DatagramSocket().use { s ->
+                binder?.bind(s); s.soTimeout = 300
+                val query = mdnsQuery(name)
+                val group = InetAddress.getByName("224.0.0.251"); val buffer = ByteArray(1500)
+                val end = System.currentTimeMillis() + millis; var next = 0L
+                while (System.currentTimeMillis() < end) {
+                    if (System.currentTimeMillis() >= next) { runCatching { s.send(DatagramPacket(query, query.size, group, MDNS_PORT)) }; next = System.currentTimeMillis() + 700 }
+                    val p = DatagramPacket(buffer, buffer.size)
+                    try { s.receive(p) } catch (e: SocketTimeoutException) { continue }
+                    val ip = mdnsAnswer(p.data, p.length, name) ?: continue
+                    if (isLocal(ip)) return ip
+                }
+            }
+            return null
+        }
+
         /** Readers on the Wi-Fi: a "hello" broadcast, every CrossPoint answers with its name; at most [millis]. */
         @JvmStatic @JvmOverloads fun discover(millis: Int = 2500, binder: Binder? = null): List<Device> {
             val found = LinkedHashMap<String, Device>()
@@ -169,6 +241,8 @@ class CrossPointClient @JvmOverloads constructor(val host: String, private val p
                     if (isLocal(address)) found[address] = Device(address, name)
                 }
             }
+            // Routers that drop broadcasts still pass multicast DNS: ask for "crosspoint.local" too.
+            if (found.isEmpty()) runCatching { resolveLocal(MDNS_NAME, 1500, binder) }.getOrNull()?.let { found[it] = Device(it, MDNS_NAME) }
             return found.values.toList()
         }
     }

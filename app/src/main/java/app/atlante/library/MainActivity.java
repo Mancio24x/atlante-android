@@ -199,11 +199,46 @@ public final class MainActivity extends AppCompatActivity {
 
     private void openDrawer() {
         if (drawer != null) { closeDrawer(); return; }
-        drawer = new FrameLayout(this); FrameLayout overlay = drawer;
-        View scrim = new View(this); scrim.setBackgroundColor(0x99000000);
-        overlay.addView(scrim, new FrameLayout.LayoutParams(-1,-1)); scrim.setOnClickListener(v -> closeDrawer());
         int width = Math.min(dp(320), Math.round(getResources().getDisplayMetrics().widthPixels * .86f));
         ScrollView scroll = new ScrollView(this);
+        View scrim = new View(this); scrim.setBackgroundColor(0x99000000);
+        // Swipe left anywhere on the open drawer to close it: the sheet follows the finger and the shade fades with it.
+        int slop = ViewConfiguration.get(this).getScaledTouchSlop();
+        drawer = new FrameLayout(this) {
+            float startX, startY; boolean dragging; VelocityTracker velocity;
+            @Override public boolean onInterceptTouchEvent(MotionEvent e) {
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { startX = e.getX(); startY = e.getY(); dragging = false; track(e, true); return false; }
+                track(e, false);
+                if (e.getActionMasked() == MotionEvent.ACTION_MOVE) { float dx = e.getX() - startX, dy = e.getY() - startY;
+                    if (dx < -slop && Math.abs(dx) > Math.abs(dy) * 1.5f) { dragging = true; return true; } }
+                return false;
+            }
+            @Override public boolean onTouchEvent(MotionEvent e) {
+                track(e, e.getActionMasked() == MotionEvent.ACTION_DOWN);
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { startX = e.getX(); startY = e.getY(); return true; }
+                float dx = Math.min(0, e.getX() - startX);
+                if (e.getActionMasked() == MotionEvent.ACTION_MOVE) {
+                    if (!dragging && dx < -slop) dragging = true;
+                    if (dragging) { scroll.setTranslationX(dx); scrim.setAlpha(1 + dx / width); }
+                    return true;
+                }
+                if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                    float speed = 0; if (velocity != null) { velocity.computeCurrentVelocity(1000); speed = velocity.getXVelocity(); velocity.recycle(); velocity = null; }
+                    if (dragging && (dx < -width / 3f || speed < -dp(800))) closeDrawer();
+                    else if (dragging) { scroll.animate().translationX(0).setDuration(160).start(); scrim.animate().alpha(1).setDuration(160).start(); }
+                    else if (e.getActionMasked() == MotionEvent.ACTION_UP) { performClick(); closeDrawer(); }      // a tap on the shade outside the sheet
+                    dragging = false;
+                }
+                return true;
+            }
+            private void track(MotionEvent e, boolean reset) {
+                if (reset && velocity != null) { velocity.recycle(); velocity = null; }
+                if (velocity == null) velocity = VelocityTracker.obtain();
+                velocity.addMovement(e);
+            }
+        };
+        FrameLayout overlay = drawer;
+        overlay.addView(scrim, new FrameLayout.LayoutParams(-1,-1)); scrim.setOnClickListener(v -> closeDrawer());
         GradientDrawable sheet = new GradientDrawable(); sheet.setColor(WHITE);
         sheet.setCornerRadii(new float[]{0, 0, dp(28), dp(28), dp(28), dp(28), 0, 0}); scroll.setBackground(sheet); scroll.setClipToOutline(true);
         overlay.addView(scroll, new FrameLayout.LayoutParams(width, -1, Gravity.START));
@@ -231,7 +266,11 @@ public final class MainActivity extends AppCompatActivity {
         menu.addView(drawerTool(R.drawable.ic_settings, "Impostazioni", false, () -> { closeDrawer(); settings(); }));
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         screen.addView(overlay,new FrameLayout.LayoutParams(-1,-1)); close.requestFocus();
-        scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(220).start();
+        // Material "emphasized decelerate": the sheet arrives fast and settles gently; the shade fades in with it.
+        if (motion()) {
+            scroll.setTranslationX(-width); scroll.animate().translationX(0).setDuration(260).setInterpolator(new android.view.animation.PathInterpolator(0.05f, 0.7f, 0.1f, 1f)).start();
+            scrim.setAlpha(0); scrim.animate().alpha(1).setDuration(220).start();
+        }
         updateBack();
     }
     /** Drawer row of a library place (design 7a): icon, name, count on the right; a filled pill when selected. */
@@ -263,9 +302,12 @@ public final class MainActivity extends AppCompatActivity {
         if (drawer == null) return;
         FrameLayout closing = drawer; drawer = null; updateBack();
         root.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
-        closing.animate().alpha(0).setDuration(140).withEndAction(() -> {
-            if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing);
-        }).start();
+        Runnable remove = () -> { if (closing.getParent() instanceof ViewGroup) ((ViewGroup)closing.getParent()).removeView(closing); };
+        if (!motion() || closing.getChildCount() < 2) { remove.run(); return; }
+        // The sheet slides back out to the left ("emphasized accelerate") while the shade fades.
+        View sheet = closing.getChildAt(1), shade = closing.getChildAt(0);
+        shade.animate().alpha(0).setDuration(180).start();
+        sheet.animate().translationX(-sheet.getWidth()).setDuration(180).setInterpolator(new android.view.animation.PathInterpolator(0.3f, 0f, 0.8f, 0.15f)).withEndAction(remove).start();
     }
     private void settings() { settingsSection=""; if(!destination.equals("Impostazioni"))getPreferences(MODE_PRIVATE).edit().putString("settingsReturn",destination).apply(); navigate("Impostazioni"); }
 
@@ -3312,8 +3354,8 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void animateIn(View view) {
         if (android.os.Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()) return;
-        view.setAlpha(0); view.setTranslationY(dp(10));
-        view.animate().alpha(1).translationY(0).setDuration(200).start();
+        view.setAlpha(0); view.setTranslationY(dp(12));
+        view.animate().alpha(1).translationY(0).setDuration(240).setInterpolator(new android.view.animation.PathInterpolator(0.05f, 0.7f, 0.1f, 1f)).start();
     }
     private void navigate(String next) {
         app.atlante.library.diagnostics.CrashLog.step("pagina: " + next);

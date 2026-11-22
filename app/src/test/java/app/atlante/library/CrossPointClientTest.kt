@@ -65,4 +65,25 @@ class CrossPointClientTest {
             assertTrue(String(f.requests.last().second).contains("name=Dune+1.epub"))
         }
     }
+
+    /** "crosspoint.local": the multicast-DNS question and the answer as the reader's mDNS responder writes it. */
+    @Test fun crosspointLocalIsResolvedOnTheHomeNetwork() {
+        assertTrue(CrossPointClient.isMdnsName("crosspoint.local")); assertTrue(CrossPointClient.isMdnsName("CrossPoint.local."))
+        assertFalse(CrossPointClient.isMdnsName("crosspoint.example.com")); assertFalse(CrossPointClient.isMdnsName("a.b.local")); assertFalse(CrossPointClient.isMdnsName(".local"))
+        assertEquals("crosspoint.local", CrossPointClient.bareHost(" http://crosspoint.local/ "))
+        assertEquals("192.168.1.20", CrossPointClient.bareHost("http://192.168.1.20:80/files"))
+        val q = CrossPointClient.mdnsQuery("crosspoint.local", 7)
+        assertEquals(12 + 1 + 10 + 1 + 5 + 1 + 4, q.size)
+        assertEquals(10, q[12].toInt()); assertEquals("crosspoint", String(q, 13, 10))
+        assertEquals(0x80, q[q.size - 2].toInt() and 0xff)                                     // unicast-response bit
+        // Response: header, the question again, then an A record whose name is a pointer to the question's name.
+        val answer = ByteArrayOutputStream().apply {
+            write(byteArrayOf(0, 7, 0x84.toByte(), 0, 0, 1, 0, 1, 0, 0, 0, 0)); write(q, 12, q.size - 12)
+            write(byteArrayOf(0xc0.toByte(), 12, 0, 1, 0x80.toByte(), 1, 0, 0, 0, 120, 0, 4, 192.toByte(), 168.toByte(), 1, 42))
+        }.toByteArray()
+        assertEquals("192.168.1.42", CrossPointClient.mdnsAnswer(answer, answer.size, "crosspoint.local"))
+        assertNull(CrossPointClient.mdnsAnswer(answer, answer.size, "other.local"))
+        assertNull(CrossPointClient.mdnsAnswer(answer, answer.size - 3, "crosspoint.local"))   // cut packet
+        assertNull(CrossPointClient.mdnsAnswer(q, q.size, "crosspoint.local"))                  // a question, not an answer
+    }
 }
